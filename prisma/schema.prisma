@@ -57,8 +57,137 @@ model Shop {
   /// Set by the Danger zone "pause app" control (Settings, Phase 6.2).
   /// While paused, pricing rules stop applying but nothing is deleted.
   pausedAt      DateTime?
+  /// Set when the post-uninstall PII purge has run (GDPR, within 48h).
+  piiPurgedAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   @@index([uninstalledAt])
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (phase 0.2)
+// ---------------------------------------------------------------------------
+
+enum AuditActorType {
+  /// A person in the Shopify admin.
+  STAFF
+  /// The admin copilot drafting on the merchant's behalf.
+  MERCHANT_AGENT
+  /// The storefront concierge acting for a buyer.
+  BUYER_AGENT
+  /// A wholesale customer on the storefront.
+  BUYER
+  /// Webhooks, scheduled jobs, migrations.
+  SYSTEM
+}
+
+/// Every consequential action, and every AI action without exception.
+///
+/// Settings → Agent controls reads this filtered by actor, action and date
+/// (phase 6.2), and each AI row links back to the artifact it produced. The
+/// trust promise depends on this table being complete, so writes are part of
+/// the caller's transaction rather than fire-and-forget.
+model AuditLog {
+  id        String   @id @default(cuid())
+  shop      String
+  createdAt DateTime @default(now())
+
+  actorType  AuditActorType
+  /// Staff user id, customer id, or the agent's identifier.
+  actorId    String?
+  /// Display name captured at write time, so the log still reads correctly
+  /// after the person is removed from the store.
+  actorLabel String?
+
+  /// Dotted action name, e.g. "pricing_rule.created", "ai.draft.approved".
+  action  String
+  /// Human sentence rendered in the log UI.
+  summary String
+
+  subjectType String?
+  subjectId   String?
+  metadata    Json?
+
+  // --- AI provenance. Set together or not at all. ------------------------
+  aiModel         String?
+  aiPromptVersion String?
+  aiRequestId     String?
+
+  /// True when this action changed live data on an AI suggestion. Such a row
+  /// is only valid with approvedById + approvedAt: no AI write path may mutate
+  /// live pricing or customers without a merchant approval recorded here.
+  aiAssisted   Boolean   @default(false)
+  approvedById String?
+  approvedAt   DateTime?
+
+  /// Correlates with the HTTP request that produced it.
+  requestId String?
+  ip        String?
+
+  @@index([shop, createdAt])
+  @@index([shop, actorType, createdAt])
+  @@index([shop, action, createdAt])
+  @@index([shop, subjectType, subjectId])
+}
+
+// ---------------------------------------------------------------------------
+// Webhook framework (phase 0.2)
+// ---------------------------------------------------------------------------
+
+/// One row per accepted webhook delivery, so Shopify's at-least-once retries
+/// are idempotent. Shopify retries for up to 48h; rows older than that are no
+/// longer needed (pruning lands with the retention jobs in phase 7.2).
+model WebhookDelivery {
+  id         String    @id @default(cuid())
+  shop       String
+  /// X-Shopify-Webhook-Id. Unique per delivery, stable across retries.
+  webhookId  String
+  topic      String
+  receivedAt DateTime  @default(now())
+  /// Null until the handler succeeds; a retry of a failed delivery re-runs.
+  handledAt  DateTime?
+  attempts   Int       @default(0)
+  lastError  String?
+
+  @@unique([shop, webhookId])
+  @@index([shop, receivedAt])
+  @@index([receivedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled jobs (phase 0.2)
+// ---------------------------------------------------------------------------
+
+enum ScheduledJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+  /// Superseded before it ran — e.g. a PII purge cancelled by a reinstall.
+  CANCELLED
+}
+
+/// A deliberately small durable queue: enough for "do this later, exactly
+/// once, and survive a restart" without adding a broker. The runner is driven
+/// by cron (`npm run jobs:run`).
+model ScheduledJob {
+  id     String             @id @default(cuid())
+  shop   String
+  kind   String
+  status ScheduledJobStatus @default(PENDING)
+
+  runAt       DateTime
+  payload     Json?
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  lastError   String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, runAt])
+  @@index([shop, kind, status])
 }

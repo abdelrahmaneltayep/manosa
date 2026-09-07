@@ -1,0 +1,70 @@
+{
+  "app": {
+    "name": "Mannon",
+    "tagline": "Wholesale quoting, without the email grind"
+  },
+  "nav": {
+    "home": "Home",
+    "pricing": "Pricing",
+    "customers": "Customers",
+    "forms": "Forms",
+    "orders": "Orders",
+    "storefrontAgent": "Storefront Agent",
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "plans": "Plans"
+  },
+  "install": {
+    "headingLead": "B2B wholesale pricing,",
+    "headingAccent": "without the email grind",
+    "body": "Mannon runs your wholesale prices, registration forms, order limits and net terms inside Shopify — and gives your buyers an agent that answers “what's my price at 100 units?” without a support ticket.",
+    "shopLabel": "Your store domain",
+    "shopPlaceholder": "my-store.myshopify.com",
+    "submit": "Install Mannon",
+    "hint": "Enter the .myshopify.com domain, not your custom domain."
+  },
+  "page": {
+    "home": {
+      "description": "Your wholesale command center — KPIs, the Merchant Agent briefing, and what needs you today."
+    },
+    "pricing": {
+      "description": "Every price rule in one place: volume tiers, custom prices, discounts, priority and combinations."
+    },
+    "customers": {
+      "description": "Approve wholesale applications, manage groups and tiers, and keep tags in sync."
+    },
+    "forms": {
+      "description": "Build and publish the registration form buyers fill in to apply for wholesale."
+    },
+    "orders": {
+      "description": "Wholesale orders, order limits, net payment terms, quotes and draft orders."
+    },
+    "storefrontAgent": {
+      "description": "Configure the Buyer Agent your wholesale customers chat with, and review every conversation."
+    },
+    "analytics": {
+      "description": "Wholesale revenue, rule performance, the registration funnel and net-terms aging."
+    },
+    "settings": {
+      "description": "Price display, discount combinations, notifications, translations, agent controls and the audit log."
+    },
+    "plans": {
+      "description": "Your plan, what it includes, and an honest recommendation based on how you actually use Mannon."
+    }
+  },
+  "scaffold": {
+    "heading": "Not built yet",
+    "bannerHeading": "Scaffold only",
+    "body": "This page is a routing and layout placeholder. The {{feature}} feature set lands in phase {{phase}}."
+  },
+  "error": {
+    "notFound": {
+      "heading": "Page not found",
+      "body": "That page isn't part of Mannon. Use the app navigation to get back."
+    },
+    "generic": {
+      "heading": "Something went wrong",
+      "body": "Mannon couldn't load this page. Reload to try again — nothing was changed."
+    }
+  }
+}

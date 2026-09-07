@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
 
 import { login } from "~/shopify.server";
 
@@ -21,25 +22,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function Index() {
   const { showForm } = useLoaderData<typeof loader>();
+  const { t } = useTranslation();
 
   return (
     <main style={styles.main}>
       <section style={styles.card}>
-        <p style={styles.eyebrow}>Mannon</p>
+        <p style={styles.eyebrow}>{t("app.name")}</p>
         <h1 style={styles.heading}>
-          B2B wholesale pricing,{" "}
-          <span style={styles.accent}>without the email grind</span>
+          {t("install.headingLead")}{" "}
+          <span style={styles.accent}>{t("install.headingAccent")}</span>
         </h1>
-        <p style={styles.body}>
-          Mannon runs your wholesale prices, registration forms, order limits and net
-          terms inside Shopify — and gives your buyers an agent that answers
-          &ldquo;what&rsquo;s my price at 100 units?&rdquo; without a support ticket.
-        </p>
+        <p style={styles.body}>{t("install.body")}</p>
 
         {showForm ? (
           <Form method="post" action="/auth/login" style={styles.form}>
             <label style={styles.label} htmlFor="shop">
-              Your store domain
+              {t("install.shopLabel")}
             </label>
             <input
               id="shop"
@@ -47,15 +45,13 @@ export default function Index() {
               name="shop"
               required
               autoComplete="off"
-              placeholder="my-store.myshopify.com"
+              placeholder={t("install.shopPlaceholder")}
               style={styles.input}
             />
             <button type="submit" style={styles.button}>
-              Install Mannon
+              {t("install.submit")}
             </button>
-            <p style={styles.hint}>
-              Enter the .myshopify.com domain, not your custom domain.
-            </p>
+            <p style={styles.hint}>{t("install.hint")}</p>
           </Form>
         ) : null}
       </section>

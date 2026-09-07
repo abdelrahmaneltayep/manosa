@@ -3,8 +3,10 @@ import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { boundary } from "@shopify/shopify-app-remix/server";
 
+import { useTranslation } from "react-i18next";
+
 import { ensureShopRecord } from "~/lib/shop/ensure-shop.server";
-import { NAV_PAGES, navHref } from "~/lib/nav/pages";
+import { NAV_PAGES, navHref, navLabelKey } from "~/lib/nav/pages";
 import { withAdmin } from "~/shopify.server";
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
@@ -15,6 +17,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 
 export default function AppLayout() {
   const { shop } = useLoaderData<typeof loader>();
+  const { t } = useTranslation();
 
   return (
     <>
@@ -23,11 +26,11 @@ export default function AppLayout() {
       <s-app-nav>
         {NAV_PAGES.map((page) => (
           <Link
-            key={page.i18nKey}
+            key={page.key}
             to={navHref(page)}
             {...(page.path === "" ? { rel: "home" } : {})}
           >
-            {page.defaultLabel}
+            {t(navLabelKey(page))}
           </Link>
         ))}
       </s-app-nav>

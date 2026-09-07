@@ -8,23 +8,36 @@ import {
   useRouteError,
   useRouteLoaderData,
 } from "@remix-run/react";
-import type { LinksFunction } from "@remix-run/node";
+import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { useTranslation } from "react-i18next";
+
+import { detectLocale } from "~/i18n.server";
+import { DEFAULT_LOCALE, dirFor } from "~/i18n/config";
 
 export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://cdn.shopify.com" },
 ];
 
-export const loader = async () => {
-  // The public app key App Bridge reads from the meta tag below. Not a secret.
-  return json({ apiKey: process.env.SHOPIFY_API_KEY ?? "" });
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const locale = detectLocale(request);
+  return json({
+    // The public app key App Bridge reads from the meta tag below. Not a secret.
+    apiKey: process.env.SHOPIFY_API_KEY ?? "",
+    locale,
+    dir: dirFor(locale),
+  });
 };
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useRouteLoaderData<typeof loader>("root");
+  const locale = data?.locale ?? DEFAULT_LOCALE;
 
   return (
-    <html lang="en" dir="ltr">
+    // lang/dir are set here rather than by a client effect so Arabic renders
+    // mirrored on first paint. A layout that flips after hydration is a CLS
+    // failure, and Built for Shopify measures it.
+    <html lang={locale} dir={data?.dir ?? dirFor(DEFAULT_LOCALE)}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -50,24 +63,21 @@ export default function App() {
 }
 
 export function ErrorBoundary() {
+  const { t } = useTranslation();
   const error = useRouteError();
-  const status = isRouteErrorResponse(error) ? error.status : 500;
-  const notFound = status === 404;
-  const heading = notFound ? "Page not found" : "Something went wrong";
-  const detail = notFound
-    ? "That page isn't part of Mannon. Use the app navigation to get back."
-    : "Mannon couldn't load this page. Reload to try again — nothing was changed.";
+  const notFound = isRouteErrorResponse(error) && error.status === 404;
+  const key = notFound ? "error.notFound" : "error.generic";
 
   // The heading is a child element, not just the `heading` attribute: this
   // boundary also catches errors on unembedded routes, where App Bridge has
   // not upgraded the custom elements and attribute-only text would render as
   // nothing at all.
   return (
-    <s-page heading={heading}>
+    <s-page heading={t(`${key}.heading`)}>
       <s-section>
         <s-banner tone="critical">
-          <s-heading>{heading}</s-heading>
-          <s-paragraph>{detail}</s-paragraph>
+          <s-heading>{t(`${key}.heading`)}</s-heading>
+          <s-paragraph>{t(`${key}.body`)}</s-paragraph>
         </s-banner>
       </s-section>
     </s-page>

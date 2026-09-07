@@ -1,95 +1,45 @@
 /**
  * The nine admin pages, in sidebar order (spec §"Sidebar Navigation").
  *
- * Labels carry their i18n key alongside an English default. Phase 0.2 swaps
- * `defaultLabel` for a real `t(i18nKey)` call in one place instead of touching
- * every route.
+ * Only keys live here — the strings themselves are in app/i18n/locales. The
+ * `phase` field is what each stub reports until its feature set lands.
  */
 export interface NavPage {
   /** Route path under /app. Empty string = the index (Home). */
   readonly path: string;
-  readonly i18nKey: string;
-  readonly defaultLabel: string;
-  /** Shown as the s-page heading and in the browser title. */
-  readonly i18nDescriptionKey: string;
-  readonly defaultDescription: string;
+  /** Key under `nav.` and `page.` in the catalogs. */
+  readonly key: string;
+  /** Build phase that replaces the stub. */
+  readonly phase: string;
 }
 
 export const NAV_PAGES: readonly NavPage[] = [
-  {
-    path: "",
-    i18nKey: "nav.home",
-    defaultLabel: "Home",
-    i18nDescriptionKey: "page.home.description",
-    defaultDescription:
-      "Your wholesale command center — KPIs, the Merchant Agent briefing, and what needs you today.",
-  },
-  {
-    path: "pricing",
-    i18nKey: "nav.pricing",
-    defaultLabel: "Pricing",
-    i18nDescriptionKey: "page.pricing.description",
-    defaultDescription:
-      "Every price rule in one place: volume tiers, custom prices, discounts, priority and combinations.",
-  },
-  {
-    path: "customers",
-    i18nKey: "nav.customers",
-    defaultLabel: "Customers",
-    i18nDescriptionKey: "page.customers.description",
-    defaultDescription:
-      "Approve wholesale applications, manage groups and tiers, and keep tags in sync.",
-  },
-  {
-    path: "forms",
-    i18nKey: "nav.forms",
-    defaultLabel: "Forms",
-    i18nDescriptionKey: "page.forms.description",
-    defaultDescription:
-      "Build and publish the registration form buyers fill in to apply for wholesale.",
-  },
-  {
-    path: "orders",
-    i18nKey: "nav.orders",
-    defaultLabel: "Orders",
-    i18nDescriptionKey: "page.orders.description",
-    defaultDescription:
-      "Wholesale orders, order limits, net payment terms, quotes and draft orders.",
-  },
-  {
-    path: "storefront-agent",
-    i18nKey: "nav.storefrontAgent",
-    defaultLabel: "Storefront Agent",
-    i18nDescriptionKey: "page.storefrontAgent.description",
-    defaultDescription:
-      "Configure the Buyer Agent your wholesale customers chat with, and review every conversation.",
-  },
-  {
-    path: "analytics",
-    i18nKey: "nav.analytics",
-    defaultLabel: "Analytics",
-    i18nDescriptionKey: "page.analytics.description",
-    defaultDescription:
-      "Wholesale revenue, rule performance, the registration funnel and net-terms aging.",
-  },
-  {
-    path: "settings",
-    i18nKey: "nav.settings",
-    defaultLabel: "Settings",
-    i18nDescriptionKey: "page.settings.description",
-    defaultDescription:
-      "Price display, discount combinations, notifications, translations, agent controls and the audit log.",
-  },
-  {
-    path: "plans",
-    i18nKey: "nav.plans",
-    defaultLabel: "Plans",
-    i18nDescriptionKey: "page.plans.description",
-    defaultDescription:
-      "Your plan, what it includes, and an honest recommendation based on how you actually use Mannon.",
-  },
+  { path: "", key: "home", phase: "4.5" },
+  { path: "pricing", key: "pricing", phase: "1.3" },
+  { path: "customers", key: "customers", phase: "2.1" },
+  { path: "forms", key: "forms", phase: "2.2" },
+  { path: "orders", key: "orders", phase: "3.1" },
+  { path: "storefront-agent", key: "storefrontAgent", phase: "5.2" },
+  { path: "analytics", key: "analytics", phase: "6.1" },
+  { path: "settings", key: "settings", phase: "6.2" },
+  { path: "plans", key: "plans", phase: "0.3" },
 ] as const;
 
 export function navHref(page: NavPage): string {
   return page.path ? `/app/${page.path}` : "/app";
+}
+
+/** Catalog key for a page's sidebar label. */
+export function navLabelKey(page: NavPage): string {
+  return `nav.${page.key}`;
+}
+
+/** Catalog key for a page's one-line description. */
+export function pageDescriptionKey(page: NavPage): string {
+  return `page.${page.key}.description`;
+}
+
+/** Route file that must exist for this nav entry to resolve. */
+export function routeFileFor(page: NavPage): string {
+  return page.path ? `app.${page.path}.tsx` : "app._index.tsx";
 }

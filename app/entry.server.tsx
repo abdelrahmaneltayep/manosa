@@ -4,8 +4,11 @@ import type { AppLoadContext, EntryContext } from "@remix-run/node";
 import { createReadableStreamFromReadable } from "@remix-run/node";
 import { RemixServer } from "@remix-run/react";
 import { isbot } from "isbot";
+import { I18nextProvider } from "react-i18next";
 import { renderToPipeableStream } from "react-dom/server";
 
+import { detectLocale } from "~/i18n.server";
+import { createI18n } from "~/i18n/i18next";
 import { addDocumentResponseHeaders } from "~/shopify.server";
 
 const ABORT_DELAY = 5_000;
@@ -21,6 +24,10 @@ export default async function handleRequest(
   // admin embed us, per shop.
   addDocumentResponseHeaders(request, responseHeaders);
 
+  // One instance per request: two shops rendering in different languages at
+  // the same time must not race on a shared global language.
+  const i18n = await createI18n(detectLocale(request));
+
   const userAgent = request.headers.get("user-agent");
   const callbackName = userAgent && isbot(userAgent) ? "onAllReady" : "onShellReady";
 
@@ -28,7 +35,9 @@ export default async function handleRequest(
     let didError = false;
 
     const { pipe, abort } = renderToPipeableStream(
-      <RemixServer context={remixContext} url={request.url} abortDelay={ABORT_DELAY} />,
+      <I18nextProvider i18n={i18n}>
+        <RemixServer context={remixContext} url={request.url} abortDelay={ABORT_DELAY} />
+      </I18nextProvider>,
       {
         [callbackName]: () => {
           const body = new PassThrough();

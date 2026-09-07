@@ -61,6 +61,43 @@ fails `tests/unit/scoped-models.test.ts` until it is either scoped or added to
 
 See `docs/adr/0002-tenant-isolation.md`.
 
+## Background jobs — required in every deployed environment
+
+`JOBS_RUNNER_TOKEN` must be set and `POST /internal/jobs/run` scheduled once a
+minute. Without it the runner refuses to run and the post-uninstall PII purge
+never happens — a GDPR obligation, not a nice-to-have.
+
+```
+* * * * * curl -fsS -XPOST -H "Authorization: Bearer $JOBS_RUNNER_TOKEN" \
+            https://<app-url>/internal/jobs/run
+```
+
+See `docs/adr/0004-webhooks-and-jobs.md`.
+
+## Adding a webhook
+
+1. Add the topic, URI and handler to `app/lib/webhooks/registry.ts`.
+2. Declare the same topic and URI in `shopify.app.toml`.
+
+`tests/unit/webhook-registry.test.ts` fails if the two disagree — which catches
+both a handler that never runs and a subscription that 404s while Shopify
+retries it for 48 hours. Handlers receive a verified payload, run inside the
+shop's tenant scope, and must be idempotent: deliveries are at-least-once.
+
+## Translating
+
+Strings live in `app/i18n/locales/{en,ar}.json`; English is the source of truth.
+`tests/unit/i18n-catalogs.test.ts` fails on a missing key, a blank string, a
+mismatched `{{placeholder}}`, or English left in the Arabic file.
+
+**Translate in components, not loaders.** On a client-side navigation there is
+no `?locale=` for the server to read, while the client i18next instance already
+holds the right language. Server-side text a _buyer_ will read — emails, agent
+replies — uses `getShopT(shop.primaryLocale)`, because the language the admin
+happens to be open in is the wrong answer for them.
+
+See `docs/adr/0003-i18n-without-a-framework-bridge.md`.
+
 ## Repository layout
 
 ```
@@ -68,6 +105,10 @@ app/
   routes/            Remix routes — /app/* is the embedded admin (9 pages)
   lib/tenant/        Shop context + the fail-closed Prisma extension
   lib/nav/           The nine sidebar pages, one source of truth
+  lib/audit/         The audit writer every AI action goes through
+  lib/webhooks/      Registry, dispatch, handlers
+  lib/jobs/          Durable queue, runner, handlers
+  i18n/              Locale config and the EN/AR catalogs
   db.server.ts       The scoped Prisma client every feature uses
   shopify.server.ts  Shopify app config, withAdmin()
 packages/            Shared packages (pricing-engine lands in phase 1)

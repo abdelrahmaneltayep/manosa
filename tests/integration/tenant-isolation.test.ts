@@ -210,6 +210,21 @@ describe("abuse cases", () => {
   });
 });
 
+describe("transactions", () => {
+  it("scopes queries inside an interactive transaction", async () => {
+    await seedBothShops();
+
+    const seen = await inBeta(() => db.$transaction(async (tx) => tx.shop.findMany()));
+    expect(seen.map((row) => row.shop)).toEqual([BETA]);
+  });
+
+  it("refuses a transaction opened with no tenant", async () => {
+    await expect(
+      db.$transaction(async (tx) => tx.shop.findMany()),
+    ).rejects.toBeInstanceOf(MissingShopContextError);
+  });
+});
+
 describe("exemptions", () => {
   it("lets Session work without a tenant context", async () => {
     await expect(

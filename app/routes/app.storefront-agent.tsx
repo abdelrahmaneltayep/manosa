@@ -1,29 +1,31 @@
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { useTranslation } from "react-i18next";
 
+import { NAV_PAGES } from "~/lib/nav/pages";
 import { withAdmin } from "~/shopify.server";
 
-export const meta: MetaFunction = () => [{ title: "Storefront Agent · Mannon" }];
+const PAGE = NAV_PAGES.find((page) => page.key === "storefrontAgent")!;
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
   // Authenticates the embedded request and opens the tenant scope. The page has
-  // no data of its own yet; phase 5.2 fills this in.
+  // no data of its own yet; phase ${PAGE.phase} fills this in.
   withAdmin(request, async ({ session }) => json({ shop: session.shop }));
 
 export default function StorefrontAgentPage() {
+  const { t } = useTranslation();
+  const label = t(`nav.${PAGE.key}`);
+
   return (
-    <s-page heading="Storefront Agent">
+    <s-page heading={label}>
       <s-section>
-        <s-paragraph>
-          Configure the Buyer Agent your wholesale customers chat with, and review every
-          conversation.
-        </s-paragraph>
+        <s-paragraph>{t(`page.${PAGE.key}.description`)}</s-paragraph>
       </s-section>
-      <s-section heading="Not built yet">
-        <s-banner tone="info" heading="Scaffold only">
+      <s-section heading={t("scaffold.heading")}>
+        <s-banner tone="info">
+          <s-heading>{t("scaffold.bannerHeading")}</s-heading>
           <s-paragraph>
-            This page is a routing and layout placeholder from phase 0.1. The Storefront
-            Agent feature set lands in phase 5.2.
+            {t("scaffold.body", { feature: label, phase: PAGE.phase })}
           </s-paragraph>
         </s-banner>
       </s-section>

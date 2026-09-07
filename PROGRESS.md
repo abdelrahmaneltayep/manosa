@@ -82,6 +82,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 - **Fail-closed tenant isolation** via a Prisma client extension — `docs/adr/0002`.
 - **Polaris web components** (`s-*`) over React Polaris, per the spec. `@shopify/polaris`
   is not installed, so nothing can accidentally import the React components.
+- **i18n on i18next directly**, not through `remix-i18next` — `docs/adr/0003`.
+- **One webhook registry**, drift-tested against `shopify.app.toml`, and a
+  Postgres-backed job runner rather than a broker — `docs/adr/0004`.
 - **Scopes start minimal** (`read_products,read_customers,write_customers,read_orders,write_draft_orders,write_discounts`)
   and each phase adds only what it needs, with a reason.
 
@@ -102,5 +105,10 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
    wholesale prices at checkout) is the suite reading, not the brand-doc reading.
    I am building to the three spec files; flagging so the divergence is a decision
    rather than a drift.
-3. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
+3. **Deferred to 7.2 on purpose, recorded so they are not forgotten:** the three
+   mandatory GDPR compliance webhooks (`customers/data_request`,
+   `customers/redact`, `shop/redact`), pruning of `WebhookDelivery` rows, and the
+   12-month `AuditLog` retention the checklist specifies in §8. The framework and
+   the job runner take each of these as a few lines when that task comes.
+4. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
    Left as-is — say the word if it should be renamed.

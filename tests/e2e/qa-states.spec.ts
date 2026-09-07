@@ -11,7 +11,7 @@ import { expect, test, type Page } from "@playwright/test";
  * Run with: npx playwright test tests/e2e/qa-states.spec.ts
  */
 
-const OUT = "qa/0.1";
+const OUT = process.env.QA_TASK_DIR ?? "qa/0.2";
 
 async function blockAppBridge(page: Page) {
   await page.route("https://cdn.shopify.com/**", (route) => route.abort());
@@ -46,6 +46,29 @@ test.describe("QA state captures — task 0.1", () => {
     await page.getByRole("button", { name: "Install Mannon" }).click();
     await page.screenshot({
       path: `${OUT}/install-page-required-field.png`,
+      fullPage: true,
+    });
+  });
+
+  test("install page, Arabic RTL", async ({ page }) => {
+    await blockAppBridge(page);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/?locale=ar");
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    await page.screenshot({ path: `${OUT}/install-page-arabic-rtl.png`, fullPage: true });
+  });
+
+  test("install page, Arabic RTL on mobile", async ({ page }) => {
+    await blockAppBridge(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/?locale=ar");
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    const overflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflows).toBe(false);
+    await page.screenshot({
+      path: `${OUT}/install-page-arabic-rtl-mobile.png`,
       fullPage: true,
     });
   });
