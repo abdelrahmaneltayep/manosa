@@ -1,0 +1,38 @@
+# Mannon — B2B Wholesale Pricing
+#
+# Run `shopify app config link` once against the Partners app to populate
+# `client_id`, then `shopify app dev --store=mannon-9iu9ewku.myshopify.com`.
+# Everything else in this file is checked in on purpose so the app config is
+# reviewable in the diff rather than living only in the Partners dashboard.
+
+name = "mannon"
+handle = "mannon"
+# client_id = ""   # populated by `shopify app config link`
+application_url = "https://localhost:3000"
+embedded = true
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
+
+[access_scopes]
+# Minimum scopes for Phase 0. Each later phase adds only what it needs and
+# records the reason in docs/adr/. See PROGRESS.md.
+scopes = "read_products,read_customers,write_customers,read_orders,write_draft_orders,write_discounts"
+
+[auth]
+redirect_urls = [
+  "https://localhost:3000/auth/callback",
+  "https://localhost:3000/auth/shopify/callback",
+  "https://localhost:3000/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2025-07"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+[pos]
+embedded = false

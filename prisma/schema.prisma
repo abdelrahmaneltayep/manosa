@@ -1,0 +1,64 @@
+// Mannon — B2B Wholesale Pricing
+//
+// Multi-tenancy rule: every model that holds merchant data carries a `shop`
+// column. The Prisma client extension in app/lib/tenant/shop-scope.server.ts
+// derives the scoped-model set from the DMMF at runtime — a model gets tenant
+// isolation the moment it has a `shop` field, with no registration step to
+// forget. Models that must stay unscoped are listed explicitly in
+// UNSCOPED_MODELS there, and each one needs a comment saying why.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Shopify OAuth sessions. Managed by @shopify/shopify-app-session-storage-prisma.
+/// UNSCOPED on purpose: session lookup happens during OAuth, before a shop
+/// context exists. The library's own queries are already keyed by shop or id.
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+
+  @@index([shop])
+}
+
+/// One row per installed store. Created on first authenticated request and
+/// soft-closed by the app/uninstalled webhook (Phase 0.2) so we keep the
+/// install history without keeping PII.
+model Shop {
+  id            String    @id @default(cuid())
+  /// The myshopify.com domain. Tenant key for every other table.
+  shop          String    @unique
+  name          String?
+  email         String?
+  countryCode   String?
+  currencyCode  String?
+  ianaTimezone  String?
+  primaryLocale String    @default("en")
+  installedAt   DateTime  @default(now())
+  uninstalledAt DateTime?
+  /// Set by the Danger zone "pause app" control (Settings, Phase 6.2).
+  /// While paused, pricing rules stop applying but nothing is deleted.
+  pausedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([uninstalledAt])
+}
