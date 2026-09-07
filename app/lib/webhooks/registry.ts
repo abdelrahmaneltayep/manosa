@@ -1,3 +1,4 @@
+import { handleAppSubscriptionsUpdate } from "~/lib/webhooks/handlers/app-subscriptions-update.server";
 import { handleAppUninstalled } from "~/lib/webhooks/handlers/app-uninstalled.server";
 
 /**
@@ -38,6 +39,14 @@ export const WEBHOOK_SUBSCRIPTIONS: readonly WebhookSubscription[] = [
     uri: "/webhooks/app/uninstalled",
     description: "Revoke access tokens immediately and schedule the GDPR PII purge.",
     handler: handleAppUninstalled,
+  },
+  {
+    topic: "app_subscriptions/update",
+    uri: "/webhooks/app-subscriptions/update",
+    description:
+      "Keep the cached plan correct the moment a subscription is approved, " +
+      "cancelled, or frozen by a failed charge.",
+    handler: handleAppSubscriptionsUpdate,
   },
 ] as const;
 

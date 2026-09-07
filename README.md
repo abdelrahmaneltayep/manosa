@@ -61,6 +61,32 @@ fails `tests/unit/scoped-models.test.ts` until it is either scoped or added to
 
 See `docs/adr/0002-tenant-isolation.md`.
 
+## Plans and gating
+
+Free · **Pro $29** · **Growth $59** · Agentic $99 — two months free annually,
+14-day trial on paid plans. Pro is the entry tier and Growth the mid tier;
+`app/lib/billing/plans.ts` is the source of truth and `rank` is the ordering.
+
+Gate on the **server**, by capability, never by plan name:
+
+```ts
+await assertFeature("net_terms"); // throws FeatureLockedError
+await assertWithinLimit("pricingRules", count); // throws LimitReachedError
+```
+
+Teasers and disabled buttons are courtesy; these are the enforcement. Pass the
+count to `assertWithinLimit` from inside the same transaction as the insert —
+counting separately races.
+
+A lapsed subscription **pauses** paid capability and never deletes anything:
+`entitlements.plan` remembers what was bought, `entitlements.effectivePlan` is
+what applies now. A failed charge keeps the plan working for a 7-day grace
+period.
+
+Set `SHOPIFY_BILLING_TEST_MODE=true` on development stores so no money moves.
+
+See `docs/adr/0005-billing-and-gating.md`.
+
 ## Background jobs — required in every deployed environment
 
 `JOBS_RUNNER_TOKEN` must be set and `POST /internal/jobs/run` scheduled once a
@@ -108,6 +134,8 @@ app/
   lib/audit/         The audit writer every AI action goes through
   lib/webhooks/      Registry, dispatch, handlers
   lib/jobs/          Durable queue, runner, handlers
+  lib/billing/       Plan catalog, entitlements, the gate, subscription sync
+  components/        Presentational components, renderable without a router
   i18n/              Locale config and the EN/AR catalogs
   db.server.ts       The scoped Prisma client every feature uses
   shopify.server.ts  Shopify app config, withAdmin()

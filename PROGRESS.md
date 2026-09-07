@@ -78,6 +78,14 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 ## Decisions taken
 
+- **Plan ladder: Free · Pro $29 · Growth $59 · Agentic $99** (confirmed by the
+  user, 0.3). Pro is the entry paid tier and Growth the mid tier — not a typo.
+  Entitlements attach to the price point; `rank` in `app/lib/billing/plans.ts`
+  is the ordering, and nothing should infer one from the names.
+- **Shopify Billing API, not Managed Pricing** — the checklist's Plans page
+  (usage meters, downgrade impact preview, Plan Advisor) cannot live on a page
+  Shopify renders. `docs/adr/0005`.
+
 - **PostgreSQL in every environment**, not SQLite in dev — `docs/adr/0001`.
 - **Fail-closed tenant isolation** via a Prisma client extension — `docs/adr/0002`.
 - **Polaris web components** (`s-*`) over React Polaris, per the spec. `@shopify/polaris`
@@ -90,13 +98,16 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 ## Open questions (blocking where noted)
 
-1. **Plan ladder — blocks 0.3.** The build prompt and `…pages-features.md` §9 say
+1. ~~**Plan ladder**~~ — resolved: Free · Pro $29 · Growth $59 · Agentic $99.
+
+   _Original question, for the record:_ The build prompt and `…pages-features.md` §9 say
    Free / Growth $29 / Pro $59 / Agentic $99. `mannon-brand.md` §7 says
    Free $0 / Starter $9 / Growth $29 / Scale $69, with Claude features unlocking at
    Growth+. These are different products commercially — four tiers with the agent
    at $99 versus at $69, and a $9 tier that does not exist in the other. Which is
    current? Everything else in 0.3 (gate middleware, usage meters, the Plan Advisor's
    honesty rules) is unaffected and can be built either way.
+
 2. **Product framing — non-blocking, worth confirming.** The three spec files
    describe a broad wholesale-pricing suite (rules engine, forms, limits, terms).
    `mannon-brand.md` describes a narrower quote → counter → accept → reorder product
@@ -105,10 +116,16 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
    wholesale prices at checkout) is the suite reading, not the brand-doc reading.
    I am building to the three spec files; flagging so the divergence is a decision
    rather than a drift.
-3. **Deferred to 7.2 on purpose, recorded so they are not forgotten:** the three
+3. **Deferred from 0.3 on purpose:** the Plans page discount-code field (needs
+   redemption tracking to be real, rather than a field that swallows any code);
+   the ✦ Plan Advisor (needs the AI infrastructure from 4.1 and a month of usage
+   to be honest); and "export offered first" on downgrade (nothing exportable
+   exists until 1.4). Usage meters read zero until 1.3 and 2.2 fill in the two
+   counts, as the task specifies.
+4. **Deferred to 7.2 on purpose, recorded so they are not forgotten:** the three
    mandatory GDPR compliance webhooks (`customers/data_request`,
    `customers/redact`, `shop/redact`), pruning of `WebhookDelivery` rows, and the
    12-month `AuditLog` retention the checklist specifies in §8. The framework and
    the job runner take each of these as a few lines when that task comes.
-4. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
+5. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
    Left as-is — say the word if it should be renamed.

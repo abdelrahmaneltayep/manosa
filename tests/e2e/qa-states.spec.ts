@@ -1,3 +1,7 @@
+import { existsSync, readdirSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
 import { expect, test, type Page } from "@playwright/test";
 
 /**
@@ -79,5 +83,36 @@ test.describe("QA state captures — task 0.1", () => {
     await page.goto("/definitely-not-a-page");
     await expect(page.locator("body")).toContainText("Page not found");
     await page.screenshot({ path: `${OUT}/error-404.png`, fullPage: true });
+  });
+});
+
+/**
+ * Screenshot the Plans page states rendered by
+ * tests/unit/plans-page-states.test.tsx. Generate the HTML first:
+ *
+ *   QA_CAPTURE=1 npx vitest run tests/unit/plans-page-states.test.tsx
+ *
+ * These are structure-only: Polaris web components cannot be loaded in this
+ * environment, so the styling is a stand-in and each capture says so.
+ */
+test.describe("Plans page states", () => {
+  const dir = resolve(process.cwd(), "qa/0.3");
+  const states = existsSync(dir)
+    ? readdirSync(dir).filter((file) => file.endsWith(".html"))
+    : [];
+
+  for (const file of states) {
+    test(`plans: ${file.replace(/\.html$/, "")}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1100, height: 900 });
+      await page.goto(pathToFileURL(resolve(dir, file)).href);
+      await page.screenshot({
+        path: resolve(dir, file.replace(/\.html$/, ".png")),
+        fullPage: true,
+      });
+    });
+  }
+
+  test("the captures exist at all", () => {
+    expect(states.length, "run the vitest capture step first").toBeGreaterThan(0);
   });
 });

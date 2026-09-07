@@ -59,10 +59,45 @@ model Shop {
   pausedAt      DateTime?
   /// Set when the post-uninstall PII purge has run (GDPR, within 48h).
   piiPurgedAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+
+  // --- Billing (phase 0.3) -----------------------------------------------
+  // Shopify is the source of truth; this is a cache so the gate can answer on
+  // every request without an Admin API round trip. Kept fresh by the
+  // app_subscriptions/update webhook, and re-synced when it goes stale.
+  planKey            String        @default("free")
+  billingStatus      BillingStatus @default(NONE)
+  billingInterval    String?
+  subscriptionId     String?
+  subscriptionName   String?
+  isTestSubscription Boolean       @default(false)
+  trialEndsAt        DateTime?
+  currentPeriodEnd   DateTime?
+  /// End of the 7-day grace period after a failed charge. Features keep
+  /// working until then; nothing is ever deleted.
+  graceEndsAt        DateTime?
+  billingSyncedAt    DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   @@index([uninstalledAt])
+}
+
+// ---------------------------------------------------------------------------
+// Billing (phase 0.3)
+// ---------------------------------------------------------------------------
+
+enum BillingStatus {
+  /// No subscription: the shop is on Free.
+  NONE
+  /// Inside the 14-day trial of a paid plan.
+  TRIAL
+  ACTIVE
+  /// Charge failed. Shopify freezes the subscription; we keep the paid plan
+  /// working through a 7-day grace period rather than cutting access instantly.
+  PAST_DUE
+  /// Merchant cancelled, or the subscription expired. Paid features pause and
+  /// the data behind them is kept intact.
+  CANCELLED
 }
 
 // ---------------------------------------------------------------------------

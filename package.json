@@ -22,9 +22,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test tests/e2e/smoke.spec.ts",
     "shopify": "shopify",
-    "jobs:run": "curl -fsS -X POST -H \"Authorization: Bearer $JOBS_RUNNER_TOKEN\" \"${APP_URL:-http://localhost:3000}/internal/jobs/run\""
+    "jobs:run": "curl -fsS -X POST -H \"Authorization: Bearer $JOBS_RUNNER_TOKEN\" \"${APP_URL:-http://localhost:3000}/internal/jobs/run\"",
+    "qa:capture": "QA_CAPTURE=1 vitest run tests/unit/plans-page-states.test.tsx && playwright test tests/e2e/qa-states.spec.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

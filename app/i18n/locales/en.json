@@ -66,5 +66,134 @@
       "heading": "Something went wrong",
       "body": "Mannon couldn't load this page. Reload to try again — nothing was changed."
     }
+  },
+  "plans": {
+    "currentPlan": "Current plan",
+    "onPlan": "You're on {{plan}}",
+    "free": "Free",
+    "perMonth": "${{price}}/month",
+    "perYear": "${{price}}/year",
+    "billedMonthly": "Billed monthly",
+    "billedAnnually": "Billed once a year",
+    "annualSaving": "Save ${{amount}} a year",
+    "interval": {
+      "legend": "Billing period",
+      "monthly": "Monthly",
+      "annual": "Yearly"
+    },
+    "choose": "Choose {{plan}}",
+    "switchTo": "Switch to {{plan}}",
+    "thisIsYourPlan": "This is your plan",
+    "trial": {
+      "pill_one": "{{count}} day left in your trial",
+      "pill_other": "{{count}} days left in your trial",
+      "endingHeading_one": "Your trial ends in {{count}} day",
+      "endingHeading_other": "Your trial ends in {{count}} days",
+      "endingBody": "After that, {{plan}} is ${{price}} a month. Nothing is deleted if you decide not to continue."
+    },
+    "pastDue": {
+      "heading": "We couldn't take the last payment",
+      "body_one": "Your {{plan}} features keep working for {{count}} more day. Update the payment method in Shopify to avoid any interruption.",
+      "body_other": "Your {{plan}} features keep working for {{count}} more days. Update the payment method in Shopify to avoid any interruption."
+    },
+    "cancelled": {
+      "heading": "Paid features are paused",
+      "body": "Your subscription ended. Nothing has been deleted — pick a plan and everything comes back exactly as you left it.",
+      "resume": "Resume {{plan}}"
+    },
+    "usage": {
+      "heading": "Your usage",
+      "pricingRules": "Pricing rules",
+      "forms": "Registration forms",
+      "unlimited": "Unlimited",
+      "ofLimit": "{{used}} of {{limit}}",
+      "usedUnlimited": "{{used}} used",
+      "nearingHeading": "You're close to your {{item}} limit",
+      "nearingBody": "You've used {{used}} of {{limit}}. {{plan}} makes them unlimited.",
+      "atHeading": "You've reached your {{item}} limit",
+      "atBody": "The {{plan}} plan allows {{limit}}. Upgrade to add more — what you already have keeps working.",
+      "pending": "Counting…"
+    },
+    "change": {
+      "upgradeHeading": "Switch to {{plan}}",
+      "downgradeHeading": "Move to {{plan}}",
+      "intervalHeading": "Change your billing period",
+      "proration": "Shopify will credit you for the unused part of your current plan and show the exact amount to approve on the next screen.",
+      "takesEffectNow": "Takes effect as soon as you approve the charge.",
+      "takesEffectAtPeriodEnd": "You keep {{plan}} until {{date}} — the period you've already paid for — and move over after that.",
+      "takesEffectAtPeriodEndNoDate": "You keep your current plan until the end of the period you've already paid for.",
+      "gaining": "What you gain",
+      "losing": "What pauses",
+      "nothingDeleted": "Nothing is deleted. Paused features and their data come back if you move up again.",
+      "limitTightens": "{{item}}: {{used}} in use, {{becomes}} allowed",
+      "overageHeading": "Some of what you've built will pause",
+      "overageBody": "{{item}}: you have {{overBy}} more than {{plan}} allows. They stay saved and stop applying until you move back up.",
+      "exportFirst": "Export your data first",
+      "confirmUpgrade": "Continue to Shopify",
+      "confirmDowngrade": "Move to {{plan}}",
+      "confirmCancel": "Move to Free",
+      "cancel": "Keep my current plan"
+    },
+    "compare": {
+      "heading": "What's in each plan",
+      "feature": "Feature",
+      "included": "Included",
+      "notIncluded": "Not included"
+    },
+    "test": {
+      "heading": "Test subscription",
+      "body": "This subscription is in Shopify's test mode, so no money changes hands."
+    },
+    "error": {
+      "heading": "We couldn't start that change",
+      "body": "Shopify didn't accept the request. Nothing was charged — try again, and if it keeps happening, contact us."
+    },
+    "advisorSoon": {
+      "heading": "Plan advice is coming",
+      "body": "Once Mannon has a month of your usage, Claude will tell you whether your plan still fits — including when the honest answer is to stay where you are."
+    }
+  },
+  "planName": {
+    "free": "Free",
+    "growth": "Growth",
+    "pro": "Pro",
+    "agentic": "Agentic"
+  },
+  "planTagline": {
+    "free": "One pricing rule and one form — enough to see Mannon work on a real product.",
+    "growth": "Unlimited rules and forms, CSV import, auto-tagging and order limits.",
+    "pro": "Net terms, shipping rules, draft orders, POS, Markets — and the Merchant Agent.",
+    "agentic": "The storefront Buyer Agent, PO-to-order, quote drafting and ERP sync."
+  },
+  "feature": {
+    "csv_import": "CSV price import and export",
+    "auto_tagging": "Automatic customer tagging",
+    "order_limits": "Order limits and case packs",
+    "net_terms": "Net payment terms",
+    "shipping_rules": "Wholesale shipping rules",
+    "draft_orders": "Draft orders and quotes",
+    "pos": "Shopify POS support",
+    "markets": "Markets and multi-currency",
+    "merchant_agent": "Merchant Agent in the admin",
+    "buyer_agent": "Buyer Agent on your storefront",
+    "po_to_order": "Purchase order to draft order",
+    "quote_assistant": "Quote drafting assistant",
+    "api_sync": "API and ERP sync",
+    "priority_support": "Priority support"
+  },
+  "limit": {
+    "pricingRules": "Pricing rules",
+    "forms": "Registration forms",
+    "pricingRulesAllowance_one": "{{count}} pricing rule",
+    "pricingRulesAllowance_other": "{{count}} pricing rules",
+    "formsAllowance_one": "{{count}} registration form",
+    "formsAllowance_other": "{{count}} registration forms",
+    "unlimitedRules": "Unlimited pricing rules",
+    "unlimitedForms": "Unlimited registration forms"
+  },
+  "locked": {
+    "heading": "{{feature}} is on {{plan}}",
+    "body": "Your plan doesn't include this yet. Everything else keeps working.",
+    "cta": "See plans"
   }
 }

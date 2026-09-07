@@ -26,6 +26,26 @@ function flatten(node: Json, prefix = ""): Record<string, string> {
 const EN = flatten(en as Json);
 const AR = flatten(ar as Json);
 
+/**
+ * i18next appends a plural category to the key it looks up, and the categories
+ * differ by language: English needs `one`/`other`, Arabic needs
+ * `zero`/`one`/`two`/`few`/`many`/`other`. So the catalogs are compared on the
+ * base key, and the required categories are checked per language.
+ */
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+const EN_PLURAL_CATEGORIES = ["one", "other"];
+const AR_PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
+
+const baseKey = (key: string) => key.replace(PLURAL_SUFFIX, "");
+const baseKeys = (catalog: Record<string, string>) =>
+  new Set(Object.keys(catalog).map(baseKey));
+const isPluralised = (catalog: Record<string, string>, base: string) =>
+  Object.keys(catalog).some((key) => key !== base && baseKey(key) === base);
+const categoriesFor = (catalog: Record<string, string>, base: string) =>
+  Object.keys(catalog)
+    .filter((key) => baseKey(key) === base && PLURAL_SUFFIX.test(key))
+    .map((key) => key.match(PLURAL_SUFFIX)![1]!);
+
 /** {{name}} placeholders a string expects, sorted. */
 function placeholders(value: string): string[] {
   return [...value.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]!).sort();
@@ -33,13 +53,39 @@ function placeholders(value: string): string[] {
 
 describe("translation catalogs", () => {
   it("covers every English key in Arabic", () => {
-    expect(Object.keys(EN).filter((key) => !(key in AR))).toEqual([]);
+    const ar = baseKeys(AR);
+    expect([...baseKeys(EN)].filter((key) => !ar.has(key))).toEqual([]);
   });
 
   it("has no Arabic keys that English does not define", () => {
     // English is the source of truth; a stray Arabic key is a rename that only
     // got applied on one side.
-    expect(Object.keys(AR).filter((key) => !(key in EN))).toEqual([]);
+    const en = baseKeys(EN);
+    expect([...baseKeys(AR)].filter((key) => !en.has(key))).toEqual([]);
+  });
+
+  it("gives every pluralised string all the categories its language needs", () => {
+    const missing: string[] = [];
+
+    for (const base of baseKeys(EN)) {
+      const pluralInEn = isPluralised(EN, base);
+      const pluralInAr = isPluralised(AR, base);
+      if (!pluralInEn && !pluralInAr) continue;
+
+      // A count-bearing string must pluralise in both languages, or Arabic
+      // renders "3 يوم" where it needs "3 أيام".
+      for (const [label, catalog, required] of [
+        ["en", EN, EN_PLURAL_CATEGORIES],
+        ["ar", AR, AR_PLURAL_CATEGORIES],
+      ] as const) {
+        const have = new Set(categoriesFor(catalog, base));
+        for (const category of required) {
+          if (!have.has(category)) missing.push(`${label}:${base}_${category}`);
+        }
+      }
+    }
+
+    expect(missing).toEqual([]);
   });
 
   it("has no blank strings in either catalog", () => {
@@ -55,17 +101,27 @@ describe("translation catalogs", () => {
    * script you cannot read.
    */
   it("keeps the same interpolation placeholders in every language", () => {
-    const mismatched = Object.keys(EN).filter(
-      (key) => placeholders(EN[key]!).join() !== placeholders(AR[key]!).join(),
-    );
+    const mismatched = Object.keys(EN).filter((key) => {
+      const arabic = AR[key] ?? AR[`${baseKey(key)}_other`];
+      if (arabic === undefined) return false; // covered by the coverage test
+      const expected = placeholders(EN[key]!).filter((name) => name !== "count");
+      const actual = placeholders(arabic).filter((name) => name !== "count");
+      return expected.join() !== actual.join();
+    });
     expect(mismatched).toEqual([]);
   });
 
   it("does not leave an English string sitting in the Arabic catalog", () => {
     // Placeholders and the .myshopify.com domain are legitimately identical.
-    const allowed = new Set(["install.shopPlaceholder"]);
+    const allowed = new Set([
+      "install.shopPlaceholder",
+      // Prices and plan identifiers read the same in both languages.
+      "plans.perMonth",
+      "plans.perYear",
+      "plans.annualSaving",
+    ]);
     const untranslated = Object.keys(EN).filter(
-      (key) => !allowed.has(key) && EN[key] === AR[key],
+      (key) => !allowed.has(key) && AR[key] !== undefined && EN[key] === AR[key],
     );
     expect(untranslated).toEqual([]);
   });

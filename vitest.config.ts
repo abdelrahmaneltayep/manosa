@@ -10,7 +10,7 @@ export default defineConfig({
   test: {
     environment: "node",
     globalSetup: ["./tests/support/global-setup.ts"],
-    include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
+    include: ["tests/unit/**/*.test.{ts,tsx}", "tests/integration/**/*.test.{ts,tsx}"],
     // Integration tests share one Postgres schema and truncate between cases,
     // so they must not run concurrently with each other.
     fileParallelism: false,
