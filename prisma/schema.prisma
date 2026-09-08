@@ -76,8 +76,21 @@ model Shop {
   /// working until then; nothing is ever deleted.
   graceEndsAt        DateTime?
   billingSyncedAt    DateTime?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+
+  // --- Discount function wiring (phase 1.2) ------------------------------
+  /// The automatic app discount that runs Mannon's Function at checkout.
+  discountId         String?
+  /// The deployed Function this shop's discount points at.
+  discountFunctionId String?
+  /// Hash of the last published ruleset, so an unchanged ruleset is not
+  /// re-pushed to Shopify every time a rule is saved.
+  rulesetHash        String?
+  rulesetPublishedAt DateTime?
+  /// How many rules were in the last publish, for the Pricing page to show
+  /// what is actually live at checkout.
+  rulesetRuleCount   Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([uninstalledAt])
 }

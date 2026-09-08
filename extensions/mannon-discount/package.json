@@ -1,0 +1,16 @@
+{
+  "name": "mannon-discount",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "shopify": "npm exec -- shopify",
+    "build": "npm exec -- shopify app function build",
+    "preview": "npm exec -- shopify app function run"
+  },
+  "dependencies": {
+    "@mannon/pricing-engine": "*",
+    "@shopify/shopify_function": "^2.0.1"
+  }
+}

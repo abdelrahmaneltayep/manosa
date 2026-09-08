@@ -14,6 +14,7 @@ export default defineConfig({
       "tests/unit/**/*.test.{ts,tsx}",
       "tests/integration/**/*.test.{ts,tsx}",
       "packages/*/test/**/*.test.{ts,tsx}",
+      "extensions/*/test/**/*.test.{ts,tsx}",
     ],
     // Integration tests share one Postgres schema and truncate between cases,
     // so they must not run concurrently with each other.

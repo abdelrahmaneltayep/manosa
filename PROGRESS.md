@@ -11,15 +11,15 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 | Task                                                        | Status | Notes                                                                                                                                        |
 | ----------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0.1 Scaffold, auth, session storage, shop-scoped Prisma, CI | ⚠      | Code and automated tests complete and green. Embedded-admin state walkthrough is blocked in this environment — see QA-REPORT 0.1 open items. |
-| 0.2 Webhook framework, audit log, i18n EN/AR                | ☐      |                                                                                                                                              |
-| 0.3 Billing: plans, gate middleware, Plans page             | ☐      | Blocked on a plan-ladder decision — see Open questions.                                                                                      |
+| 0.2 Webhook framework, audit log, i18n EN/AR                | ⚠      | Code and automated tests complete and green. Same embedded-admin walkthrough open item as 0.1. See QA-REPORT 0.2.                            |
+| 0.3 Billing: plans, gate middleware, Plans page             | ⚠      | Plan ladder resolved. Three parity items deferred with reasons; billing not yet run against real Shopify. See QA-REPORT 0.3.                 |
 
 ## Phase 1 — Pricing engine + Pricing page
 
 | Task                                                        | Status |
 | ----------------------------------------------------------- | ------ |
 | 1.1 `packages/pricing-engine` (golden vectors first)        | ☑      |
-| 1.2 Shopify discount Function wired to the engine           | ☐      |
+| 1.2 Shopify discount Function wired to the engine           | ⚠      |
 | 1.3 Pricing page: rule list, builder, priority/combinations | ☐      |
 | 1.4 CSV import/export with dry-run and undo                 | ☐      |
 
@@ -78,6 +78,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 ## Decisions taken
 
+- **Checkout reads a published ruleset from metafields**, because a Function
+  cannot call our API and its input query is fixed at deploy time. The Function
+  computes nothing itself. `docs/adr/0007`.
 - **The pricing engine is a pure, dependency-free package** and never converts
   currency — an absolute-money rule in an unpriced currency is skipped, not
   converted at a rate we invented. Money is integer minor units throughout.
@@ -120,16 +123,25 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
    wholesale prices at checkout) is the suite reading, not the brand-doc reading.
    I am building to the three spec files; flagging so the divergence is a decision
    rather than a drift.
-3. **Deferred from 0.3 on purpose:** the Plans page discount-code field (needs
+3. **Hard dependencies of 1.3, created by 1.2:**
+   - 1.3 must call `publishRuleset(admin, rules)` after every rule save. Nothing
+     else keeps checkout in step with the admin, and an unpublished rule simply
+     does not exist at checkout.
+   - 1.3 must publish `$app:mannon.collections` on products (a `products/update`
+     handler plus a backfill job), or collection-targeted rules will not apply
+     at checkout even though the admin shows them applying.
+   - 1.3 should publish a country-to-market map so market-scoped rules can be
+     evaluated at checkout; until then the Function drops them, deliberately.
+4. **Deferred from 0.3 on purpose:** the Plans page discount-code field (needs
    redemption tracking to be real, rather than a field that swallows any code);
    the ✦ Plan Advisor (needs the AI infrastructure from 4.1 and a month of usage
    to be honest); and "export offered first" on downgrade (nothing exportable
    exists until 1.4). Usage meters read zero until 1.3 and 2.2 fill in the two
    counts, as the task specifies.
-4. **Deferred to 7.2 on purpose, recorded so they are not forgotten:** the three
+5. **Deferred to 7.2 on purpose, recorded so they are not forgotten:** the three
    mandatory GDPR compliance webhooks (`customers/data_request`,
    `customers/redact`, `shop/redact`), pruning of `WebhookDelivery` rows, and the
    12-month `AuditLog` retention the checklist specifies in §8. The framework and
    the job runner take each of these as a few lines when that task comes.
-5. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
+6. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
    Left as-is — say the word if it should be renamed.

@@ -1,4 +1,5 @@
 import { handleAppSubscriptionsUpdate } from "~/lib/webhooks/handlers/app-subscriptions-update.server";
+import { handleCustomersUpsert } from "~/lib/webhooks/handlers/customers-upsert.server";
 import { handleAppUninstalled } from "~/lib/webhooks/handlers/app-uninstalled.server";
 
 /**
@@ -47,6 +48,20 @@ export const WEBHOOK_SUBSCRIPTIONS: readonly WebhookSubscription[] = [
       "Keep the cached plan correct the moment a subscription is approved, " +
       "cancelled, or frozen by a failed charge.",
     handler: handleAppSubscriptionsUpdate,
+  },
+  {
+    topic: "customers/create",
+    uri: "/webhooks/customers/create",
+    description: "Publish a new customer's tags so checkout can price for them.",
+    handler: handleCustomersUpsert,
+  },
+  {
+    topic: "customers/update",
+    uri: "/webhooks/customers/update",
+    description:
+      "Republish a buyer's tags when they change — this is how approving " +
+      "someone for wholesale reaches checkout.",
+    handler: handleCustomersUpsert,
   },
 ] as const;
 

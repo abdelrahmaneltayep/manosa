@@ -68,6 +68,37 @@ Rules for working on it:
 
 See `docs/adr/0006-pricing-engine.md`.
 
+## Getting prices to checkout
+
+`extensions/mannon-discount` is a Shopify Function that applies each approved
+buyer's price at checkout. It **computes nothing** — it reads the published
+ruleset and calls `@mannon/pricing-engine`, the same module the admin and the
+Buyer Agent call, so what a buyer is quoted and what they are charged cannot
+disagree.
+
+A Function cannot call our API and its input query is fixed at deploy time, so
+everything it needs arrives as metafields:
+
+| Metafield                 | Owner                  | Written by                                |
+| ------------------------- | ---------------------- | ----------------------------------------- |
+| `$app:mannon.ruleset`     | the automatic discount | `publishRuleset`                          |
+| `$app:mannon.buyer`       | customer               | `publishBuyerFacts`, on customer webhooks |
+| `$app:mannon.collections` | product                | phase 1.3                                 |
+
+**`publishRuleset` is the only thing keeping checkout in step with the admin.**
+Anything not published does not exist at checkout, so call it after every change
+to a rule.
+
+The Function never throws: one that fails applies no discounts at all, which
+would silently charge every wholesale buyer retail. One malformed rule costs
+that rule.
+
+Testing it needs no store — it is a plain `(input) => output` function and the
+CLI only wraps it in WebAssembly, so `extensions/mannon-discount/test` exercises
+the real checkout behaviour.
+
+See `docs/adr/0007-checkout-pricing.md`.
+
 ## Multi-tenancy — read this before writing a query
 
 Every table holding merchant data carries a `shop` column, and **every query is
@@ -170,6 +201,8 @@ app/
   shopify.server.ts  Shopify app config, withAdmin()
 packages/
   pricing-engine/    The one source of every price. Pure and dependency-free.
+extensions/
+  mannon-discount/   The Shopify Function that prices the cart at checkout.
 prisma/              Schema and migrations
 tests/               unit · integration · e2e
 qa/                  Per-task QA state captures

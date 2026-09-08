@@ -1,0 +1,67 @@
+# Everything the Function needs, in one query.
+#
+# The query is fixed at deploy time and serves every merchant, so nothing here
+# can depend on a particular shop's configuration. That is why the ruleset, the
+# buyer's tags and the product's collections all arrive as metafields rather
+# than as arguments to hasAnyTag/inAnyCollection: those take a list we would
+# have to bake in, and merchants change theirs daily.
+query CartInput {
+  cart {
+    cost {
+      subtotalAmount {
+        amount
+        currencyCode
+      }
+    }
+    buyerIdentity {
+      customer {
+        id
+        # Tags and Mannon groups, written by the app on customer sync.
+        buyer: metafield(namespace: "$app:mannon", key: "buyer") {
+          jsonValue
+        }
+      }
+      purchasingCompany {
+        company {
+          id
+        }
+      }
+    }
+    lines {
+      id
+      quantity
+      cost {
+        amountPerQuantity {
+          amount
+          currencyCode
+        }
+      }
+      merchandise {
+        __typename
+        ... on ProductVariant {
+          id
+          product {
+            id
+            # Collection membership, written by the app on product sync.
+            collections: metafield(namespace: "$app:mannon", key: "collections") {
+              jsonValue
+            }
+          }
+        }
+      }
+    }
+  }
+  discount {
+    discountClasses
+    # The published ruleset. Lives on the discount node so the configuration
+    # travels with the discount it drives.
+    ruleset: metafield(namespace: "$app:mannon", key: "ruleset") {
+      jsonValue
+    }
+  }
+  localization {
+    country {
+      isoCode
+    }
+  }
+}

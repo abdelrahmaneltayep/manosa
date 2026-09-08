@@ -1,0 +1,23 @@
+# Mannon's wholesale pricing at checkout.
+#
+# The Function is the only thing standing between the price the app shows and
+# the price the buyer is charged, so it computes nothing itself: it reads the
+# published ruleset and asks @mannon/pricing-engine, exactly as the admin and
+# the Buyer Agent do.
+
+api_version = "2025-07"
+
+[[extensions]]
+name = "Mannon wholesale pricing"
+handle = "mannon-discount"
+type = "function"
+description = "Applies each approved buyer's wholesale price at checkout."
+
+  [[extensions.targeting]]
+  target = "cart.lines.discounts.generate.run"
+  input_query = "src/cart_lines_discounts_generate_run.graphql"
+  export = "cart-lines-discounts-generate-run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"
