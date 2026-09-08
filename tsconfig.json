@@ -30,7 +30,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./app/*"]
+      "~/*": ["./app/*"],
+      "@mannon/pricing-engine": ["./packages/pricing-engine/src/index.ts"]
     },
     "noEmit": true
   },

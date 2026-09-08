@@ -18,7 +18,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 | Task                                                        | Status |
 | ----------------------------------------------------------- | ------ |
-| 1.1 `packages/pricing-engine` (golden vectors first)        | ☐      |
+| 1.1 `packages/pricing-engine` (golden vectors first)        | ☑      |
 | 1.2 Shopify discount Function wired to the engine           | ☐      |
 | 1.3 Pricing page: rule list, builder, priority/combinations | ☐      |
 | 1.4 CSV import/export with dry-run and undo                 | ☐      |
@@ -78,6 +78,10 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 ## Decisions taken
 
+- **The pricing engine is a pure, dependency-free package** and never converts
+  currency — an absolute-money rule in an unpriced currency is skipped, not
+  converted at a rate we invented. Money is integer minor units throughout.
+  `docs/adr/0006`.
 - **Plan ladder: Free · Pro $29 · Growth $59 · Agentic $99** (confirmed by the
   user, 0.3). Pro is the entry paid tier and Growth the mid tier — not a typo.
   Entitlements attach to the price point; `rank` in `app/lib/billing/plans.ts`

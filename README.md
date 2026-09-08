@@ -39,6 +39,35 @@ npm run dev                   # shopify app dev --store=mannon-9iu9ewku.myshopif
 | `npm test`                           | Vitest — unit + integration (needs `mannon_test`) |
 | `npm run test:e2e`                   | Playwright smoke tests against the built server   |
 
+## The pricing engine — read this before showing a price
+
+`packages/pricing-engine` answers `{ customer, product, quantity, market } →
+price`. **Every price Mannon shows or charges comes from it** — the Shopify
+Function, the storefront blocks, the Buyer Agent's tools, the PO parser and the
+admin previews all call the same module, so the agent's answer and the checkout
+total can never disagree.
+
+```ts
+const result = resolvePrice({ rules, context });
+result.unitPrice; // Money — integer minor units, never a float
+result.trace; // why each rule applied or did not: "Why this price?"
+result.nextTier; // "add 8 more units to unlock the 12% tier"
+```
+
+Rules for working on it:
+
+- It is **pure**: no dependencies, no I/O, no Node built-ins. It has to run in a
+  Shopify Function and in a browser bundle. A test and an ESLint rule enforce it.
+- It **never converts currency**. An absolute-money rule in a currency the
+  merchant has not priced is skipped with `no_price_in_currency`, not converted
+  at a rate we invented.
+- It is **deterministic**, including the order rules arrive in.
+- Golden vectors in `packages/pricing-engine/test/golden/vectors.json` were
+  written from the spec before the code. Changing an expectation changes what a
+  merchant is charged — argue for it in the pull request, do not re-record.
+
+See `docs/adr/0006-pricing-engine.md`.
+
 ## Multi-tenancy — read this before writing a query
 
 Every table holding merchant data carries a `shop` column, and **every query is
@@ -139,7 +168,8 @@ app/
   i18n/              Locale config and the EN/AR catalogs
   db.server.ts       The scoped Prisma client every feature uses
   shopify.server.ts  Shopify app config, withAdmin()
-packages/            Shared packages (pricing-engine lands in phase 1)
+packages/
+  pricing-engine/    The one source of every price. Pure and dependency-free.
 prisma/              Schema and migrations
 tests/               unit · integration · e2e
 qa/                  Per-task QA state captures

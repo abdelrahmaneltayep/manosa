@@ -55,4 +55,25 @@ export default tseslint.config(
     files: ["app/db.server.ts", "app/lib/tenant/**/*.ts"],
     rules: { "no-restricted-imports": "off" },
   },
+  {
+    // The pricing engine has to run inside a Shopify Function and in a browser
+    // bundle, so it must not reach into the app or pull in a dependency.
+    // packages/pricing-engine/test/purity.test.ts enforces the same thing at
+    // runtime; this catches it while you type.
+    files: ["packages/pricing-engine/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["~/*", "@prisma/client", "@shopify/*", "@remix-run/*", "react*"],
+              message:
+                "The pricing engine is pure and dependency-free — it runs in a Shopify Function and in the browser. Pass what it needs in through the context.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
