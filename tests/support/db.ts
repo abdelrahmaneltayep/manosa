@@ -1,14 +1,22 @@
+import { Prisma } from "@prisma/client";
+
 import { prismaBase } from "~/db.server";
 
 /**
- * Wipe every table between test cases. Truncate rather than delete so the
- * order of foreign keys does not matter as the schema grows.
+ * Wipe every table between test cases.
+ *
+ * The table list comes from the schema rather than being maintained by hand:
+ * a hand-written list is a registration step to forget, and forgetting it
+ * leaks rows between tests, which shows up as a dozen unrelated failures.
+ * Truncate rather than delete so foreign-key order does not matter.
  */
-const TABLES = ["Session", "Shop", "AuditLog", "WebhookDelivery", "ScheduledJob"];
+const TABLES = Prisma.dmmf.datamodel.models.map(
+  (model) => `"${model.dbName ?? model.name}"`,
+);
 
 export async function resetDatabase() {
   await prismaBase.$executeRawUnsafe(
-    `TRUNCATE TABLE ${TABLES.map((t) => `"${t}"`).join(", ")} RESTART IDENTITY CASCADE`,
+    `TRUNCATE TABLE ${TABLES.join(", ")} RESTART IDENTITY CASCADE`,
   );
 }
 

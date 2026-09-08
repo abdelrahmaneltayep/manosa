@@ -46,5 +46,13 @@ api_version = "2025-07"
   topics = [ "customers/update" ]
   uri = "/webhooks/customers/update"
 
+  [[webhooks.subscriptions]]
+  topics = [ "products/update" ]
+  uri = "/webhooks/products/update"
+
+  [[webhooks.subscriptions]]
+  topics = [ "collections/update" ]
+  uri = "/webhooks/collections/update"
+
 [pos]
 embedded = false

@@ -68,6 +68,30 @@ Rules for working on it:
 
 See `docs/adr/0006-pricing-engine.md`.
 
+## Working on pricing rules
+
+Rules live in `PricingRule`, storing the engine's own wire shapes, so a row
+becomes an engine rule through the same code that reads the checkout ruleset —
+`toEngineRule` in `app/lib/pricing/rule-mapper.server.ts`.
+
+**Saving publishes.** `createRule`, `updateRule`, `archiveRule` and
+`reorderRules` push the active ruleset to checkout when a live rule changes. A
+rule that is not published does not exist at checkout, so this is part of
+saving, not a later reconciliation.
+
+Every row carries a `version`. A save built on a stale one is refused and the
+builder offers "overwrite with mine" or "keep theirs" — two staff saving at once
+must not both believe they won.
+
+Screens are `app/components/pricing/*`, props-only, so every state in checklist
+§2 renders in a test (`npm run qa:capture` writes them to `qa/1.3/`).
+
+One trap worth knowing: React stringifies props on custom elements, so
+`disabled={false}` becomes `disabled="false"`, which a browser reads as
+disabled. Use the `whenDisabled` helper, never a bare boolean.
+
+See `docs/adr/0008-pricing-rules.md`.
+
 ## Getting prices to checkout
 
 `extensions/mannon-discount` is a Shopify Function that applies each approved

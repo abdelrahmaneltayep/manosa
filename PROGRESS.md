@@ -20,7 +20,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 | ----------------------------------------------------------- | ------ |
 | 1.1 `packages/pricing-engine` (golden vectors first)        | ☑      |
 | 1.2 Shopify discount Function wired to the engine           | ⚠      |
-| 1.3 Pricing page: rule list, builder, priority/combinations | ☐      |
+| 1.3 Pricing page: rule list, builder, priority/combinations | ⚠      |
 | 1.4 CSV import/export with dry-run and undo                 | ☐      |
 
 ## Phase 2 — Customers & Forms
@@ -78,6 +78,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 ## Decisions taken
 
+- **Rules are stored in the engine's own wire shape**, so a database row becomes
+  an engine rule through the same code that reads the checkout ruleset. Saving
+  publishes; concurrency is version-checked. `docs/adr/0008`.
 - **Checkout reads a published ruleset from metafields**, because a Function
   cannot call our API and its input query is fixed at deploy time. The Function
   computes nothing itself. `docs/adr/0007`.
@@ -123,15 +126,15 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
    wholesale prices at checkout) is the suite reading, not the brand-doc reading.
    I am building to the three spec files; flagging so the divergence is a decision
    rather than a drift.
-3. **Hard dependencies of 1.3, created by 1.2:**
-   - 1.3 must call `publishRuleset(admin, rules)` after every rule save. Nothing
-     else keeps checkout in step with the admin, and an unpublished rule simply
-     does not exist at checkout.
-   - 1.3 must publish `$app:mannon.collections` on products (a `products/update`
-     handler plus a backfill job), or collection-targeted rules will not apply
-     at checkout even though the admin shows them applying.
-   - 1.3 should publish a country-to-market map so market-scoped rules can be
-     evaluated at checkout; until then the Function drops them, deliberately.
+3. ~~**Hard dependencies of 1.3, created by 1.2**~~ — two resolved, one deferred:
+   - ☑ Saving now publishes: every create, update, archive and reorder pushes the
+     active ruleset to checkout.
+   - ☑ `$app:mannon.collections` is published from `products/update` and
+     `collections/update`, so collection targeting works at checkout.
+   - ☐ The country-to-market map is **not** built. Rather than let the admin and
+     checkout disagree, market scoping is simply not offered in the rule builder
+     — the engine and storage support it, only the control is withheld. Needs the
+     Shopify Markets query, which cannot be verified without a store.
 4. **Deferred from 0.3 on purpose:** the Plans page discount-code field (needs
    redemption tracking to be real, rather than a field that swallows any code);
    the ✦ Plan Advisor (needs the AI infrastructure from 4.1 and a month of usage

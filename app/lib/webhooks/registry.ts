@@ -1,5 +1,7 @@
 import { handleAppSubscriptionsUpdate } from "~/lib/webhooks/handlers/app-subscriptions-update.server";
+import { handleCollectionsUpdate } from "~/lib/webhooks/handlers/collections-update.server";
 import { handleCustomersUpsert } from "~/lib/webhooks/handlers/customers-upsert.server";
+import { handleProductsUpdate } from "~/lib/webhooks/handlers/products-update.server";
 import { handleAppUninstalled } from "~/lib/webhooks/handlers/app-uninstalled.server";
 
 /**
@@ -62,6 +64,21 @@ export const WEBHOOK_SUBSCRIPTIONS: readonly WebhookSubscription[] = [
       "Republish a buyer's tags when they change — this is how approving " +
       "someone for wholesale reaches checkout.",
     handler: handleCustomersUpsert,
+  },
+  {
+    topic: "products/update",
+    uri: "/webhooks/products/update",
+    description:
+      "Republish a product's collection membership so collection-targeted " +
+      "rules apply at checkout.",
+    handler: handleProductsUpdate,
+  },
+  {
+    topic: "collections/update",
+    uri: "/webhooks/collections/update",
+    description:
+      "Refresh membership for the products in a collection whose rules changed.",
+    handler: handleCollectionsUpdate,
   },
 ] as const;
 

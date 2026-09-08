@@ -158,6 +158,16 @@ export function deserializeRuleset(value: unknown): DeserializeResult {
 type ReadResult =
   { rule: PricingRule } | { error: { ruleId: string | null; message: string } };
 
+/**
+ * Read one serialized rule.
+ *
+ * The app uses this to turn a database row into an engine rule, so storage and
+ * the ruleset published to checkout go through exactly the same code.
+ */
+export function deserializeRule(raw: unknown): ReadResult {
+  return readRule(raw);
+}
+
 function isMoney(value: unknown): value is Money {
   return (
     typeof value === "object" &&

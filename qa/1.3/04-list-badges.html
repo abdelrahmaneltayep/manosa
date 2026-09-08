@@ -1,0 +1,60 @@
+<!doctype html><html lang="en" dir="ltr"><head>
+<meta charset="utf-8"><title>Pricing — 04-list-badges</title><style>
+ body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+   margin:0;padding:1.5rem;background:#f6f6f7;color:#1c1d2b}
+ .note{background:#fff4e4;border:1px solid #e0b252;border-radius:8px;padding:.75rem 1rem;
+   margin-bottom:1.25rem;font-size:12px;color:#5e4200}
+ s-page,s-section,s-box{display:block}
+ s-section,s-box{background:#fff;border:1px solid #e3e3e3;border-radius:10px;
+   padding:1rem;margin-bottom:1rem}
+ s-stack{display:flex;gap:.45rem}
+ s-stack[direction=block]{flex-direction:column;align-items:flex-start}
+ s-stack[direction=inline]{flex-direction:row;align-items:center;flex-wrap:wrap}
+ s-heading{display:block;font-weight:700;margin:.25rem 0}
+ s-page[heading]::before{content:attr(heading);display:block;font-size:20px;
+   font-weight:800;margin-bottom:1rem}
+ s-section[heading]::before{content:attr(heading);display:block;font-weight:700;
+   margin-bottom:.5rem}
+ s-banner[heading]::before{content:attr(heading);display:block;font-weight:700}
+ s-paragraph{display:block;margin:.35rem 0}
+ s-banner{display:block;border-inline-start:4px solid #8a8a8a;background:#fafafa;
+   padding:.75rem 1rem;margin:.5rem 0;border-radius:6px}
+ s-banner[tone=critical]{border-color:#d64545;background:#fdeaea}
+ s-banner[tone=warning]{border-color:#b7791f;background:#fff2dd}
+ s-banner[tone=info]{border-color:#2f6bd6;background:#eaf1ff}
+ s-banner[tone=success]{border-color:#1f8a53;background:#e7f7ee}
+ s-badge{display:inline-block;background:#eef0ff;color:#4f46e5;border-radius:999px;
+   padding:.1rem .55rem;font-size:12px;margin-inline-end:.4rem}
+ s-button{display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;
+   padding:.45rem .9rem;margin-inline-end:.5rem;font-weight:700}
+ s-button[variant=tertiary]{background:transparent;color:#4f46e5;font-weight:600}
+ s-button[disabled]{opacity:.45}
+ s-table{display:table;width:100%;border-collapse:collapse}
+ s-table-body{display:table-row-group}
+ s-table-header-row,s-table-row{display:table-row}
+ s-table-header,s-table-cell{display:table-cell;padding:.4rem .5rem;
+   border-bottom:1px solid #eee;text-align:start;vertical-align:top}
+ s-table-header{font-weight:700}
+ s-text-field,s-number-field,s-money-field,s-select,s-text-area,s-date-field,
+ s-search-field,s-checkbox{display:block;margin:.4rem 0}
+ s-text-field::before,s-number-field::before,s-money-field::before,
+ s-select::before,s-text-area::before,s-date-field::before,
+ s-search-field::before,s-checkbox::before{content:attr(label);display:block;
+   font-weight:600;font-size:12px;margin-bottom:.15rem}
+ s-text-field::after,s-number-field::after,s-money-field::after,
+ s-select::after,s-text-area::after,s-date-field::after{
+   content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
+   padding:.35rem .5rem;min-height:1.1em;background:#fff;color:#444}
+ s-ordered-list{display:block;padding-inline-start:1.2rem}
+ s-unordered-list{display:block;padding-inline-start:1.1rem}
+ s-list-item{display:list-item;margin:.3rem 0}
+ s-link{color:#4f46e5;text-decoration:underline;margin-inline-end:.6rem}
+ s-text[accessibilityvisibility=exclusive]{position:absolute;width:1px;height:1px;
+   overflow:hidden;clip-path:inset(50%)}
+ ui-save-bar{display:none}
+</style></head><body>
+<div class="note"><strong>QA capture — structure only.</strong> Polaris web components
+are not upgraded here: this build environment has no egress to Shopify's CDN, so the
+styling below is a plain stand-in and is <em>not</em> what a merchant sees. What this
+capture verifies is which content and which states render.</div>
+<s-page heading="Pricing rules"><s-section><s-stack direction="block" gap="base"><s-stack direction="block" gap="small"><s-stack direction="inline" gap="small" alignItems="center"><s-link href="?" aria-current="page">Rules</s-link><s-link href="?archived=1">Archived</s-link><s-button variant="primary" href="/app/pricing/new">Create rule</s-button></s-stack><form method="get"><s-search-field name="search" label="Search rules by name" value=""></s-search-field></form><s-text color="subdued">No rules have reached checkout yet.</s-text></s-stack><s-table><s-table-header-row><s-table-header><s-link href="?sort=name">Name</s-link></s-table-header><s-table-header>Type</s-table-header><s-table-header>Applies to</s-table-header><s-table-header>For</s-table-header><s-table-header><s-link href="?sort=usage">Uses · 30 days</s-link></s-table-header><s-table-header>Status</s-table-header></s-table-header-row><s-table-body><s-table-row><s-table-cell><s-stack direction="block" gap="small-500"><s-link href="/app/pricing/r1">Wholesale 35%</s-link><s-badge tone="warning">2 targets missing</s-badge></s-stack></s-table-cell><s-table-cell>Percentage off</s-table-cell><s-table-cell>Every product</s-table-cell><s-table-cell>Tagged wholesale</s-table-cell><s-table-cell><s-text color="subdued" accessibilityVisibility="hidden">—</s-text><s-text accessibilityVisibility="exclusive">Usage is counted once you have wholesale orders.</s-text></s-table-cell><s-table-cell><s-stack direction="inline" gap="small-500" alignItems="center"><s-badge tone="success">Active</s-badge><form method="post"><input type="hidden" name="ruleId" value="r1"/><input type="hidden" name="intent" value="archive"/><s-button type="submit" variant="tertiary">Archive</s-button></form></s-stack></s-table-cell></s-table-row><s-table-row><s-table-cell><s-stack direction="block" gap="small-500"><s-link href="/app/pricing/r2">Starts soon</s-link><s-badge tone="info">Starts in 3 days</s-badge></s-stack></s-table-cell><s-table-cell>Percentage off</s-table-cell><s-table-cell>Every product</s-table-cell><s-table-cell>Tagged wholesale</s-table-cell><s-table-cell><s-text color="subdued" accessibilityVisibility="hidden">—</s-text><s-text accessibilityVisibility="exclusive">Usage is counted once you have wholesale orders.</s-text></s-table-cell><s-table-cell><s-stack direction="inline" gap="small-500" alignItems="center"><s-badge tone="success">Active</s-badge><form method="post"><input type="hidden" name="ruleId" value="r2"/><input type="hidden" name="intent" value="archive"/><s-button type="submit" variant="tertiary">Archive</s-button></form></s-stack></s-table-cell></s-table-row><s-table-row><s-table-cell><s-stack direction="block" gap="small-500"><s-link href="/app/pricing/r3">Summer tiers</s-link><s-text tone="caution">Another rule is also called “Summer tiers”.</s-text></s-stack></s-table-cell><s-table-cell>Percentage off</s-table-cell><s-table-cell>Every product</s-table-cell><s-table-cell>Tagged wholesale</s-table-cell><s-table-cell><s-text color="subdued" accessibilityVisibility="hidden">—</s-text><s-text accessibilityVisibility="exclusive">Usage is counted once you have wholesale orders.</s-text></s-table-cell><s-table-cell><s-stack direction="inline" gap="small-500" alignItems="center"><s-badge tone="success">Active</s-badge><form method="post"><input type="hidden" name="ruleId" value="r3"/><input type="hidden" name="intent" value="archive"/><s-button type="submit" variant="tertiary">Archive</s-button></form></s-stack></s-table-cell></s-table-row><s-table-row><s-table-cell><s-stack direction="block" gap="small-500"><s-link href="/app/pricing/r4">Old rule</s-link></s-stack></s-table-cell><s-table-cell>Percentage off</s-table-cell><s-table-cell>Every product</s-table-cell><s-table-cell>Tagged wholesale</s-table-cell><s-table-cell><s-stack direction="inline" gap="small-500" alignItems="center"><s-text fontVariantNumeric="tabular-nums">0</s-text><s-badge tone="caution">Unused</s-badge></s-stack></s-table-cell><s-table-cell><s-stack direction="inline" gap="small-500" alignItems="center"><s-badge tone="success">Active</s-badge><form method="post"><input type="hidden" name="ruleId" value="r4"/><input type="hidden" name="intent" value="archive"/><s-button type="submit" variant="tertiary">Archive</s-button></form></s-stack></s-table-cell></s-table-row><s-table-row><s-table-cell><s-stack direction="block" gap="small-500"><s-link href="/app/pricing/r5">Finished</s-link><s-badge tone="neutral">Ended</s-badge></s-stack></s-table-cell><s-table-cell>Percentage off</s-table-cell><s-table-cell>Every product</s-table-cell><s-table-cell>Tagged wholesale</s-table-cell><s-table-cell><s-text color="subdued" accessibilityVisibility="hidden">—</s-text><s-text accessibilityVisibility="exclusive">Usage is counted once you have wholesale orders.</s-text></s-table-cell><s-table-cell><s-stack direction="inline" gap="small-500" alignItems="center"><s-badge tone="success">Active</s-badge><form method="post"><input type="hidden" name="ruleId" value="r5"/><input type="hidden" name="intent" value="archive"/><s-button type="submit" variant="tertiary">Archive</s-button></form></s-stack></s-table-cell></s-table-row></s-table-body></s-table></s-stack></s-section></s-page></body></html>

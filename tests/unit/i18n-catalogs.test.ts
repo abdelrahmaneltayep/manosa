@@ -119,6 +119,8 @@ describe("translation catalogs", () => {
       "plans.perMonth",
       "plans.perYear",
       "plans.annualSaving",
+      // An em dash means the same in both languages.
+      "pricing.list.usageUnmeasured",
     ]);
     const untranslated = Object.keys(EN).filter(
       (key) => !allowed.has(key) && AR[key] !== undefined && EN[key] === AR[key],

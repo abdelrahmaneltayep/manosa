@@ -239,3 +239,74 @@ model ScheduledJob {
   @@index([status, runAt])
   @@index([shop, kind, status])
 }
+
+// ---------------------------------------------------------------------------
+// Pricing rules (phase 1.3)
+// ---------------------------------------------------------------------------
+
+enum PricingRuleStatus {
+  DRAFT
+  ACTIVE
+  /// Soft-deleted. Restorable for 30 days, then permanently removable.
+  ARCHIVED
+}
+
+enum PricingRuleKind {
+  FIXED_PRICE
+  VOLUME_TIER
+  CART_VALUE_TIER
+  AMOUNT_OFF
+  PERCENTAGE
+}
+
+/// A merchant's pricing rule.
+///
+/// The JSON columns hold exactly the wire shapes from
+/// `@mannon/pricing-engine`'s codec, so a row becomes an engine rule through
+/// the same tested code that reads the published ruleset at checkout. There is
+/// one definition of a rule's shape, not a database one and an engine one.
+model PricingRule {
+  id     String            @id @default(cuid())
+  shop   String
+  name   String
+  status PricingRuleStatus @default(DRAFT)
+  kind   PricingRuleKind
+
+  /// Lower runs first and wins. Merchants drag a rule up the list to make it
+  /// matter more, so "first in the list" means "wins".
+  priority   Int     @default(100)
+  combinable Boolean @default(false)
+
+  /// Engine wire shapes. See packages/pricing-engine/src/codec.ts.
+  value    Json
+  targets  Json
+  audience Json
+  markets  Json
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  /// Soft delete. Restorable for 30 days; hard delete asks for the rule name.
+  archivedAt DateTime?
+
+  /// Bumped on every save. A stale version means another staff member changed
+  /// the rule since this editor loaded it.
+  version Int @default(1)
+
+  /// Targets that no longer exist in Shopify, kept so the list can say
+  /// "1 target missing" rather than silently pricing nothing.
+  missingTargetCount Int @default(0)
+
+  /// Times this rule priced a line in the last 30 days. Filled in by analytics
+  /// (phase 6.1); null means "not measured yet", which is not the same as zero.
+  usageCount30d Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+  updatedBy String?
+
+  @@index([shop, status, priority])
+  @@index([shop, archivedAt])
+  @@index([shop, updatedAt])
+}

@@ -1,0 +1,60 @@
+<!doctype html><html lang="en" dir="ltr"><head>
+<meta charset="utf-8"><title>Pricing — 14-builder-preview</title><style>
+ body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+   margin:0;padding:1.5rem;background:#f6f6f7;color:#1c1d2b}
+ .note{background:#fff4e4;border:1px solid #e0b252;border-radius:8px;padding:.75rem 1rem;
+   margin-bottom:1.25rem;font-size:12px;color:#5e4200}
+ s-page,s-section,s-box{display:block}
+ s-section,s-box{background:#fff;border:1px solid #e3e3e3;border-radius:10px;
+   padding:1rem;margin-bottom:1rem}
+ s-stack{display:flex;gap:.45rem}
+ s-stack[direction=block]{flex-direction:column;align-items:flex-start}
+ s-stack[direction=inline]{flex-direction:row;align-items:center;flex-wrap:wrap}
+ s-heading{display:block;font-weight:700;margin:.25rem 0}
+ s-page[heading]::before{content:attr(heading);display:block;font-size:20px;
+   font-weight:800;margin-bottom:1rem}
+ s-section[heading]::before{content:attr(heading);display:block;font-weight:700;
+   margin-bottom:.5rem}
+ s-banner[heading]::before{content:attr(heading);display:block;font-weight:700}
+ s-paragraph{display:block;margin:.35rem 0}
+ s-banner{display:block;border-inline-start:4px solid #8a8a8a;background:#fafafa;
+   padding:.75rem 1rem;margin:.5rem 0;border-radius:6px}
+ s-banner[tone=critical]{border-color:#d64545;background:#fdeaea}
+ s-banner[tone=warning]{border-color:#b7791f;background:#fff2dd}
+ s-banner[tone=info]{border-color:#2f6bd6;background:#eaf1ff}
+ s-banner[tone=success]{border-color:#1f8a53;background:#e7f7ee}
+ s-badge{display:inline-block;background:#eef0ff;color:#4f46e5;border-radius:999px;
+   padding:.1rem .55rem;font-size:12px;margin-inline-end:.4rem}
+ s-button{display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;
+   padding:.45rem .9rem;margin-inline-end:.5rem;font-weight:700}
+ s-button[variant=tertiary]{background:transparent;color:#4f46e5;font-weight:600}
+ s-button[disabled]{opacity:.45}
+ s-table{display:table;width:100%;border-collapse:collapse}
+ s-table-body{display:table-row-group}
+ s-table-header-row,s-table-row{display:table-row}
+ s-table-header,s-table-cell{display:table-cell;padding:.4rem .5rem;
+   border-bottom:1px solid #eee;text-align:start;vertical-align:top}
+ s-table-header{font-weight:700}
+ s-text-field,s-number-field,s-money-field,s-select,s-text-area,s-date-field,
+ s-search-field,s-checkbox{display:block;margin:.4rem 0}
+ s-text-field::before,s-number-field::before,s-money-field::before,
+ s-select::before,s-text-area::before,s-date-field::before,
+ s-search-field::before,s-checkbox::before{content:attr(label);display:block;
+   font-weight:600;font-size:12px;margin-bottom:.15rem}
+ s-text-field::after,s-number-field::after,s-money-field::after,
+ s-select::after,s-text-area::after,s-date-field::after{
+   content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
+   padding:.35rem .5rem;min-height:1.1em;background:#fff;color:#444}
+ s-ordered-list{display:block;padding-inline-start:1.2rem}
+ s-unordered-list{display:block;padding-inline-start:1.1rem}
+ s-list-item{display:list-item;margin:.3rem 0}
+ s-link{color:#4f46e5;text-decoration:underline;margin-inline-end:.6rem}
+ s-text[accessibilityvisibility=exclusive]{position:absolute;width:1px;height:1px;
+   overflow:hidden;clip-path:inset(50%)}
+ ui-save-bar{display:none}
+</style></head><body>
+<div class="note"><strong>QA capture — structure only.</strong> Polaris web components
+are not upgraded here: this build environment has no egress to Shopify's CDN, so the
+styling below is a plain stand-in and is <em>not</em> what a merchant sees. What this
+capture verifies is which content and which states render.</div>
+<s-page heading="New pricing rule"><form method="post"><input type="hidden" name="intent" value="save"/><input type="hidden" name="version" value="1"/><ui-save-bar id="rule-save-bar"><button type="submit" variant="primary"></button><button type="reset"></button></ui-save-bar><s-section heading="Basics"><s-stack direction="block" gap="base"><s-stack direction="block" gap="small-500"><s-text-field name="name" label="Rule name" details="Only you see this. Buyers see it at checkout when the rule applies." value=""></s-text-field></s-stack><s-select name="status" label="Status" details="A draft is saved but does not change any prices." value="draft"><s-option value="draft">Draft</s-option><s-option value="active">Active</s-option></s-select><s-select name="kind" label="What this rule does" value="percentage"><s-option value="percentage">Percentage off</s-option><s-option value="amount_off">Amount off</s-option><s-option value="fixed_price">Custom price</s-option><s-option value="volume_tier">Volume tiers</s-option><s-option value="cart_value_tier">Cart value</s-option></s-select><s-stack direction="block" gap="small-500"><s-number-field name="percentage" label="Percentage off" value="" min="0" max="100" suffix="%"></s-number-field></s-stack></s-stack></s-section><s-section heading="Which products"><s-stack direction="block" gap="base"><s-stack direction="block" gap="small-500"><s-select name="targetMode" label="Applies to" value="all"><s-option value="all">Every product</s-option><s-option value="collections">0 collections</s-option><s-option value="products">0 products</s-option><s-option value="variants">0 variants</s-option></s-select></s-stack><s-text-area name="excludeCollectionIds" label="Excluded collections" details="One per line. Use Browse to pick them in Shopify." value=""></s-text-area></s-stack></s-section><s-section heading="Which buyers"><s-stack direction="block" gap="base"><s-stack direction="block" gap="small-500"><s-select name="audienceMode" label="Applies to" value="tags"><s-option value="all">Everyone</s-option><s-option value="tags">Tagged </s-option><s-option value="groups">0 groups</s-option><s-option value="customers">0 customers</s-option><s-option value="companies">0 companies</s-option><s-option value="guests">Guests</s-option></s-select></s-stack><s-text-area name="audienceTags" label="Customer tags" details="A buyer with any of these tags gets this price." value=""></s-text-area></s-stack></s-section><s-section heading="When"><s-stack direction="block" gap="base"><s-paragraph color="subdued">Leave blank to start now and never end.</s-paragraph><s-stack direction="inline" gap="small"><s-date-field name="startsAt" label="Starts" value=""></s-date-field><s-stack direction="block" gap="small-500"><s-date-field name="endsAt" label="Ends" value=""></s-date-field></s-stack></s-stack></s-stack></s-section><s-section heading="Priority and combining"><s-stack direction="block" gap="base"><s-number-field name="priority" label="Priority" details="Lower wins when more than one rule matches." value="100" min="0"></s-number-field><s-checkbox name="combinable" label="Let this rule combine with other Mannon rules" details="Off means this rule applies on its own." checked="false"></s-checkbox><s-banner tone="warning"><s-paragraph>Combining rules can reduce a price to zero — review carefully.</s-paragraph></s-banner></s-stack></s-section><s-section><s-stack direction="inline" gap="small"><s-button type="submit" variant="primary">Save</s-button><s-button href="/app/pricing">Discard</s-button></s-stack></s-section></form><s-section heading="Live preview"><s-stack direction="block" gap="small"><s-paragraph color="subdued">What a buyer who matches this rule pays for a sample product.</s-paragraph><s-stack direction="inline" gap="base" alignItems="center"><s-text color="subdued">Was 100.00</s-text><s-text type="strong">Now 65.00</s-text><s-badge tone="info">Quantity: 10</s-badge></s-stack></s-stack></s-section></s-page></body></html>

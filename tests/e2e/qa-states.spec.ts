@@ -95,6 +95,32 @@ test.describe("QA state captures — task 0.1", () => {
  * These are structure-only: Polaris web components cannot be loaded in this
  * environment, so the styling is a stand-in and each capture says so.
  */
+function captureSuite(task: string) {
+  const dir = resolve(process.cwd(), `qa/${task}`);
+  const states = existsSync(dir)
+    ? readdirSync(dir).filter((file) => file.endsWith(".html"))
+    : [];
+
+  for (const file of states) {
+    test(`${task}: ${file.replace(/\.html$/, "")}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1100, height: 900 });
+      await page.goto(pathToFileURL(resolve(dir, file)).href);
+      await page.screenshot({
+        path: resolve(dir, file.replace(/\.html$/, ".png")),
+        fullPage: true,
+      });
+    });
+  }
+
+  test(`${task}: the captures exist at all`, () => {
+    expect(states.length, "run the vitest capture step first").toBeGreaterThan(0);
+  });
+}
+
+test.describe("Pricing page states", () => {
+  captureSuite("1.3");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)
