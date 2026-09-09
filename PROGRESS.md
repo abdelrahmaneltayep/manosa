@@ -21,7 +21,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 | 1.1 `packages/pricing-engine` (golden vectors first)        | ☑      |
 | 1.2 Shopify discount Function wired to the engine           | ⚠      |
 | 1.3 Pricing page: rule list, builder, priority/combinations | ⚠      |
-| 1.4 CSV import/export with dry-run and undo                 | ☐      |
+| 1.4 CSV import/export with dry-run and undo                 | ⚠      |
 
 ## Phase 2 — Customers & Forms
 
@@ -78,6 +78,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 ## Decisions taken
 
+- **CSV imports are planned before they are run**, and the dry run checks the
+  published size so an import cannot half-land at checkout. Undo removes exactly
+  what it created, for an hour. `docs/adr/0009`.
 - **Rules are stored in the engine's own wire shape**, so a database row becomes
   an engine rule through the same code that reads the checkout ruleset. Saving
   publishes; concurrency is version-checked. `docs/adr/0008`.

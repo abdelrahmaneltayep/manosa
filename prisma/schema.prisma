@@ -310,3 +310,50 @@ model PricingRule {
   @@index([shop, archivedAt])
   @@index([shop, updatedAt])
 }
+
+// ---------------------------------------------------------------------------
+// CSV imports (phase 1.4)
+// ---------------------------------------------------------------------------
+
+/// One import run, kept so it can be undone.
+///
+/// Undo is a single click within an hour — a merchant who imported the wrong
+/// file should not have to delete two hundred rules by hand.
+model RuleImport {
+  id       String @id @default(cuid())
+  shop     String
+  fileName String
+  template String
+
+  rowCount     Int
+  createdCount Int
+  errorCount   Int
+  warningCount Int
+
+  /// Ids of the rules this import created, for undo.
+  createdRuleIds String[]
+
+  /// Undo is offered until this time.
+  undoableUntil DateTime
+  undoneAt      DateTime?
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@index([shop, createdAt])
+}
+
+/// An uploaded file waiting for the merchant to accept or reject its dry run.
+///
+/// Held server-side because a browser will not resubmit a file input: the
+/// review step has to be able to import exactly the bytes that were checked,
+/// not ask for the file again. Deleted the moment it is used or abandoned.
+model RuleImportDraft {
+  id        String   @id @default(cuid())
+  shop      String
+  fileName  String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
+}

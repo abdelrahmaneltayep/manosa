@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { I18nextProvider } from "react-i18next";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { CsvPage, type CsvView } from "~/components/pricing/CsvPage";
 import { PricingSettingsPage } from "~/components/pricing/PricingSettingsPage";
 import { RuleBuilderPage } from "~/components/pricing/RuleBuilderPage";
 import { RuleListPage } from "~/components/pricing/RuleListPage";
@@ -27,14 +28,20 @@ import { emptyFormView } from "~/lib/pricing/view-model.server";
  */
 
 const CAPTURE = process.env.QA_CAPTURE === "1";
-const OUT = resolve(process.cwd(), "qa/1.3");
+const OUT_13 = resolve(process.cwd(), "qa/1.3");
+const OUT_14 = resolve(process.cwd(), "qa/1.4");
+/** Captures numbered 24 and up belong to task 1.4 (CSV import/export). */
+const outFor = (name: string) => (Number(name.slice(0, 2)) >= 24 ? OUT_14 : OUT_13);
 const instances = new Map<Locale, Awaited<ReturnType<typeof createI18n>>>();
 
 beforeAll(async () => {
   for (const locale of ["en", "ar"] as Locale[]) {
     instances.set(locale, await createI18n(locale));
   }
-  if (CAPTURE) mkdirSync(OUT, { recursive: true });
+  if (CAPTURE) {
+    mkdirSync(OUT_13, { recursive: true });
+    mkdirSync(OUT_14, { recursive: true });
+  }
 });
 
 function render(node: React.ReactNode, locale: Locale = "en"): string {
@@ -101,7 +108,7 @@ const STYLES = `
 function capture(name: string, html: string, locale: Locale = "en") {
   if (!CAPTURE) return;
   writeFileSync(
-    resolve(OUT, `${name}.html`),
+    resolve(outFor(name), `${name}.html`),
     `<!doctype html><html lang="${locale}" dir="${dirFor(locale)}"><head>
 <meta charset="utf-8"><title>Pricing — ${name}</title><style>${STYLES}</style></head><body>
 <div class="note"><strong>QA capture — structure only.</strong> Polaris web components
@@ -582,5 +589,189 @@ describe("Arabic", () => {
     const html = render(<RuleBuilderPage view={builderView()} />, "ar");
     capture("23-builder-arabic", html, "ar");
     expect(html).toContain("قاعدة تسعير جديدة");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+const csvView = (overrides: Partial<CsvView> = {}): CsvView => ({
+  step: "choose",
+  fileError: null,
+  review: null,
+  imported: null,
+  undone: null,
+  undoExpired: false,
+  ...overrides,
+});
+
+const review = (overrides: Partial<NonNullable<CsvView["review"]>> = {}) => ({
+  draftId: "draft-1",
+  fileName: "june-prices.csv",
+  template: "rules" as const,
+  columns: [
+    { header: "rule_name", matched: true },
+    { header: "type", matched: true },
+    { header: "notes", matched: false },
+  ],
+  totalRows: 220,
+  willCreate: 214,
+  errors: [],
+  warnings: [],
+  tooLarge: null,
+  ...overrides,
+});
+
+describe("CSV import states", () => {
+  it("choose — the templates and the upload", () => {
+    const html = render(<CsvPage view={csvView()} />);
+    capture("24-csv-choose", html);
+
+    expect(html).toContain("Download template");
+    expect(html).toContain("CSV only, up to 10 MB");
+    expect(html).toContain("Quantity breaks");
+  });
+
+  it("file too big, with the limit and what to do", () => {
+    const html = render(
+      <CsvPage view={csvView({ fileError: { code: "too_large", sizeMb: 24 } })} />,
+    );
+    capture("25-csv-too-large", html);
+
+    expect(html).toContain("24 MB");
+    expect(html).toContain("Split it");
+  });
+
+  it("too many rows, with both numbers", () => {
+    const html = render(
+      <CsvPage
+        view={csvView({
+          fileError: { code: "too_many_rows", rows: 80000, limit: 50000 },
+        })}
+      />,
+    );
+    capture("26-csv-too-many-rows", html);
+    expect(html).toContain("80000");
+    expect(html).toContain("50000");
+  });
+
+  it("columns we do not recognise", () => {
+    const html = render(
+      <CsvPage view={csvView({ fileError: { code: "unknown_template" } })} />,
+    );
+    capture("27-csv-unknown-columns", html);
+    expect(html).toContain("don&#x27;t recognise those columns");
+  });
+
+  /** "214 will import, 6 errors" — the checklist's own example. */
+  it("dry run — what the file would do", () => {
+    const html = render(
+      <CsvPage
+        view={csvView({
+          step: "review",
+          review: review({
+            errors: [
+              {
+                line: 12,
+                column: "skus",
+                code: "unknown_sku",
+                params: { sku: "NOPE-9" },
+              },
+            ],
+            warnings: [{ line: 40, code: "zero_value" }],
+          }),
+        })}
+      />,
+    );
+    capture("28-csv-dry-run", html);
+
+    expect(html).toContain("214 rules will be created");
+    expect(html).toContain("1 row has a problem");
+    // Listed with its line, never just counted.
+    expect(html).toContain("NOPE-9");
+    expect(html).toContain("Download the problem list");
+    // An unmatched column is shown as ignored rather than silently dropped.
+    expect(html).toContain("notes");
+    expect(html).toContain("Ignored");
+  });
+
+  it("dry run — nothing importable, so the button is off", () => {
+    const html = render(
+      <CsvPage
+        view={csvView({
+          step: "review",
+          review: review({
+            willCreate: 0,
+            errors: [
+              { line: 2, column: "type", code: "unknown_type", params: { value: "x" } },
+            ],
+          }),
+        })}
+      />,
+    );
+    capture("29-csv-dry-run-blocked", html);
+
+    expect(html).toContain("Nothing in this file can be imported yet");
+    expect(html).toContain('disabled="true"');
+  });
+
+  /**
+   * Publishing fails on the whole set, so this has to be said before the
+   * import rather than after checkout is left on the old prices.
+   */
+  it("dry run — the import would be too big for checkout", () => {
+    const html = render(
+      <CsvPage
+        view={csvView({
+          step: "review",
+          review: review({ tooLarge: { bytes: 60 * 1024, limit: 48 * 1024 } }),
+        })}
+      />,
+    );
+    capture("30-csv-too-big-for-checkout", html);
+
+    expect(html).toContain("too big for checkout");
+    expect(html).toContain("Nothing has been imported");
+    expect(html).toContain('disabled="true"');
+  });
+
+  it("imported — with undo offered", () => {
+    const html = render(
+      <CsvPage
+        view={csvView({ step: "imported", imported: { count: 214, importId: "imp-1" } })}
+      />,
+    );
+    capture("31-csv-imported", html);
+
+    expect(html).toContain("Imported 214 rules");
+    expect(html).toContain("Undo this import");
+  });
+
+  it("undone", () => {
+    const html = render(
+      <CsvPage view={csvView({ step: "undone", undone: { count: 214 } })} />,
+    );
+    capture("32-csv-undone", html);
+    expect(html).toContain("Import undone");
+    expect(html).toContain("Nothing else changed");
+  });
+
+  /** The hour removes the shortcut, not the data — say which. */
+  it("undo expired", () => {
+    const html = render(<CsvPage view={csvView({ undoExpired: true })} />);
+    capture("33-csv-undo-expired", html);
+
+    expect(html).toContain("no longer be undone in one click");
+    expect(html).toContain("archive the rules individually");
+  });
+
+  it("renders in Arabic", () => {
+    const html = render(
+      <CsvPage view={csvView({ step: "review", review: review() })} />,
+      "ar",
+    );
+    capture("34-csv-arabic", html, "ar");
+
+    expect(html).toContain("ما سيفعله هذا الملف");
+    expect(html).not.toContain("will be created");
   });
 });

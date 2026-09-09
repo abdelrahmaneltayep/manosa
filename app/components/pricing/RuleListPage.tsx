@@ -151,6 +151,7 @@ function Toolbar({ view }: { view: RuleListView }) {
         <s-link href="?archived=1" {...(view.archived ? { "aria-current": "page" } : {})}>
           {t("pricing.list.tabArchived")}
         </s-link>
+        <s-link href="/app/pricing/csv">{t("pricing.list.csvLink")}</s-link>
         <s-button
           variant="primary"
           href="/app/pricing/new"

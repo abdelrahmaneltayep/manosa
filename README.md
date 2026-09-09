@@ -200,6 +200,11 @@ Strings live in `app/i18n/locales/{en,ar}.json`; English is the source of truth.
 `tests/unit/i18n-catalogs.test.ts` fails on a missing key, a blank string, a
 mismatched `{{placeholder}}`, or English left in the Arabic file.
 
+**Every count-bearing string needs `_one` and `_other` in English** — i18next
+resolves the English singular as `<key>_one`, never the bare key, and Arabic
+needs all six categories. `tests/unit/i18n-catalogs.test.ts` fails on a missing
+one; it has caught this three times, so write the suffixes from the start.
+
 **Translate in components, not loaders.** On a client-side navigation there is
 no `?locale=` for the server to read, while the client i18next instance already
 holds the right language. Server-side text a _buyer_ will read — emails, agent
