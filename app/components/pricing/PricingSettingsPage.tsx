@@ -1,13 +1,8 @@
 import { useTranslation } from "react-i18next";
 
-import type { PricingSettingsView } from "~/components/pricing/types";
+import { whenDisabled } from "~/components/boolean-attribute";
 
-/**
- * React stringifies props on custom elements, so `disabled={false}` renders
- * `disabled="false"` — which a browser reads as disabled. Boolean attributes on
- * `s-*` elements have to be omitted rather than set false.
- */
-const whenDisabled = (value: boolean) => (value ? { disabled: true } : {});
+import type { PricingSettingsView } from "~/components/pricing/types";
 
 export function PricingSettingsPage({ view }: { view: PricingSettingsView }) {
   const { t } = useTranslation();

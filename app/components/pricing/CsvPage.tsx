@@ -1,9 +1,9 @@
 import { useTranslation } from "react-i18next";
 
+import { whenDisabled } from "~/components/boolean-attribute";
+
 import type { ImportIssue, ImportWarning } from "~/lib/pricing/csv/plan";
 import { TEMPLATE_KEYS, type TemplateKey } from "~/lib/pricing/csv/templates";
-
-const whenDisabled = (value: boolean) => (value ? { disabled: true } : {});
 
 export type CsvStep = "choose" | "review" | "imported" | "undone";
 

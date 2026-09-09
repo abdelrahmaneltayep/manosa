@@ -121,6 +121,10 @@ describe("translation catalogs", () => {
       "plans.annualSaving",
       // An em dash means the same in both languages.
       "pricing.list.usageUnmeasured",
+      // A plus or minus sign in front of a tag chip. The only word in these is
+      // the merchant's own tag, which is not ours to translate.
+      "customers.tagging.addTag",
+      "customers.tagging.removeTag",
     ]);
     const untranslated = Object.keys(EN).filter(
       (key) => !allowed.has(key) && AR[key] !== undefined && EN[key] === AR[key],

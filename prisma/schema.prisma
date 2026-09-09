@@ -89,6 +89,21 @@ model Shop {
   /// How many rules were in the last publish, for the Pricing page to show
   /// what is actually live at checkout.
   rulesetRuleCount   Int       @default(0)
+
+  // --- Customers (phase 2.1) ---------------------------------------------
+  /// The tag that means "this buyer is wholesale". Configurable because every
+  /// store already has its own word for it, and re-tagging an existing
+  /// customer base to suit us would be rude. Settings exposes it in 6.2.
+  wholesaleTag       String    @default("wholesale")
+  /// When on, a buyer cannot be marked tax-exempt without a VAT id on file.
+  requireVatForTaxExempt Boolean @default(false)
+  /// Progress of the one-off customer backfill. Null means never finished.
+  customersBackfilledAt DateTime?
+  /// Where the backfill got to. A store with 40,000 customers takes many
+  /// pages, and a restart in the middle must not start again from the top.
+  customersBackfillCursor String?
+  customerCount      Int       @default(0)
+
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -356,4 +371,162 @@ model RuleImportDraft {
   createdAt DateTime @default(now())
 
   @@index([shop, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Customers (phase 2.1)
+// ---------------------------------------------------------------------------
+
+/// A wholesale tier: Silver, Gold, VIP.
+///
+/// A group is a *bundle*, not a label — pricing rules, order limits, payment
+/// terms, shipping rules and product visibility all hang off it. The fields
+/// whose features land in later phases are stored here from the start so the
+/// group page can show the whole bundle rather than growing a new table each
+/// time a phase adds a section.
+model CustomerGroup {
+  id     String  @id @default(cuid())
+  shop   String
+  name   String
+  /// Stable key used in pricing-rule audiences and in CSV imports, so renaming
+  /// a group does not silently repoint every rule that referenced it.
+  handle String
+  color  String?
+  description String?
+
+  /// Members of a group are priced by rules whose audience names it, and are
+  /// tagged with this in Shopify so the storefront and checkout agree.
+  tag String
+
+  // --- Bundle: each of these is owned by a later phase, shown here now. ----
+  /// Net payment terms in days. Enforced in phase 3.2.
+  netTermsDays  Int?
+  /// Minimum order value in minor units. Enforced in phase 3.1.
+  orderMinimum  Int?
+  /// Order must be a multiple of this. Enforced in phase 3.1.
+  orderIncrement Int?
+  /// Free shipping above this subtotal, in minor units. Phase 3.
+  freeShippingOver Int?
+  /// Collections this group may see. Empty means everything. Phase 3.4.
+  visibleCollectionIds String[]
+
+  /// Groups created from a starter template say so, so the empty state can
+  /// stop offering a template the merchant already took.
+  template String?
+
+  sortOrder Int      @default(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  members Customer[]
+
+  @@unique([shop, handle])
+  @@index([shop, sortOrder])
+}
+
+/// What Mannon knows about a Shopify customer.
+///
+/// A mirror, not a second source of truth: Shopify owns the customer, and this
+/// row exists so the buyers list can be searched, filtered and paginated
+/// without an Admin API round trip per keystroke, and so a customer deleted in
+/// Shopify can still be shown as deleted rather than vanishing mid-list.
+model Customer {
+  id   String @id @default(cuid())
+  shop String
+  /// Shopify's GID. The join key to everything on their side.
+  customerId String
+
+  email       String?
+  firstName   String?
+  lastName    String?
+  /// Default address company, which is what wholesale buyers are known by.
+  company     String?
+  phone       String?
+  countryCode String?
+  province    String?
+
+  /// Shopify's tags, normalised (trimmed, de-duplicated, sorted).
+  tags  String[]
+  /// Shopify's account state: enabled, disabled, invited, declined.
+  state String @default("enabled")
+
+  taxExempt Boolean @default(false)
+  /// EU/GCC VAT id. Collected by the registration form (2.2) and validated
+  /// against VIES there; stored here so tax-exempt can require it.
+  vatNumber String?
+  /// Set when VIES confirmed the number. Null means unverified, which is not
+  /// the same as invalid — VIES outages must not brand a buyer as fraudulent.
+  vatVerifiedAt DateTime?
+
+  groupId String?
+  group   CustomerGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  status BuyerStatus @default(APPROVED)
+
+  /// Shopify's own totals, in minor units of `currencyCode`. Not a price we
+  /// computed — every *price* in this app comes from the pricing engine.
+  lifetimeSpend Int    @default(0)
+  currencyCode  String @default("USD")
+  orderCount    Int    @default(0)
+  lastOrderAt   DateTime?
+
+  /// Staff-only. Never shown to the buyer and never sent in an email.
+  internalNote String?
+
+  /// Set by the customers/delete webhook. The row is kept so an open list does
+  /// not lose a row mid-scroll, and so history survives; the cleanup job
+  /// removes it later.
+  deletedInShopifyAt DateTime?
+
+  /// Last time this row was written from Shopify's copy.
+  syncedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shop, customerId])
+  @@index([shop, status, lastOrderAt])
+  @@index([shop, groupId])
+  @@index([shop, email])
+  @@index([shop, deletedInShopifyAt])
+}
+
+enum BuyerStatus {
+  /// Applied through a registration form and waiting on a decision (2.3).
+  PENDING
+  /// Can buy at wholesale prices. Every customer synced from Shopify starts
+  /// here: they already have an account and can already place orders.
+  APPROVED
+  REJECTED
+}
+
+/// One rule of the auto-tagging engine.
+///
+/// Conditions are the wire shape from app/lib/customers/tagging.ts, which is a
+/// pure module — the same code decides a match in a preview, in a webhook, and
+/// in the nightly sweep, so a merchant's preview cannot disagree with what
+/// actually happens.
+model CustomerTagRule {
+  id      String  @id @default(cuid())
+  shop    String
+  name    String
+  enabled Boolean @default(true)
+  /// Lower runs first, matching the pricing rules' convention.
+  priority Int    @default(100)
+
+  /// "all" or "any" — how the conditions combine.
+  matchMode  String @default("all")
+  conditions Json
+
+  addTags    String[]
+  removeTags String[]
+
+  lastRunAt      DateTime?
+  lastMatchCount Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([shop, enabled, priority])
 }

@@ -1,5 +1,6 @@
 import { handleAppSubscriptionsUpdate } from "~/lib/webhooks/handlers/app-subscriptions-update.server";
 import { handleCollectionsUpdate } from "~/lib/webhooks/handlers/collections-update.server";
+import { handleCustomersDelete } from "~/lib/webhooks/handlers/customers-delete.server";
 import { handleCustomersUpsert } from "~/lib/webhooks/handlers/customers-upsert.server";
 import { handleProductsUpdate } from "~/lib/webhooks/handlers/products-update.server";
 import { handleAppUninstalled } from "~/lib/webhooks/handlers/app-uninstalled.server";
@@ -54,7 +55,8 @@ export const WEBHOOK_SUBSCRIPTIONS: readonly WebhookSubscription[] = [
   {
     topic: "customers/create",
     uri: "/webhooks/customers/create",
-    description: "Publish a new customer's tags so checkout can price for them.",
+    description:
+      "Mirror a new customer and publish their tags so checkout can price for them.",
     handler: handleCustomersUpsert,
   },
   {
@@ -64,6 +66,12 @@ export const WEBHOOK_SUBSCRIPTIONS: readonly WebhookSubscription[] = [
       "Republish a buyer's tags when they change — this is how approving " +
       "someone for wholesale reaches checkout.",
     handler: handleCustomersUpsert,
+  },
+  {
+    topic: "customers/delete",
+    uri: "/webhooks/customers/delete",
+    description: "Flag a deleted buyer so the list says so, rather than losing the row.",
+    handler: handleCustomersDelete,
   },
   {
     topic: "products/update",

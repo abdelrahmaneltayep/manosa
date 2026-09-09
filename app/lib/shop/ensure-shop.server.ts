@@ -1,6 +1,6 @@
 import { db } from "~/db.server";
 import { recordAudit, SYSTEM_ACTOR } from "~/lib/audit/record.server";
-import { cancelPendingJobs } from "~/lib/jobs/queue.server";
+import { cancelPendingJobs, enqueueJob } from "~/lib/jobs/queue.server";
 import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
 
 /**
@@ -26,6 +26,14 @@ export async function ensureShopRecord() {
       summary: `Mannon installed on ${shop}.`,
       subject: { type: "Shop", id: shop },
     });
+    // Webhooks only report customers who change. Without this, a store with an
+    // existing wholesale customer base sees an empty Customers page until each
+    // buyer happens to be edited.
+    await enqueueJob({
+      kind: "customers.backfill",
+      runAt: new Date(),
+      replacePending: true,
+    });
     return created;
   }
 
@@ -36,6 +44,21 @@ export async function ensureShopRecord() {
     data: { uninstalledAt: null },
   });
   const cancelled = await cancelPendingJobs("shop.purge_pii");
+
+  // A reinstall may have missed months of customer changes while the app was
+  // gone, and webhooks do not backfill. Only when the previous run finished:
+  // an interrupted one is still queued with its cursor.
+  if (restored.customersBackfilledAt) {
+    await db.shop.update({
+      where: { shop },
+      data: { customersBackfilledAt: null, customersBackfillCursor: null },
+    });
+    await enqueueJob({
+      kind: "customers.backfill",
+      runAt: new Date(),
+      replacePending: true,
+    });
+  }
 
   await recordAudit({
     actor: SYSTEM_ACTOR,

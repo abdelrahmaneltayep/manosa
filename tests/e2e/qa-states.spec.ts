@@ -125,6 +125,10 @@ test.describe("CSV import states", () => {
   captureSuite("1.4");
 });
 
+test.describe("Customer page states", () => {
+  captureSuite("2.1");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)

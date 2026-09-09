@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
 
+import { whenChecked } from "~/components/boolean-attribute";
+
 import type { RuleBuilderView, RuleFormView } from "~/components/pricing/types";
 import type { RuleIssue } from "@mannon/pricing-engine";
 
@@ -442,7 +444,7 @@ function AdvancedSection({ form }: { form: RuleFormView }) {
           name="combinable"
           label={t("pricing.builder.combinableLabel")}
           details={t("pricing.builder.combinableHelp")}
-          checked={form.combinable}
+          {...whenChecked(form.combinable)}
         />
         <s-banner tone="warning">
           <s-paragraph>{t("pricing.settings.combinationWarning")}</s-paragraph>

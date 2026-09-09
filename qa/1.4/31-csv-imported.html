@@ -52,6 +52,9 @@
  s-text[accessibilityvisibility=exclusive]{position:absolute;width:1px;height:1px;
    overflow:hidden;clip-path:inset(50%)}
  ui-save-bar{display:none}
+ /* A real s-select renders its own menu; here the options would otherwise
+    print as a run-on line of text next to the field. */
+ s-option{display:none}
 </style></head><body>
 <div class="note"><strong>QA capture — structure only.</strong> Polaris web components
 are not upgraded here: this build environment has no egress to Shopify's CDN, so the

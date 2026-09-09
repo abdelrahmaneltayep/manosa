@@ -27,7 +27,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 | Task                                                              | Status |
 | ----------------------------------------------------------------- | ------ |
-| 2.1 Customer sync, groups, tagging, approved-buyers list          | ☐      |
+| 2.1 Customer sync, groups, tagging, approved-buyers list          | ⚠      |
 | 2.2 Registration form builder, theme block, VIES, spam protection | ☐      |
 | 2.3 Approval pipeline: queue, emails, auto-approval evaluator     | ☐      |
 
@@ -78,6 +78,14 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 ## Decisions taken
 
+- **Shopify's customers are mirrored, not queried per request** — the buyers
+  list needs filters, sorting and real pagination that the Admin API cannot
+  serve. Shopify stays the source of truth: every write goes there first, tags
+  through `tagsAdd`/`tagsRemove` so another app's tags survive. `docs/adr/0010`.
+- **Auto-tagging decides in a pure module and never runs on its own** — a tag is
+  what pricing rules target, so tagging someone changes what they pay. The
+  preview and the apply are the same function; there is no unattended sweep.
+  `docs/adr/0011`.
 - **CSV imports are planned before they are run**, and the dry run checks the
   published size so an import cannot half-land at checkout. Undo removes exactly
   what it created, for an hour. `docs/adr/0009`.
@@ -149,5 +157,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
    `customers/redact`, `shop/redact`), pruning of `WebhookDelivery` rows, and the
    12-month `AuditLog` retention the checklist specifies in §8. The framework and
    the job runner take each of these as a few lines when that task comes.
-6. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
+6. **Shopify B2B companies (Plus) are not modelled.** `…pages-features.md` §3
+   lists companies, locations and catalogs. Mannon's groups are its own tiers.
+   Reconciling the two needs a Plus store to look at, so it is flagged rather
+   than guessed at.
+7. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
    Left as-is — say the word if it should be renamed.

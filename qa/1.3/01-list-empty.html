@@ -52,9 +52,12 @@
  s-text[accessibilityvisibility=exclusive]{position:absolute;width:1px;height:1px;
    overflow:hidden;clip-path:inset(50%)}
  ui-save-bar{display:none}
+ /* A real s-select renders its own menu; here the options would otherwise
+    print as a run-on line of text next to the field. */
+ s-option{display:none}
 </style></head><body>
 <div class="note"><strong>QA capture — structure only.</strong> Polaris web components
 are not upgraded here: this build environment has no egress to Shopify's CDN, so the
 styling below is a plain stand-in and is <em>not</em> what a merchant sees. What this
 capture verifies is which content and which states render.</div>
-<s-page heading="Pricing rules"><s-section><s-stack direction="block" gap="base"><s-heading>No pricing rules yet</s-heading><s-paragraph color="subdued">A rule decides what your wholesale buyers pay. Describe one in a sentence, or build it yourself.</s-paragraph><s-stack direction="inline" gap="small"><s-button variant="primary" disabled="true" href="/app/pricing/new?ai=1">✦ Describe a rule</s-button><s-button href="/app/pricing/new">Create manually</s-button></s-stack></s-stack></s-section></s-page></body></html>
+<s-page heading="Pricing rules"><s-section><s-stack direction="block" gap="base"><s-heading>No pricing rules yet</s-heading><s-paragraph color="subdued">A rule decides what your wholesale buyers pay. Describe one in a sentence, or build it yourself.</s-paragraph><s-stack direction="inline" gap="small"><s-button variant="primary" href="/app/pricing/new?ai=1" disabled="true">✦ Describe a rule</s-button><s-button href="/app/pricing/new">Create manually</s-button></s-stack></s-stack></s-section></s-page></body></html>

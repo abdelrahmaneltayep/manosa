@@ -87,8 +87,12 @@ Screens are `app/components/pricing/*`, props-only, so every state in checklist
 §2 renders in a test (`npm run qa:capture` writes them to `qa/1.3/`).
 
 One trap worth knowing: React stringifies props on custom elements, so
-`disabled={false}` becomes `disabled="false"`, which a browser reads as
-disabled. Use the `whenDisabled` helper, never a bare boolean.
+`disabled={false}` becomes `disabled="false"`, which a browser reads as the
+attribute being **set**. Use the helpers in `app/components/boolean-attribute.ts`
+(`whenDisabled`, `whenChecked`, `whenLoading`), never a bare boolean. This has
+shipped twice — a button that would have been dead the day its feature landed,
+and a combinations checkbox that showed ticked on rules that do not combine —
+so treat any `someProp={aBoolean}` on an `s-*` element as a defect on sight.
 
 See `docs/adr/0008-pricing-rules.md`.
 
@@ -107,7 +111,7 @@ everything it needs arrives as metafields:
 | ------------------------- | ---------------------- | ----------------------------------------- |
 | `$app:mannon.ruleset`     | the automatic discount | `publishRuleset`                          |
 | `$app:mannon.buyer`       | customer               | `publishBuyerFacts`, on customer webhooks |
-| `$app:mannon.collections` | product                | phase 1.3                                 |
+| `$app:mannon.collections` | product                | `publishProductCollections`               |
 
 **`publishRuleset` is the only thing keeping checkout in step with the admin.**
 Anything not published does not exist at checkout, so call it after every change
@@ -122,6 +126,36 @@ CLI only wraps it in WebAssembly, so `extensions/mannon-discount/test` exercises
 the real checkout behaviour.
 
 See `docs/adr/0007-checkout-pricing.md`.
+
+## Customers, groups and tags
+
+`Customer` is a **mirror** of Shopify's customer, per shop — not a second source
+of truth. It exists so the buyers list can filter, sort and paginate without an
+Admin API round trip per keystroke. Webhooks keep it current; a backfill job
+(`customers.backfill`) seeds it a page at a time on install and on reinstall.
+
+Shopify owns the customer, so **every write goes there first and to the mirror
+second**. Tags are written with `tagsAdd`/`tagsRemove`, never by setting the
+whole list — other apps tag the same customers, and dropping a loyalty app's
+tags is a support ticket nobody can diagnose.
+
+A customer deleted in Shopify keeps their row, flagged `deletedInShopifyAt`. The
+list shows them greyed rather than losing a row mid-scroll; 7.2 prunes them.
+
+**A tag is a price.** Pricing rules target tags, so anything that tags a customer
+changes what they pay. That is why `app/lib/customers/tagging.ts` is pure — the
+same function backs the preview and the apply — and why nothing tags anyone on a
+schedule. A rule with no conditions matches nobody; a condition that cannot be
+read disables its rule; money is never converted across currencies.
+
+Groups are Mannon's own tiers, each carrying a Shopify tag. Deleting one asks
+where its members go, because a buyer who silently loses their tier gets a
+different price at their next checkout.
+
+The only money on these screens is Shopify's own lifetime total for a buyer.
+It is a historical fact, not a price — every price still comes from the engine.
+
+See `docs/adr/0010-customer-mirror.md` and `docs/adr/0011-auto-tagging.md`.
 
 ## Multi-tenancy — read this before writing a query
 
@@ -224,6 +258,7 @@ app/
   lib/webhooks/      Registry, dispatch, handlers
   lib/jobs/          Durable queue, runner, handlers
   lib/billing/       Plan catalog, entitlements, the gate, subscription sync
+  lib/customers/     Customer mirror, groups, and the pure auto-tagging engine
   components/        Presentational components, renderable without a router
   i18n/              Locale config and the EN/AR catalogs
   db.server.ts       The scoped Prisma client every feature uses

@@ -1,8 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { renderToStaticMarkup } from "react-dom/server";
-import { I18nextProvider } from "react-i18next";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { CsvPage, type CsvView } from "~/components/pricing/CsvPage";
@@ -15,9 +12,9 @@ import type {
   RuleRowView,
   PricingSettingsView,
 } from "~/components/pricing/types";
-import { dirFor, type Locale } from "~/i18n/config";
-import { createI18n } from "~/i18n/i18next";
+import type { Locale } from "~/i18n/config";
 import { emptyFormView } from "~/lib/pricing/view-model.server";
+import { createCaptureHarness, type CaptureHarness } from "../support/state-capture";
 
 /**
  * Every state in checklist §2, rendered and asserted.
@@ -27,97 +24,24 @@ import { emptyFormView } from "~/lib/pricing/view-model.server";
  * are actually exercised. QA_CAPTURE=1 also writes each one to qa/1.3/.
  */
 
-const CAPTURE = process.env.QA_CAPTURE === "1";
 const OUT_13 = resolve(process.cwd(), "qa/1.3");
 const OUT_14 = resolve(process.cwd(), "qa/1.4");
 /** Captures numbered 24 and up belong to task 1.4 (CSV import/export). */
 const outFor = (name: string) => (Number(name.slice(0, 2)) >= 24 ? OUT_14 : OUT_13);
-const instances = new Map<Locale, Awaited<ReturnType<typeof createI18n>>>();
+
+let harness: CaptureHarness;
+const render = (node: React.ReactNode, locale: Locale = "en") =>
+  harness.render(node, locale);
+const capture = (name: string, html: string, locale: Locale = "en") =>
+  harness.capture(name, html, locale);
 
 beforeAll(async () => {
-  for (const locale of ["en", "ar"] as Locale[]) {
-    instances.set(locale, await createI18n(locale));
-  }
-  if (CAPTURE) {
-    mkdirSync(OUT_13, { recursive: true });
-    mkdirSync(OUT_14, { recursive: true });
-  }
+  harness = await createCaptureHarness({
+    title: "Pricing",
+    outFor,
+    dirs: [OUT_13, OUT_14],
+  });
 });
-
-function render(node: React.ReactNode, locale: Locale = "en"): string {
-  return renderToStaticMarkup(
-    <I18nextProvider i18n={instances.get(locale)!}>{node}</I18nextProvider>,
-  );
-}
-
-const STYLES = `
- body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-   margin:0;padding:1.5rem;background:#f6f6f7;color:#1c1d2b}
- .note{background:#fff4e4;border:1px solid #e0b252;border-radius:8px;padding:.75rem 1rem;
-   margin-bottom:1.25rem;font-size:12px;color:#5e4200}
- s-page,s-section,s-box{display:block}
- s-section,s-box{background:#fff;border:1px solid #e3e3e3;border-radius:10px;
-   padding:1rem;margin-bottom:1rem}
- s-stack{display:flex;gap:.45rem}
- s-stack[direction=block]{flex-direction:column;align-items:flex-start}
- s-stack[direction=inline]{flex-direction:row;align-items:center;flex-wrap:wrap}
- s-heading{display:block;font-weight:700;margin:.25rem 0}
- s-page[heading]::before{content:attr(heading);display:block;font-size:20px;
-   font-weight:800;margin-bottom:1rem}
- s-section[heading]::before{content:attr(heading);display:block;font-weight:700;
-   margin-bottom:.5rem}
- s-banner[heading]::before{content:attr(heading);display:block;font-weight:700}
- s-paragraph{display:block;margin:.35rem 0}
- s-banner{display:block;border-inline-start:4px solid #8a8a8a;background:#fafafa;
-   padding:.75rem 1rem;margin:.5rem 0;border-radius:6px}
- s-banner[tone=critical]{border-color:#d64545;background:#fdeaea}
- s-banner[tone=warning]{border-color:#b7791f;background:#fff2dd}
- s-banner[tone=info]{border-color:#2f6bd6;background:#eaf1ff}
- s-banner[tone=success]{border-color:#1f8a53;background:#e7f7ee}
- s-badge{display:inline-block;background:#eef0ff;color:#4f46e5;border-radius:999px;
-   padding:.1rem .55rem;font-size:12px;margin-inline-end:.4rem}
- s-button{display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;
-   padding:.45rem .9rem;margin-inline-end:.5rem;font-weight:700}
- s-button[variant=tertiary]{background:transparent;color:#4f46e5;font-weight:600}
- s-button[disabled]{opacity:.45}
- s-table{display:table;width:100%;border-collapse:collapse}
- s-table-body{display:table-row-group}
- s-table-header-row,s-table-row{display:table-row}
- s-table-header,s-table-cell{display:table-cell;padding:.4rem .5rem;
-   border-bottom:1px solid #eee;text-align:start;vertical-align:top}
- s-table-header{font-weight:700}
- s-text-field,s-number-field,s-money-field,s-select,s-text-area,s-date-field,
- s-search-field,s-checkbox{display:block;margin:.4rem 0}
- s-text-field::before,s-number-field::before,s-money-field::before,
- s-select::before,s-text-area::before,s-date-field::before,
- s-search-field::before,s-checkbox::before{content:attr(label);display:block;
-   font-weight:600;font-size:12px;margin-bottom:.15rem}
- s-text-field::after,s-number-field::after,s-money-field::after,
- s-select::after,s-text-area::after,s-date-field::after{
-   content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
-   padding:.35rem .5rem;min-height:1.1em;background:#fff;color:#444}
- s-ordered-list{display:block;padding-inline-start:1.2rem}
- s-unordered-list{display:block;padding-inline-start:1.1rem}
- s-list-item{display:list-item;margin:.3rem 0}
- s-link{color:#4f46e5;text-decoration:underline;margin-inline-end:.6rem}
- s-text[accessibilityvisibility=exclusive]{position:absolute;width:1px;height:1px;
-   overflow:hidden;clip-path:inset(50%)}
- ui-save-bar{display:none}
-`;
-
-function capture(name: string, html: string, locale: Locale = "en") {
-  if (!CAPTURE) return;
-  writeFileSync(
-    resolve(outFor(name), `${name}.html`),
-    `<!doctype html><html lang="${locale}" dir="${dirFor(locale)}"><head>
-<meta charset="utf-8"><title>Pricing — ${name}</title><style>${STYLES}</style></head><body>
-<div class="note"><strong>QA capture — structure only.</strong> Polaris web components
-are not upgraded here: this build environment has no egress to Shopify's CDN, so the
-styling below is a plain stand-in and is <em>not</em> what a merchant sees. What this
-capture verifies is which content and which states render.</div>
-${html}</body></html>\n`,
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 
@@ -331,6 +255,40 @@ describe("rule list states", () => {
     expect(html).toContain("51–100 of 120");
     expect(html).toContain("Previous");
     expect(html).toContain("Next");
+  });
+});
+
+describe("boolean attributes on Polaris elements", () => {
+  /**
+   * React stringifies props on a custom element, so a boolean passed straight
+   * through renders as the string "false" — which a browser reads as the
+   * attribute being set. Both of these were live defects found in the 2.1 QA
+   * pass; they are asserted here so they cannot come back.
+   */
+  it("does not disable the ✦ button the day the AI layer ships", () => {
+    const html = render(<RuleListPage view={listView({ aiAvailable: true })} />);
+    expect(html).not.toContain('disabled="false"');
+    expect(html).not.toContain('disabled=""');
+  });
+
+  it("does not show the combinations box ticked on a rule that does not combine", () => {
+    const html = render(
+      <RuleBuilderPage
+        view={builderView({
+          form: { ...emptyFormView("USD"), combinable: false },
+        })}
+      />,
+    );
+    expect(html).not.toContain('checked="false"');
+  });
+
+  it("still ticks the box on a rule that does combine", () => {
+    const html = render(
+      <RuleBuilderPage
+        view={builderView({ form: { ...emptyFormView("USD"), combinable: true } })}
+      />,
+    );
+    expect(html).toContain("checked");
   });
 });
 

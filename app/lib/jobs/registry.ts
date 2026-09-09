@@ -1,3 +1,4 @@
+import { backfillCustomers } from "~/lib/jobs/handlers/backfill-customers.server";
 import { purgeShopPii } from "~/lib/jobs/handlers/purge-shop-pii.server";
 
 /**
@@ -9,6 +10,7 @@ import { purgeShopPii } from "~/lib/jobs/handlers/purge-shop-pii.server";
  */
 export const JOB_HANDLERS = {
   "shop.purge_pii": purgeShopPii,
+  "customers.backfill": backfillCustomers,
 } as const;
 
 export type JobKind = keyof typeof JOB_HANDLERS;

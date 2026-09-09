@@ -1,13 +1,8 @@
 import { useTranslation } from "react-i18next";
 
-import type { RuleListView, RuleRowView } from "~/components/pricing/types";
+import { whenDisabled } from "~/components/boolean-attribute";
 
-/**
- * React stringifies props on custom elements, so `disabled={false}` renders
- * `disabled="false"` — which a browser reads as disabled. Boolean attributes on
- * `s-*` elements have to be omitted rather than set false.
- */
-const whenDisabled = (value: boolean) => (value ? { disabled: true } : {});
+import type { RuleListView, RuleRowView } from "~/components/pricing/types";
 
 /** Below this, a filter bar is more chrome than help. */
 const FILTER_BAR_FROM = 3;
@@ -110,8 +105,8 @@ function EmptyState({ view }: { view: RuleListView }) {
               the merchant should know it is coming. */}
           <s-button
             variant="primary"
-            disabled={!view.aiAvailable}
             href="/app/pricing/new?ai=1"
+            {...whenDisabled(!view.aiAvailable)}
           >
             {t("pricing.list.emptyDescribe")}
           </s-button>
