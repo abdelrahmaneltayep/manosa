@@ -21,8 +21,12 @@ export default async function handleRequest(
   _loadContext: AppLoadContext,
 ) {
   // Sets the Content-Security-Policy frame-ancestors that lets the Shopify
-  // admin embed us, per shop.
-  addDocumentResponseHeaders(request, responseHeaders);
+  // admin embed us, per shop. Not applied to the buyer-facing form pages: they
+  // are framed by the merchant's storefront, not by the admin, and the route
+  // sets its own frame-ancestors naming that storefront.
+  if (!new URL(request.url).pathname.startsWith("/f/")) {
+    addDocumentResponseHeaders(request, responseHeaders);
+  }
 
   // One instance per request: two shops rendering in different languages at
   // the same time must not race on a shared global language.

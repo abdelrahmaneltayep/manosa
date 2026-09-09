@@ -78,8 +78,28 @@ const STYLES = `
 
 export interface CaptureHarness {
   render: (node: React.ReactNode, locale?: Locale) => string;
-  capture: (name: string, html: string, locale?: Locale) => void;
+  capture: (
+    name: string,
+    html: string,
+    locale?: Locale,
+    /** Overrides the standing "structure only" note — see `REAL_NOTE`. */
+    note?: string,
+  ) => void;
 }
+
+const STAND_IN_NOTE = `<strong>QA capture — structure only.</strong> Polaris web components
+are not upgraded here: this build environment has no egress to Shopify's CDN, so the
+styling below is a plain stand-in and is <em>not</em> what a merchant sees. What this
+capture verifies is which content and which states render.`;
+
+/**
+ * For pages that are not Polaris. The buyer-facing form is plain HTML with the
+ * merchant's own colours, so its capture is the real thing — saying otherwise
+ * would understate what has been checked.
+ */
+export const REAL_NOTE = `<strong>QA capture — the real page.</strong> This screen is plain
+HTML styled by the merchant's own appearance settings, not Polaris, so what you see here
+is what a buyer sees.`;
 
 /**
  * Build the harness for one task's captures.
@@ -111,16 +131,13 @@ export async function createCaptureHarness(options: {
       );
     },
 
-    capture(name, html, locale: Locale = "en") {
+    capture(name, html, locale: Locale = "en", note: string = STAND_IN_NOTE) {
       if (!enabled) return;
       writeFileSync(
         resolve(options.outFor(name), `${name}.html`),
         `<!doctype html><html lang="${locale}" dir="${dirFor(locale)}"><head>
 <meta charset="utf-8"><title>${options.title} — ${name}</title><style>${STYLES}</style></head><body>
-<div class="note"><strong>QA capture — structure only.</strong> Polaris web components
-are not upgraded here: this build environment has no egress to Shopify's CDN, so the
-styling below is a plain stand-in and is <em>not</em> what a merchant sees. What this
-capture verifies is which content and which states render.</div>
+<div class="note">${note}</div>
 ${html}</body></html>\n`,
       );
     },

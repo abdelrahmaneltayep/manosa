@@ -1,0 +1,8 @@
+{
+  "mannon": {
+    "registration": {
+      "needs_url": "Add your form's link in this block's settings. You will find it in the Publish tab of the form in the Mannon app.",
+      "open_in_new_tab": "Open the application form in a new tab"
+    }
+  }
+}

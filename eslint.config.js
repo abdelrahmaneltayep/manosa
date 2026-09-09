@@ -56,6 +56,13 @@ export default tseslint.config(
     rules: { "no-restricted-imports": "off" },
   },
   {
+    // End-to-end specs run outside the app, against the built server. They
+    // seed fixtures the way an operator would, so they need an unscoped
+    // client — the guard is on application code, which is where it matters.
+    files: ["tests/e2e/**/*.ts"],
+    rules: { "no-restricted-imports": "off" },
+  },
+  {
     // The pricing engine has to run inside a Shopify Function and in a browser
     // bundle, so it must not reach into the app or pull in a dependency.
     // packages/pricing-engine/test/purity.test.ts enforces the same thing at

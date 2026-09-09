@@ -94,18 +94,23 @@ model Shop {
   /// The tag that means "this buyer is wholesale". Configurable because every
   /// store already has its own word for it, and re-tagging an existing
   /// customer base to suit us would be rude. Settings exposes it in 6.2.
-  wholesaleTag       String    @default("wholesale")
+  wholesaleTag           String  @default("wholesale")
   /// When on, a buyer cannot be marked tax-exempt without a VAT id on file.
   requireVatForTaxExempt Boolean @default(false)
+  /// The storefront the merchant actually uses. Needed so the registration
+  /// form can be framed by their theme without allowing every origin to frame
+  /// it. Refreshed when a form is published.
+  primaryDomain          String?
+
   /// Progress of the one-off customer backfill. Null means never finished.
-  customersBackfilledAt DateTime?
+  customersBackfilledAt   DateTime?
   /// Where the backfill got to. A store with 40,000 customers takes many
   /// pages, and a restart in the middle must not start again from the top.
   customersBackfillCursor String?
-  customerCount      Int       @default(0)
+  customerCount           Int       @default(0)
 
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([uninstalledAt])
 }
@@ -385,13 +390,13 @@ model RuleImportDraft {
 /// group page can show the whole bundle rather than growing a new table each
 /// time a phase adds a section.
 model CustomerGroup {
-  id     String  @id @default(cuid())
-  shop   String
-  name   String
+  id          String  @id @default(cuid())
+  shop        String
+  name        String
   /// Stable key used in pricing-rule audiences and in CSV imports, so renaming
   /// a group does not silently repoint every rule that referenced it.
-  handle String
-  color  String?
+  handle      String
+  color       String?
   description String?
 
   /// Members of a group are priced by rules whose audience names it, and are
@@ -400,13 +405,13 @@ model CustomerGroup {
 
   // --- Bundle: each of these is owned by a later phase, shown here now. ----
   /// Net payment terms in days. Enforced in phase 3.2.
-  netTermsDays  Int?
+  netTermsDays         Int?
   /// Minimum order value in minor units. Enforced in phase 3.1.
-  orderMinimum  Int?
+  orderMinimum         Int?
   /// Order must be a multiple of this. Enforced in phase 3.1.
-  orderIncrement Int?
+  orderIncrement       Int?
   /// Free shipping above this subtotal, in minor units. Phase 3.
-  freeShippingOver Int?
+  freeShippingOver     Int?
   /// Collections this group may see. Empty means everything. Phase 3.4.
   visibleCollectionIds String[]
 
@@ -432,8 +437,8 @@ model CustomerGroup {
 /// without an Admin API round trip per keystroke, and so a customer deleted in
 /// Shopify can still be shown as deleted rather than vanishing mid-list.
 model Customer {
-  id   String @id @default(cuid())
-  shop String
+  id         String @id @default(cuid())
+  shop       String
   /// Shopify's GID. The join key to everything on their side.
   customerId String
 
@@ -449,12 +454,12 @@ model Customer {
   /// Shopify's tags, normalised (trimmed, de-duplicated, sorted).
   tags  String[]
   /// Shopify's account state: enabled, disabled, invited, declined.
-  state String @default("enabled")
+  state String   @default("enabled")
 
-  taxExempt Boolean @default(false)
+  taxExempt     Boolean   @default(false)
   /// EU/GCC VAT id. Collected by the registration form (2.2) and validated
   /// against VIES there; stored here so tax-exempt can require it.
-  vatNumber String?
+  vatNumber     String?
   /// Set when VIES confirmed the number. Null means unverified, which is not
   /// the same as invalid — VIES outages must not brand a buyer as fraudulent.
   vatVerifiedAt DateTime?
@@ -466,9 +471,9 @@ model Customer {
 
   /// Shopify's own totals, in minor units of `currencyCode`. Not a price we
   /// computed — every *price* in this app comes from the pricing engine.
-  lifetimeSpend Int    @default(0)
-  currencyCode  String @default("USD")
-  orderCount    Int    @default(0)
+  lifetimeSpend Int       @default(0)
+  currencyCode  String    @default("USD")
+  orderCount    Int       @default(0)
   lastOrderAt   DateTime?
 
   /// Staff-only. Never shown to the buyer and never sent in an email.
@@ -507,12 +512,12 @@ enum BuyerStatus {
 /// in the nightly sweep, so a merchant's preview cannot disagree with what
 /// actually happens.
 model CustomerTagRule {
-  id      String  @id @default(cuid())
-  shop    String
-  name    String
-  enabled Boolean @default(true)
+  id       String  @id @default(cuid())
+  shop     String
+  name     String
+  enabled  Boolean @default(true)
   /// Lower runs first, matching the pricing rules' convention.
-  priority Int    @default(100)
+  priority Int     @default(100)
 
   /// "all" or "any" — how the conditions combine.
   matchMode  String @default("all")
@@ -529,4 +534,173 @@ model CustomerTagRule {
   createdBy String?
 
   @@index([shop, enabled, priority])
+}
+
+// ---------------------------------------------------------------------------
+// Registration forms (phase 2.2)
+// ---------------------------------------------------------------------------
+
+enum FormStatus {
+  DRAFT
+  LIVE
+}
+
+/// A wholesale registration form.
+///
+/// The JSON columns hold the wire shapes from app/lib/forms/schema.ts, which is
+/// a pure module: the same definition validates a submission in the admin
+/// preview, on the standalone page, and behind the app proxy. A form that
+/// validates one way in the builder and another way for a buyer is the kind of
+/// bug that only shows up as applications that never arrive.
+model RegistrationForm {
+  id     String     @id @default(cuid())
+  shop   String
+  name   String
+  /// URL slug, unique per shop. Duplicating a form appends "-copy".
+  slug   String
+  status FormStatus @default(DRAFT)
+
+  /// The public link. Unguessable and shop-free, so a standalone form URL does
+  /// not have to carry the merchant's domain or reveal their other forms.
+  publicId String @unique @default(cuid())
+
+  /// FormDefinition — fields, their validation, and conditional logic.
+  fields     Json
+  /// Layout, width, font and colours.
+  appearance Json
+  /// Confirmation / approved / rejected / needs-info templates.
+  emails     Json
+  /// Redirect URL, auto-tags, auto-group, spam protection.
+  publish    Json
+
+  /// Which starter template this began as, if any.
+  template String?
+
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+  updatedBy String?
+
+  submissions FormSubmission[]
+  events      FormEvent[]
+
+  @@unique([shop, slug])
+  @@index([shop, status, updatedAt])
+}
+
+enum SubmissionStatus {
+  /// Waiting on a merchant decision. The approval pipeline is phase 2.3.
+  PENDING
+  APPROVED
+  REJECTED
+  /// Caught by spam protection. Kept, not deleted: a false positive is a lost
+  /// customer, and the merchant needs to be able to find one.
+  SPAM
+}
+
+enum VatCheckStatus {
+  /// No VAT id was given.
+  NONE
+  /// VIES confirmed it.
+  VALID
+  /// VIES said no.
+  INVALID
+  /// VIES could not be reached, or the country is outside the EU. Accepted
+  /// with a flag — a third-party outage must never block an applicant.
+  UNVERIFIED
+}
+
+/// One application.
+model FormSubmission {
+  id     String           @id @default(cuid())
+  shop   String
+  formId String
+  form   RegistrationForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  /// Pulled out of the answers so duplicates can be found without parsing JSON.
+  email   String
+  company String?
+  /// Every answer, keyed by field key.
+  answers Json
+
+  status SubmissionStatus @default(PENDING)
+
+  vatNumber String?
+  vatStatus VatCheckStatus @default(NONE)
+  /// Why the VAT id is unverified, for the reviewer: "vies_unreachable",
+  /// "outside_eu", "format".
+  vatNote   String?
+
+  /// Set when spam protection caught it, so a merchant reviewing a false
+  /// positive can see what tripped: "honeypot", "too_fast", "rate_limit".
+  spamReason String?
+
+  /// Kept for rate limiting and for the reviewer. Purged with the rest of the
+  /// PII on uninstall.
+  ip        String?
+  userAgent String?
+
+  /// Set by the approval pipeline (2.3) once this becomes a real customer.
+  customerId String?
+
+  createdAt DateTime @default(now())
+
+  uploads FormUpload[]
+
+  @@index([shop, status, createdAt])
+  @@index([shop, formId, createdAt])
+  @@index([shop, email])
+  @@index([shop, ip, createdAt])
+}
+
+/// A file an applicant attached — a trade licence, a tax certificate.
+///
+/// Stored in the database rather than object storage: these are a few hundred
+/// kilobytes each, arriving a handful a day, and adding a bucket to the
+/// deployment for that would be a worse trade than a bytea column.
+model FormUpload {
+  id           String          @id @default(cuid())
+  shop         String
+  submissionId String?
+  submission   FormSubmission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  fieldKey    String
+  fileName    String
+  contentType String
+  byteSize    Int
+  content     Bytes
+
+  /// Null means not scanned. The admin says so rather than implying it is
+  /// clean — claiming a scan that never ran is worse than admitting there is
+  /// none. See QA-REPORT 2.2.
+  scannedAt     DateTime?
+  /// Set if a scanner ever finds something.
+  quarantinedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([shop, submissionId])
+}
+
+enum FormEventKind {
+  VIEW
+  SUBMIT
+}
+
+/// Views and submissions, so the form card can show a real conversion rate.
+///
+/// Rows rather than counters because "in the last 30 days" needs timestamps.
+/// Pruned with the retention jobs in 7.2.
+model FormEvent {
+  id     String           @id @default(cuid())
+  shop   String
+  formId String
+  form   RegistrationForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  kind   FormEventKind
+  at     DateTime         @default(now())
+
+  @@index([shop, formId, kind, at])
+  @@index([at])
 }

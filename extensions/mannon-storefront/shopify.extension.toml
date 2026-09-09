@@ -1,0 +1,12 @@
+# Mannon's buyer-facing blocks.
+#
+# One block today: the wholesale registration form. It embeds the app's own
+# standalone form rather than re-implementing it in Liquid — see
+# docs/adr/0012-registration-forms.md for why there is one renderer and not two.
+
+api_version = "2025-07"
+
+[[extensions]]
+type = "theme"
+name = "Mannon storefront"
+handle = "mannon-storefront"

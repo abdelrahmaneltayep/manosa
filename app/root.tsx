@@ -15,17 +15,27 @@ import { useTranslation } from "react-i18next";
 import { detectLocale } from "~/i18n.server";
 import { DEFAULT_LOCALE, dirFor } from "~/i18n/config";
 
-export const links: LinksFunction = () => [
-  { rel: "preconnect", href: "https://cdn.shopify.com" },
-];
+export const links: LinksFunction = () => [];
+
+/**
+ * Routes that are not the embedded admin.
+ *
+ * A buyer filling in a registration form on the merchant's storefront should
+ * not be handed App Bridge: it cannot work outside the admin iframe, and it is
+ * a third-party script on a page a member of the public is looking at.
+ */
+const PUBLIC_PREFIXES = ["/f/"];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const locale = detectLocale(request);
+  const { pathname } = new URL(request.url);
+
   return json({
     // The public app key App Bridge reads from the meta tag below. Not a secret.
     apiKey: process.env.SHOPIFY_API_KEY ?? "",
     locale,
     dir: dirFor(locale),
+    embedded: !PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix)),
   });
 };
 
@@ -43,9 +53,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         {/* App Bridge + Polaris web components. The meta tag must precede the
             script, and the script must not be deferred: App Bridge establishes
-            the embedded session before the app renders. */}
-        <meta name="shopify-api-key" content={data?.apiKey ?? ""} />
-        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
+            the embedded session before the app renders. Left out entirely on
+            the buyer-facing routes, which are not embedded and where it would
+            be a third-party script loaded for nothing. */}
+        {data?.embedded !== false ? (
+          <>
+            <link rel="preconnect" href="https://cdn.shopify.com" />
+            <meta name="shopify-api-key" content={data?.apiKey ?? ""} />
+            <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
+          </>
+        ) : null}
         <Meta />
         <Links />
       </head>

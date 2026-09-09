@@ -157,6 +157,49 @@ It is a historical fact, not a price — every price still comes from the engine
 
 See `docs/adr/0010-customer-mirror.md` and `docs/adr/0011-auto-tagging.md`.
 
+## Registration forms
+
+A form is defined by a pure module (`app/lib/forms/schema.ts`) that decides both
+what a form is and whether a submission is valid. The builder's preview, the
+standalone page and the submit endpoint all ask it, so a form cannot validate
+one way in the admin and another way for a buyer.
+
+**The buyer's form works with JavaScript switched off**, and that path is
+exercised in a real browser (`tests/e2e/public-form.spec.ts`) — it is our own
+page on our own domain, so unlike the embedded admin it can be. Without JS
+every field renders, including ones a condition would hide; the server resolves
+visibility from the answers, so a hidden field is simply not required.
+
+Two ways a buyer reaches it:
+
+| Route                          | What it is                                                    |
+| ------------------------------ | ------------------------------------------------------------- |
+| `/f/:publicId`                 | The standalone page. No session, no App Bridge, no JS needed. |
+| `extensions/mannon-storefront` | A theme block that frames that page.                          |
+
+The block frames rather than re-implements: a Liquid copy of the fields,
+validation and conditional logic would be a second implementation of the code
+that decides whether an application is accepted. `frame-ancestors` names the
+merchant's own storefront and nobody else, which is why publishing a form reads
+the shop's primary domain.
+
+**Unverified is not invalid.** A VIES outage, a country VIES does not cover (the
+Gulf), or a format we do not recognise all accept the applicant with a flag for
+the reviewer. Only VIES answering "no" rejects one. A wholesale buyer who cannot
+apply because a member state's server is down is a customer lost to somebody
+else's downtime.
+
+Spam protection is a honeypot, a minimum fill time and a rate limit per address
+— no captcha. Nothing is deleted: a caught submission is stored with the reason
+that caught it, because a real buyer wrongly marked spam is a lost customer
+somebody has to be able to find.
+
+Nothing scans uploaded files and no email is sent yet. Both say so on screen
+rather than implying otherwise; `app/lib/email/send.server.ts` is a seam with no
+transport behind it.
+
+See `docs/adr/0012-registration-forms.md`.
+
 ## Multi-tenancy — read this before writing a query
 
 Every table holding merchant data carries a `shop` column, and **every query is
@@ -259,6 +302,8 @@ app/
   lib/jobs/          Durable queue, runner, handlers
   lib/billing/       Plan catalog, entitlements, the gate, subscription sync
   lib/customers/     Customer mirror, groups, and the pure auto-tagging engine
+  lib/forms/         Form definitions, validation, VIES, spam protection
+  lib/email/         The transport seam. No provider wired up yet.
   components/        Presentational components, renderable without a router
   i18n/              Locale config and the EN/AR catalogs
   db.server.ts       The scoped Prisma client every feature uses
@@ -267,6 +312,7 @@ packages/
   pricing-engine/    The one source of every price. Pure and dependency-free.
 extensions/
   mannon-discount/   The Shopify Function that prices the cart at checkout.
+  mannon-storefront/ Theme blocks. Today: the wholesale registration form.
 prisma/              Schema and migrations
 tests/               unit · integration · e2e
 qa/                  Per-task QA state captures

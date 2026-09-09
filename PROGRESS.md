@@ -28,7 +28,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 | Task                                                              | Status |
 | ----------------------------------------------------------------- | ------ |
 | 2.1 Customer sync, groups, tagging, approved-buyers list          | ⚠      |
-| 2.2 Registration form builder, theme block, VIES, spam protection | ☐      |
+| 2.2 Registration form builder, theme block, VIES, spam protection | ⚠      |
 | 2.3 Approval pipeline: queue, emails, auto-approval evaluator     | ☐      |
 
 ## Phase 3 — Orders
@@ -78,6 +78,13 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 ## Decisions taken
 
+- **There is one registration-form renderer, and the theme block frames it** —
+  a Liquid copy would be a second implementation of the code that decides
+  whether an application is accepted. The form works with JavaScript switched
+  off, and that path is exercised in a real browser. `docs/adr/0012`.
+- **Unverified is not invalid** — a VIES outage, a country it does not cover, or
+  a format we do not recognise all accept the applicant with a flag. Only VIES
+  answering "no" rejects one. `docs/adr/0012`.
 - **Shopify's customers are mirrored, not queried per request** — the buyers
   list needs filters, sorting and real pagination that the Admin API cannot
   serve. Shopify stays the source of truth: every write goes there first, tags
@@ -157,9 +164,14 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
    `customers/redact`, `shop/redact`), pruning of `WebhookDelivery` rows, and the
    12-month `AuditLog` retention the checklist specifies in §8. The framework and
    the job runner take each of these as a few lines when that task comes.
-6. **Shopify B2B companies (Plus) are not modelled.** `…pages-features.md` §3
+6. **Nothing scans uploaded files, and no email is sent.** Both are service
+   decisions rather than code ones: there is no virus scanner and no mail
+   provider. The admin says "not virus-scanned" and the test-send button says
+   nothing was sent, rather than either implying otherwise. Mail belongs with
+   the approval pipeline in 2.3.
+7. **Shopify B2B companies (Plus) are not modelled.** `…pages-features.md` §3
    lists companies, locations and catalogs. Mannon's groups are its own tiers.
    Reconciling the two needs a Plus store to look at, so it is flagged rather
    than guessed at.
-7. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
+8. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
    Left as-is — say the word if it should be renamed.

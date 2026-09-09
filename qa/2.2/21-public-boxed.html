@@ -1,0 +1,62 @@
+<!doctype html><html lang="en" dir="ltr"><head>
+<meta charset="utf-8"><title>Forms — 21-public-boxed</title><style>
+ body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+   margin:0;padding:1.5rem;background:#f6f6f7;color:#1c1d2b}
+ .note{background:#fff4e4;border:1px solid #e0b252;border-radius:8px;padding:.75rem 1rem;
+   margin-bottom:1.25rem;font-size:12px;color:#5e4200}
+ s-page,s-section,s-box{display:block}
+ s-section,s-box{background:#fff;border:1px solid #e3e3e3;border-radius:10px;
+   padding:1rem;margin-bottom:1rem}
+ s-stack{display:flex;gap:.45rem}
+ s-stack[direction=block]{flex-direction:column;align-items:flex-start}
+ s-stack[direction=inline]{flex-direction:row;align-items:center;flex-wrap:wrap}
+ s-heading{display:block;font-weight:700;margin:.25rem 0}
+ s-page[heading]::before{content:attr(heading);display:block;font-size:20px;
+   font-weight:800;margin-bottom:1rem}
+ s-section[heading]::before{content:attr(heading);display:block;font-weight:700;
+   margin-bottom:.5rem}
+ s-banner[heading]::before{content:attr(heading);display:block;font-weight:700}
+ s-paragraph{display:block;margin:.35rem 0}
+ s-banner{display:block;border-inline-start:4px solid #8a8a8a;background:#fafafa;
+   padding:.75rem 1rem;margin:.5rem 0;border-radius:6px}
+ s-banner[tone=critical]{border-color:#d64545;background:#fdeaea}
+ s-banner[tone=warning]{border-color:#b7791f;background:#fff2dd}
+ s-banner[tone=info]{border-color:#2f6bd6;background:#eaf1ff}
+ s-banner[tone=success]{border-color:#1f8a53;background:#e7f7ee}
+ s-badge{display:inline-block;background:#eef0ff;color:#4f46e5;border-radius:999px;
+   padding:.1rem .55rem;font-size:12px;margin-inline-end:.4rem}
+ s-button{display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;
+   padding:.45rem .9rem;margin-inline-end:.5rem;font-weight:700}
+ s-button[variant=tertiary]{background:transparent;color:#4f46e5;font-weight:600}
+ s-button[disabled]{opacity:.45}
+ s-table{display:table;width:100%;border-collapse:collapse}
+ s-table-body{display:table-row-group}
+ s-table-header-row,s-table-row{display:table-row}
+ s-table-header,s-table-cell{display:table-cell;padding:.4rem .5rem;
+   border-bottom:1px solid #eee;text-align:start;vertical-align:top}
+ s-table-header{font-weight:700}
+ s-text-field,s-number-field,s-money-field,s-select,s-text-area,s-date-field,
+ s-search-field,s-checkbox{display:block;margin:.4rem 0}
+ s-text-field::before,s-number-field::before,s-money-field::before,
+ s-select::before,s-text-area::before,s-date-field::before,
+ s-search-field::before,s-checkbox::before{content:attr(label);display:block;
+   font-weight:600;font-size:12px;margin-bottom:.15rem}
+ s-text-field::after,s-number-field::after,s-money-field::after,
+ s-select::after,s-text-area::after,s-date-field::after{
+   content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
+   padding:.35rem .5rem;min-height:1.1em;background:#fff;color:#444}
+ s-ordered-list{display:block;padding-inline-start:1.2rem}
+ s-unordered-list{display:block;padding-inline-start:1.1rem}
+ s-list-item{display:list-item;margin:.3rem 0}
+ s-link{color:#4f46e5;text-decoration:underline;margin-inline-end:.6rem}
+ s-text[accessibilityvisibility=exclusive]{position:absolute;width:1px;height:1px;
+   overflow:hidden;clip-path:inset(50%)}
+ ui-save-bar{display:none}
+ /* A real s-select renders its own menu; here the options would otherwise
+    print as a run-on line of text next to the field. */
+ s-option{display:none}
+</style></head><body>
+<div class="note"><strong>QA capture — the real page.</strong> This screen is plain
+HTML styled by the merchant's own appearance settings, not Polaris, so what you see here
+is what a buyer sees.</div>
+<div style="max-width:480px;margin:0 auto;padding:2rem;background:#ffffff;border:1px solid #e3e3e3;border-radius:12px;color:#1c1d2b;font-family:-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif"><h1 style="font-size:1.5rem;margin:0 0 1rem">Wholesale application</h1><form method="post" action="/f/abc123" encType="multipart/form-data" novalidate=""><input type="hidden" name="_t" value="1780000000000"/><div style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap" aria-hidden="true"><label for="website">Website</label><input type="text" id="website" name="website" tabindex="-1" autoComplete="off"/></div><div style="margin-bottom:1rem"><label for="field-first_name" style="display:block;font-weight:600;margin-bottom:.2rem">First name <span style="font-weight:400;opacity:0.7">(required)</span></label><input id="field-first_name" name="first_name" aria-required="true" style="width:100%;box-sizing:border-box;padding:0.6rem 0.7rem;border:1px solid #c9c9c9;border-radius:6px;font:inherit;color:#1c1d2b;background:#fff" type="text" value=""/></div><div style="margin-bottom:1rem"><label for="field-email" style="display:block;font-weight:600;margin-bottom:.2rem">Email <span style="font-weight:400;opacity:0.7">(required)</span></label><input id="field-email" name="email" aria-required="true" style="width:100%;box-sizing:border-box;padding:0.6rem 0.7rem;border:1px solid #c9c9c9;border-radius:6px;font:inherit;color:#1c1d2b;background:#fff" type="email" autoComplete="email" value=""/></div><div style="margin-bottom:1rem"><label for="field-company" style="display:block;font-weight:600;margin-bottom:.2rem">Company <span style="font-weight:400;opacity:0.7">(required)</span></label><input id="field-company" name="company" aria-required="true" style="width:100%;box-sizing:border-box;padding:0.6rem 0.7rem;border:1px solid #c9c9c9;border-radius:6px;font:inherit;color:#1c1d2b;background:#fff" type="text" autoComplete="organization" value=""/></div><div style="margin-bottom:1rem"><label for="field-business_type" style="display:block;font-weight:600;margin-bottom:.2rem">Type of business <span style="font-weight:400;opacity:0.7">(required)</span></label><select id="field-business_type" name="business_type" aria-required="true" style="width:100%;box-sizing:border-box;padding:0.6rem 0.7rem;border:1px solid #c9c9c9;border-radius:6px;font:inherit;color:#1c1d2b;background:#fff"><option value="" selected="">Choose one…</option><option value="Retailer">Retailer</option><option value="Distributor">Distributor</option></select></div><div style="margin-bottom:1rem"><label for="field-vat" style="display:block;font-weight:600;margin-bottom:.2rem">VAT / tax registration number <span style="font-weight:400;opacity:0.7">(optional)</span></label><input id="field-vat" name="vat" style="width:100%;box-sizing:border-box;padding:0.6rem 0.7rem;border:1px solid #c9c9c9;border-radius:6px;font:inherit;color:#1c1d2b;background:#fff" type="text" value=""/></div><div style="margin-bottom:1rem" data-show-when-field="business_type" data-show-when-equals="Distributor"><label for="field-licence" style="display:block;font-weight:600;margin-bottom:.2rem">Trade licence <span style="font-weight:400;opacity:0.7">(required)</span></label><input id="field-licence" name="licence" aria-required="true" style="width:100%;box-sizing:border-box;padding:.4rem;border:1px solid #c9c9c9;border-radius:6px;font:inherit;color:#1c1d2b;background:#fff" type="file" accept=".pdf,.jpg,.jpeg,.png"/><p style="font-size:.85em;opacity:0.75;margin:.2rem 0">PDF, JPG or PNG, up to 5 MB.</p></div><div style="margin-bottom:1rem"><label for="field-privacy" style="display:flex;gap:.5rem;align-items:start"><input type="checkbox" id="field-privacy" name="privacy" aria-required="true" value="yes"/><span>I agree to the privacy policy</span></label></div><button type="submit" style="margin-top:1rem;padding:0.7rem 1.4rem;border:none;border-radius:8px;background:#0a7d55;color:#ffffff;font:inherit;font-weight:700;cursor:pointer">Send application</button></form></div></body></html>
