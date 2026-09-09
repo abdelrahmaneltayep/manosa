@@ -133,6 +133,10 @@ test.describe("Registration form states", () => {
   captureSuite("2.2");
 });
 
+test.describe("Approval queue states", () => {
+  captureSuite("2.3");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)

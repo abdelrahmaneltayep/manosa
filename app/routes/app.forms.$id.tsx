@@ -6,6 +6,12 @@ import { FormBuilderPage } from "~/components/forms/FormBuilderPage";
 import type { BuilderTab, FormBuilderView } from "~/components/forms/types";
 import { db } from "~/db.server";
 import { clampWidth, isSafeRedirect } from "~/lib/forms/appearance";
+import {
+  readApproval,
+  validateApproval,
+  type Criterion,
+  type CriterionField,
+} from "~/lib/forms/approval";
 import { checkContrast } from "~/lib/forms/contrast";
 import {
   FormValidationError,
@@ -72,6 +78,8 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
       appearance: loaded.appearance,
       emails: loaded.emails,
       publish: loaded.publish,
+      approval: readApproval(loaded.row.approval),
+      approvalIssues: validateApproval(readApproval(loaded.row.approval)),
       groups,
       definitionIssues,
       emailIssues,
@@ -109,8 +117,43 @@ function toInput(loaded: LoadedForm) {
     appearance: loaded.appearance,
     emails: loaded.emails,
     publish: loaded.publish,
+    approval: readApproval(loaded.row.approval),
     status: loaded.row.status,
   };
+}
+
+/** One criterion from the builder's single-value form. */
+function criterionFrom(field: CriterionField, value: string): Criterion | null {
+  const text = value.trim();
+
+  switch (field) {
+    case "vat_valid":
+      return { field: "vat_valid" };
+    case "existing_customer":
+      return { field: "existing_customer" };
+    case "years_in_business": {
+      const atLeast = Number(text);
+      return Number.isFinite(atLeast) && atLeast >= 0
+        ? { field: "years_in_business", atLeast }
+        : null;
+    }
+    case "country": {
+      const values = text
+        .split(",")
+        .map((code) => code.trim().toUpperCase())
+        .filter(Boolean);
+      return values.length > 0 ? { field: "country", op: "in", values } : null;
+    }
+    case "has_upload":
+      return { field: "has_upload", key: text || null };
+    case "answer": {
+      const [key, ...rest] = text.split("=");
+      const equals = rest.join("=").trim();
+      return key?.trim() && equals ? { field: "answer", key: key.trim(), equals } : null;
+    }
+    default:
+      return null;
+  }
 }
 
 const list = (value: FormDataEntryValue | null) =>
@@ -269,6 +312,40 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
           autoTags: list(form.get("autoTags")),
           autoGroupId: (form.get("autoGroupId") ?? "").toString() || null,
           spamProtection: form.get("spamProtection") === "yes",
+        };
+        break;
+      }
+
+      case "approvalSettings":
+        tab = "publish";
+        input.approval = {
+          ...input.approval,
+          enabled: form.get("enabled") === "yes",
+          otherwise: form.get("otherwise") === "reject" ? "reject" : "review",
+        };
+        break;
+
+      case "addCriterion": {
+        tab = "publish";
+        const field = (form.get("field") ?? "").toString() as CriterionField;
+        const criterion = criterionFrom(field, (form.get("value") ?? "").toString());
+        // A criterion we could not read is not added. Adding a broken one would
+        // either never match or, worse, quietly widen the rule.
+        if (criterion) {
+          input.approval = {
+            ...input.approval,
+            criteria: [...input.approval.criteria, criterion],
+          };
+        }
+        break;
+      }
+
+      case "removeCriterion": {
+        tab = "publish";
+        const index = Number(form.get("index"));
+        input.approval = {
+          ...input.approval,
+          criteria: input.approval.criteria.filter((_, at) => at !== index),
         };
         break;
       }

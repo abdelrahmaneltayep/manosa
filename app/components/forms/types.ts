@@ -1,4 +1,5 @@
 import type { Appearance, PublishSettings } from "~/lib/forms/appearance";
+import type { ApprovalCriteria, ApprovalIssue } from "~/lib/forms/approval";
 import type { ContrastVerdict } from "~/lib/forms/contrast";
 import type { EmailIssue, EmailTemplates } from "~/lib/forms/merge-tags";
 import type { DefinitionIssue, FormField } from "~/lib/forms/schema";
@@ -68,6 +69,8 @@ export interface FormBuilderView {
   appearance: Appearance;
   emails: EmailTemplates;
   publish: PublishSettings;
+  approval: ApprovalCriteria;
+  approvalIssues: ApprovalIssue[];
   /** Groups an approved applicant can be put into. */
   groups: { id: string; name: string }[];
   definitionIssues: DefinitionIssue[];

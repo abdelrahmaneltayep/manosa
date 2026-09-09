@@ -10,6 +10,13 @@ import {
   type PublishSettings,
 } from "~/lib/forms/appearance";
 import {
+  DEFAULT_APPROVAL,
+  readApproval,
+  validateApproval,
+  type ApprovalCriteria,
+  type ApprovalIssue,
+} from "~/lib/forms/approval";
+import {
   readEmails,
   validateEmails,
   type EmailIssue,
@@ -40,11 +47,13 @@ export class FormValidationError extends Error {
   constructor(
     readonly definitionIssues: DefinitionIssue[],
     readonly emailIssues: EmailIssue[],
+    readonly approvalIssues: ApprovalIssue[] = [],
   ) {
     super(
       `Form is not valid: ${[
         ...definitionIssues.map((issue) => issue.code),
         ...emailIssues.map((issue) => issue.code),
+        ...approvalIssues.map((issue) => issue.code),
       ].join(", ")}`,
     );
     this.name = "FormValidationError";
@@ -58,6 +67,7 @@ export interface LoadedForm {
   appearance: Appearance;
   emails: EmailTemplates;
   publish: PublishSettings;
+  approval: ApprovalCriteria;
 }
 
 export function load(row: RegistrationForm): LoadedForm {
@@ -67,6 +77,7 @@ export function load(row: RegistrationForm): LoadedForm {
     appearance: readAppearance(row.appearance),
     emails: readEmails(row.emails),
     publish: readPublish(row.publish),
+    approval: readApproval(row.approval),
   };
 }
 
@@ -152,6 +163,7 @@ export interface FormInput {
   appearance: Appearance;
   emails: EmailTemplates;
   publish: PublishSettings;
+  approval?: ApprovalCriteria;
   status?: "DRAFT" | "LIVE";
 }
 
@@ -166,6 +178,7 @@ export function issuesFor(input: FormInput) {
   return {
     definitionIssues: validateDefinition(input.definition),
     emailIssues: validateEmails(input.emails),
+    approvalIssues: validateApproval(input.approval ?? DEFAULT_APPROVAL),
   };
 }
 
@@ -176,6 +189,7 @@ function jsonData(input: FormInput) {
     appearance: input.appearance as unknown as Prisma.InputJsonValue,
     emails: input.emails as unknown as Prisma.InputJsonValue,
     publish: input.publish as unknown as Prisma.InputJsonValue,
+    approval: (input.approval ?? DEFAULT_APPROVAL) as unknown as Prisma.InputJsonValue,
   };
 }
 
@@ -215,9 +229,13 @@ export async function createForm(
 }
 
 function assertPublishable(input: FormInput) {
-  const { definitionIssues, emailIssues } = issuesFor(input);
-  if (definitionIssues.length > 0 || emailIssues.length > 0) {
-    throw new FormValidationError(definitionIssues, emailIssues);
+  const { definitionIssues, emailIssues, approvalIssues } = issuesFor(input);
+  if (
+    definitionIssues.length > 0 ||
+    emailIssues.length > 0 ||
+    approvalIssues.length > 0
+  ) {
+    throw new FormValidationError(definitionIssues, emailIssues, approvalIssues);
   }
 }
 
@@ -289,6 +307,7 @@ export async function duplicateForm(
       appearance: current.appearance as Prisma.InputJsonValue,
       emails: current.emails as Prisma.InputJsonValue,
       publish: current.publish as Prisma.InputJsonValue,
+      approval: (current.approval ?? DEFAULT_APPROVAL) as Prisma.InputJsonValue,
       template: current.template,
       createdBy: actor.id ?? null,
       updatedBy: actor.id ?? null,

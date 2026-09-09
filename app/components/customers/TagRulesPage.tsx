@@ -20,6 +20,7 @@ export function TagRulesPage({ view }: { view: TagRuleListView }) {
     <s-page heading={t("customers.tagging.heading")}>
       <s-section>
         <s-stack direction="inline" gap="small" alignItems="center">
+          <s-link href="/app/customers/applications">{t("applications.tab")}</s-link>
           <s-link href="/app/customers">{t("customers.list.tabBuyers")}</s-link>
           <s-link href="/app/customers/groups">{t("customers.list.tabGroups")}</s-link>
           <s-link href="/app/customers/tagging" aria-current="page">

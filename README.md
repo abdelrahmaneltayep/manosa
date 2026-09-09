@@ -200,6 +200,36 @@ transport behind it.
 
 See `docs/adr/0012-registration-forms.md`.
 
+## Approving a buyer
+
+An application waits in the queue at `/app/customers/applications` until
+somebody decides on it, or until the form's own criteria do.
+
+- **A rejection always carries a reason.** The code is internal; only what the
+  reviewer types is sent, because "competitor" is not a sentence to send anyone.
+- **Undo lasts ten seconds** and takes back the tags, the tier and the wholesale
+  status. It does not delete the Shopify customer — that is destructive and
+  irreversible, and the audit entry says one was left behind. After ten seconds,
+  reversing an approval means rejecting the buyer, which is a decision with a
+  reason.
+- **Approving finds the buyer by email before creating one.** A wholesale
+  applicant is very often already a retail customer, and a second account splits
+  their order history in half.
+- **Auto-approval is off by default**, needs _every_ criterion (there is no "any
+  of"), and stops deciding entirely if a stored criterion cannot be read —
+  dropping one makes the rule wider. It runs in a job, not in the buyer's
+  request: approving takes several Admin API calls, and if they fail the
+  application must still be sitting in the queue for a person.
+
+Emails are written to `EmailMessage` before they are attempted and updated
+after, so "did they ever hear from us?" does not depend on a provider's
+dashboard. A failed send never reverses the decision that asked for it. Set
+`MANNON_EMAIL_FROM` and `MANNON_RESEND_API_KEY` to send for real, or
+`MANNON_EMAIL_TRANSPORT=log` in development; with neither, nothing is sent and
+every screen says so.
+
+See `docs/adr/0013-approval-pipeline.md`.
+
 ## Multi-tenancy — read this before writing a query
 
 Every table holding merchant data carries a `shop` column, and **every query is

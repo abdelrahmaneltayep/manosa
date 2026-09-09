@@ -2,7 +2,11 @@ import type { FormSubmission, Prisma, RegistrationForm } from "@prisma/client";
 
 import { db } from "~/db.server";
 import { recordAudit, SYSTEM_ACTOR } from "~/lib/audit/record.server";
+import { deliverEmail } from "~/lib/email/deliver.server";
 import { readPublish } from "~/lib/forms/appearance";
+import { readApproval } from "~/lib/forms/approval";
+import { isDomainBlocked } from "~/lib/forms/decisions.server";
+import { readEmails } from "~/lib/forms/merge-tags";
 import {
   ALLOWED_UPLOAD_TYPES,
   emailFrom,
@@ -26,6 +30,7 @@ import {
   type SpamReason,
 } from "~/lib/forms/spam";
 import { checkVat, toDbStatus, type CheckVatOptions } from "~/lib/forms/vies.server";
+import { enqueueJob } from "~/lib/jobs/queue.server";
 import { shopScope, tenant, withoutShopScope } from "~/lib/tenant/shop-context.server";
 
 /**
@@ -44,10 +49,14 @@ export interface SubmissionFile {
   bytes: Uint8Array;
 }
 
+/** Why a submission was taken and then quietly dropped. */
+export type DropReason = SpamReason | "blocked_domain";
+
 export type SubmitResult =
   | { ok: true; submission: FormSubmission }
-  /** Caught by a signal a real person would not trip. Answered as success. */
-  | { ok: true; silentlyDropped: true; reason: SpamReason }
+  /** Caught by a signal a real person would not trip, or by the blocklist.
+   *  Answered as success either way — see the comments at each site. */
+  | { ok: true; silentlyDropped: true; reason: DropReason }
   | { ok: false; kind: "invalid"; issues: SubmissionIssue[] }
   | { ok: false; kind: "already_applied"; status: string }
   | { ok: false; kind: "rate_limited" }
@@ -166,6 +175,15 @@ export async function submitForm(input: SubmitInput): Promise<SubmitResult> {
   const email = emailFrom(definition, input.answers);
   if (!email) return { ok: false, kind: "invalid", issues: [] };
 
+  if (await isDomainBlocked(email)) {
+    // Recorded as rejected, and answered as success. A blocklist a spammer can
+    // probe is a blocklist that tells them what to change; and a person whose
+    // employer's domain the merchant blocked should hear it from the merchant,
+    // not from a form.
+    await storeBlocked(input, definition, email, ip, now);
+    return { ok: true, silentlyDropped: true, reason: "blocked_domain" };
+  }
+
   const existing = await db.formSubmission.findFirst({
     where: { formId: input.form.id, email, status: { not: "SPAM" } },
     orderBy: { createdAt: "desc" },
@@ -221,7 +239,68 @@ export async function submitForm(input: SubmitInput): Promise<SubmitResult> {
     ip,
   });
 
+  // Hand the auto-approval criteria to the job runner rather than running them
+  // here: approving takes several Admin API calls, and a buyer pressing "send"
+  // should not be waiting on them.
+  if (readApproval(input.form.approval).enabled) {
+    await enqueueJob({
+      kind: "forms.decide_applications",
+      runAt: now,
+      replacePending: true,
+    });
+  }
+
+  // The confirmation. Sent after the application is stored, and a failure to
+  // send never loses it — the merchant can still see and answer the
+  // application, which is the thing that actually matters.
+  await deliverEmail({
+    kind: "confirmation",
+    to: email,
+    templates: readEmails(input.form.emails),
+    values: {
+      first_name: firstTextAnswer(definition, input.answers),
+      company: submission.company,
+      email,
+      form_name: input.form.name,
+    },
+    submissionId: submission.id,
+  });
+
   return { ok: true, submission };
+}
+
+/** The first free-text answer, which is where a first name usually is. */
+function firstTextAnswer(definition: FormDefinition, answers: Answers): string | null {
+  const field = definition.fields.find((entry) => entry.kind === "text");
+  const value = field ? (answers[field.key] ?? "").trim() : "";
+  return value || null;
+}
+
+async function storeBlocked(
+  input: SubmitInput,
+  definition: FormDefinition,
+  email: string,
+  ip: string | null,
+  now: Date,
+) {
+  await db.formSubmission.create({
+    data: {
+      ...tenant(),
+      formId: input.form.id,
+      email,
+      company: firstOfKind(definition, "company", input.answers),
+      answers: sanitisedAnswers(definition, input.answers) as Prisma.InputJsonValue,
+      status: "REJECTED",
+      rejectionCode: "blocked_domain",
+      decidedAt: now,
+      decidedAutomatically: true,
+      // Nothing more to evaluate: the domain decided it.
+      autoEvaluatedAt: now,
+      ip,
+      userAgent: input.headers.get("user-agent")?.slice(0, 500) ?? null,
+      createdAt: now,
+    },
+  });
 }
 
 /**

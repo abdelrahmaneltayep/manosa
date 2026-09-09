@@ -26,7 +26,7 @@
     "test:e2e": "playwright test tests/e2e/smoke.spec.ts",
     "shopify": "shopify",
     "jobs:run": "curl -fsS -X POST -H \"Authorization: Bearer $JOBS_RUNNER_TOKEN\" \"${APP_URL:-http://localhost:3000}/internal/jobs/run\"",
-    "qa:capture": "QA_CAPTURE=1 vitest run tests/unit/plans-page-states.test.tsx tests/unit/pricing-pages-states.test.tsx tests/unit/customers-pages-states.test.tsx tests/unit/forms-pages-states.test.tsx && playwright test tests/e2e/qa-states.spec.ts"
+    "qa:capture": "QA_CAPTURE=1 vitest run tests/unit/plans-page-states.test.tsx tests/unit/pricing-pages-states.test.tsx tests/unit/customers-pages-states.test.tsx tests/unit/forms-pages-states.test.tsx tests/unit/applications-page-states.test.tsx && playwright test tests/e2e/qa-states.spec.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

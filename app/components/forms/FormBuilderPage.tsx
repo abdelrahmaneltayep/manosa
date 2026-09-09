@@ -4,6 +4,7 @@ import { whenChecked, whenDisabled } from "~/components/boolean-attribute";
 import type { BuilderTab, FieldRowView, FormBuilderView } from "~/components/forms/types";
 import { FIELD_KINDS, MAX_UPLOAD_BYTES } from "~/lib/forms/schema";
 import { MAX_WIDTH, MIN_WIDTH } from "~/lib/forms/appearance";
+import { CRITERION_FIELDS } from "~/lib/forms/approval";
 import { EMAIL_KEYS, MERGE_TAGS } from "~/lib/forms/merge-tags";
 
 const TABS: BuilderTab[] = ["configuration", "appearance", "emails", "publish"];
@@ -516,6 +517,8 @@ function Publish({ view }: { view: FormBuilderView }) {
         </form>
       </s-section>
 
+      <AutoApproval view={view} />
+
       <s-section heading={t("forms.publish.recentHeading", { count: view.recentTotal })}>
         {view.recent.length === 0 ? (
           <s-paragraph color="subdued">{t("forms.publish.noApplications")}</s-paragraph>
@@ -583,4 +586,127 @@ function Publish({ view }: { view: FormBuilderView }) {
       </s-section>
     </>
   );
+}
+
+/**
+ * Who gets approved without a person looking.
+ *
+ * Off by default, and every criterion narrows: there is no "any of", because a
+ * rule that fires when any condition holds grows more permissive with every
+ * line the merchant adds, which is the opposite of what adding a line reads
+ * like.
+ */
+function AutoApproval({ view }: { view: FormBuilderView }) {
+  const { t } = useTranslation();
+
+  return (
+    <s-section heading={t("approval.heading")}>
+      <s-stack direction="block" gap="base">
+        <s-paragraph color="subdued">{t("approval.intro")}</s-paragraph>
+
+        {view.approvalIssues.length > 0 ? (
+          <s-banner tone="critical">
+            <s-unordered-list>
+              {view.approvalIssues.map((issue) => (
+                <s-list-item key={`${issue.code}-${issue.detail ?? ""}`}>
+                  {t(`approval.issue.${issue.code}`)}
+                </s-list-item>
+              ))}
+            </s-unordered-list>
+          </s-banner>
+        ) : null}
+
+        <form method="post">
+          <input type="hidden" name="intent" value="approvalSettings" />
+          <s-stack direction="block" gap="small">
+            <s-checkbox
+              name="enabled"
+              value="yes"
+              label={t("approval.enabled")}
+              details={t("approval.enabledHelp")}
+              {...whenChecked(view.approval.enabled)}
+            />
+            <s-select
+              name="otherwise"
+              label={t("approval.otherwise")}
+              details={t("approval.otherwiseHelp")}
+              value={view.approval.otherwise}
+            >
+              <s-option value="review">{t("approval.otherwiseReview")}</s-option>
+              <s-option value="reject">{t("approval.otherwiseReject")}</s-option>
+            </s-select>
+            <s-button type="submit" variant="primary">
+              {t("forms.builder.save")}
+            </s-button>
+          </s-stack>
+        </form>
+
+        {view.approval.criteria.length === 0 ? (
+          <s-paragraph color="subdued">{t("approval.noCriteria")}</s-paragraph>
+        ) : (
+          <s-stack direction="block" gap="small">
+            <s-text type="strong">{t("approval.allOf")}</s-text>
+            {view.approval.criteria.map((criterion, index) => (
+              <s-stack
+                key={`${criterion.field}-${index}`}
+                direction="inline"
+                gap="small"
+                alignItems="center"
+              >
+                <s-text>
+                  {t(`approval.criterion.${criterion.field}`, describe(criterion))}
+                </s-text>
+                <form method="post">
+                  <input type="hidden" name="intent" value="removeCriterion" />
+                  <input type="hidden" name="index" value={String(index)} />
+                  <s-button type="submit" variant="tertiary" tone="critical">
+                    {t("forms.builder.removeField")}
+                  </s-button>
+                </form>
+              </s-stack>
+            ))}
+          </s-stack>
+        )}
+
+        <form method="post">
+          <input type="hidden" name="intent" value="addCriterion" />
+          <s-stack direction="inline" gap="small" alignItems="end">
+            <s-select
+              name="field"
+              label={t("approval.addLabel")}
+              value={CRITERION_FIELDS[0]}
+            >
+              {CRITERION_FIELDS.map((field) => (
+                <s-option key={field} value={field}>
+                  {t(`approval.field.${field}`)}
+                </s-option>
+              ))}
+            </s-select>
+            <s-text-field
+              name="value"
+              label={t("approval.valueLabel")}
+              details={t("approval.valueHelp")}
+            />
+            <s-button type="submit">{t("approval.add")}</s-button>
+          </s-stack>
+        </form>
+      </s-stack>
+    </s-section>
+  );
+}
+
+/** Interpolations for a criterion's sentence. */
+function describe(criterion: FormBuilderView["approval"]["criteria"][number]) {
+  switch (criterion.field) {
+    case "years_in_business":
+      return { count: criterion.atLeast };
+    case "country":
+      return { countries: criterion.values.join(", ") };
+    case "has_upload":
+      return { key: criterion.key ?? "" };
+    case "answer":
+      return { key: criterion.key, value: criterion.equals };
+    default:
+      return {};
+  }
 }

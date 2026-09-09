@@ -1,3 +1,4 @@
+import type { ReasonCode, RejectionReason } from "~/lib/forms/approval";
 import type { TagCondition, TagRuleIssue } from "~/lib/customers/tagging";
 
 /**
@@ -166,4 +167,57 @@ export interface TagRuleListView {
   /** Result of the last sweep that actually ran. */
   lastRun: { changed: number; failed: number; examined: number } | null;
   issues: TagRuleIssue[];
+}
+
+export interface ApplicationRowView {
+  id: string;
+  company: string | null;
+  contact: string;
+  email: string;
+  formName: string;
+  /** Whole days since it arrived. Zero means today. */
+  daysAgo: number;
+  submittedAt: string;
+  vatStatus: "NONE" | "VALID" | "INVALID" | "UNVERIFIED";
+  vatNote: string | null;
+  uploads: { id: string; fileName: string; scanned: boolean }[];
+  /** The evaluator's verdict. `null` when the merchant has not set criteria. */
+  criteria: { met: boolean; reasons: ReasonCode[] } | null;
+  /** Other applications waiting from the same email domain. */
+  sameDomainCount: number;
+  /** They already have a Shopify customer account. */
+  existingCustomer: boolean;
+}
+
+export interface ApplicationsView {
+  rows: ApplicationRowView[];
+  total: number;
+  page: number;
+  pageSize: number;
+  /** Applications waiting before filters — tells empty from no-results. */
+  totalWaiting: number;
+  search: string;
+  /** Groups an approved buyer can join, with their terms. */
+  groups: { id: string; name: string; terms: string | null }[];
+  /** The live form to share from the empty state, if there is one. */
+  shareUrl: string | null;
+  /** True while the first page of applications is still loading. */
+  loading: boolean;
+  /** Set right after an approval, while it can still be taken back. */
+  undo: { id: string; who: string; secondsLeft: number } | null;
+  /** Set when an undo arrived too late. */
+  undoExpired: boolean;
+  /** The application whose email is being edited before sending. */
+  editing: {
+    id: string;
+    intent: "approve" | "reject";
+    subject: string;
+    body: string;
+  } | null;
+  /** Reasons offered in the reject flow. */
+  rejectionReasons: RejectionReason[];
+  /** ✦ Screening needs the AI layer (phase 4.3). */
+  aiScreening: boolean;
+  /** No mail provider is configured, so no applicant is being told anything. */
+  emailUnavailable: boolean;
 }

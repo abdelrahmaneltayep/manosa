@@ -572,6 +572,10 @@ model RegistrationForm {
   emails     Json
   /// Redirect URL, auto-tags, auto-group, spam protection.
   publish    Json
+  /// Auto-approval criteria — the wire shape from app/lib/forms/approval.ts.
+  /// Null means every application waits for a person, which is the default:
+  /// deciding on its own is something a merchant has to switch on.
+  approval   Json?
 
   /// Which starter template this began as, if any.
   template String?
@@ -642,8 +646,25 @@ model FormSubmission {
   ip        String?
   userAgent String?
 
-  /// Set by the approval pipeline (2.3) once this becomes a real customer.
+  /// The Shopify customer this application became, once approved.
   customerId String?
+
+  // --- The decision (phase 2.3) --------------------------------------------
+  decidedAt            DateTime?
+  /// Staff session id, or null when the evaluator decided.
+  decidedBy            String?
+  /// True when the auto-approval criteria decided this, not a person.
+  decidedAutomatically Boolean   @default(false)
+  /// Why it was rejected: a code from REJECTION_REASONS, plus whatever the
+  /// reviewer typed. A rejection with no reason is one nobody can answer for.
+  rejectionCode        String?
+  decisionNote         String?
+  /// Approve can be undone until this time. Ten seconds — long enough to catch
+  /// the wrong row, short enough that nothing has acted on it yet.
+  undoableUntil        DateTime?
+  /// When the auto-approval criteria last looked at this. Null means the
+  /// evaluator has not seen it yet, which is what the job claims work by.
+  autoEvaluatedAt      DateTime?
 
   createdAt DateTime @default(now())
 
@@ -703,4 +724,67 @@ model FormEvent {
 
   @@index([shop, formId, kind, at])
   @@index([at])
+}
+
+// ---------------------------------------------------------------------------
+// Approval pipeline (phase 2.3)
+// ---------------------------------------------------------------------------
+
+/// An email domain the merchant has closed the door on.
+///
+/// Applications from it are rejected on arrival, without telling the sender
+/// which door was shut — a blocklist a spammer can probe is a blocklist that
+/// tells them what to change.
+model BlockedDomain {
+  id     String @id @default(cuid())
+  shop   String
+  /// Lowercased, without a leading @.
+  domain String
+
+  reason    String?
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@unique([shop, domain])
+  @@index([shop, createdAt])
+}
+
+enum EmailStatus {
+  /// Written, not yet handed to a provider.
+  QUEUED
+  SENT
+  /// The provider refused it, or there is no provider at all.
+  FAILED
+}
+
+/// Every message the app sends a buyer.
+///
+/// Recorded before it is sent and updated after, so "did they ever hear from
+/// us?" has an answer that does not depend on a provider's dashboard. A
+/// merchant answering an applicant who says they got nothing needs this.
+model EmailMessage {
+  id   String @id @default(cuid())
+  shop String
+
+  /// "confirmation", "approved", "rejected", "needs_info".
+  kind    String
+  to      String
+  subject String
+  body    String
+
+  status    EmailStatus @default(QUEUED)
+  /// Why it failed, in the words the provider used.
+  error     String?
+  sentAt    DateTime?
+  /// Which transport carried it, or tried to.
+  transport String?
+
+  /// The application it is about, when it is about one.
+  submissionId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([shop, submissionId])
+  @@index([shop, status])
 }

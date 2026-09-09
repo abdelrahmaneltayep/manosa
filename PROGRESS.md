@@ -29,7 +29,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 | ----------------------------------------------------------------- | ------ |
 | 2.1 Customer sync, groups, tagging, approved-buyers list          | ⚠      |
 | 2.2 Registration form builder, theme block, VIES, spam protection | ⚠      |
-| 2.3 Approval pipeline: queue, emails, auto-approval evaluator     | ☐      |
+| 2.3 Approval pipeline: queue, emails, auto-approval evaluator     | ⚠      |
 
 ## Phase 3 — Orders
 
@@ -78,6 +78,16 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
 
 ## Decisions taken
 
+- **A rejection always carries a reason, and undo is not a decision** — undo
+  lasts ten seconds and takes back what the approval added, but never deletes a
+  Shopify customer. Reversing an approval after that means rejecting the buyer,
+  with a reason. `docs/adr/0013`.
+- **Auto-approval is off by default, needs every criterion, and stops deciding
+  if it cannot read one** — dropping a criterion makes the rule wider, and a
+  wider rule approves people the merchant never meant to. `docs/adr/0013`.
+- **Notification emails are recorded before they are sent**, so "did they hear
+  from us?" does not depend on a provider's dashboard; and a failed send never
+  reverses the decision that asked for it. `docs/adr/0013`.
 - **There is one registration-form renderer, and the theme block frames it** —
   a Liquid copy would be a second implementation of the code that decides
   whether an application is accepted. The form works with JavaScript switched
@@ -164,11 +174,12 @@ Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done wi
    `customers/redact`, `shop/redact`), pruning of `WebhookDelivery` rows, and the
    12-month `AuditLog` retention the checklist specifies in §8. The framework and
    the job runner take each of these as a few lines when that task comes.
-6. **Nothing scans uploaded files, and no email is sent.** Both are service
-   decisions rather than code ones: there is no virus scanner and no mail
-   provider. The admin says "not virus-scanned" and the test-send button says
-   nothing was sent, rather than either implying otherwise. Mail belongs with
-   the approval pipeline in 2.3.
+6. **Nothing scans uploaded files.** A service decision rather than a code one:
+   there is no virus scanner. The admin says "not virus-scanned" rather than
+   implying otherwise. **Email now has a transport** (Resend over HTTP, or a
+   log transport for development) but no provider key exists in this
+   environment, so no real message has ever been sent — every message the app
+   would send is recorded either way.
 7. **Shopify B2B companies (Plus) are not modelled.** `…pages-features.md` §3
    lists companies, locations and catalogs. Mannon's groups are its own tiers.
    Reconciling the two needs a Plus store to look at, so it is flagged rather

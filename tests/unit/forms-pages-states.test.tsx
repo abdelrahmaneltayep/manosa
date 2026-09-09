@@ -12,6 +12,7 @@ import type {
 } from "~/components/forms/types";
 import type { Locale } from "~/i18n/config";
 import { DEFAULT_APPEARANCE, DEFAULT_PUBLISH } from "~/lib/forms/appearance";
+import { DEFAULT_APPROVAL } from "~/lib/forms/approval";
 import { checkContrast } from "~/lib/forms/contrast";
 import type { FormField } from "~/lib/forms/schema";
 import {
@@ -127,6 +128,8 @@ const builderView = (overrides: Partial<FormBuilderView> = {}): FormBuilderView 
     needs_info: { subject: "One more thing", body: "{{reason}}" },
   },
   publish: { ...DEFAULT_PUBLISH },
+  approval: { ...DEFAULT_APPROVAL },
+  approvalIssues: [],
   groups: [{ id: "g1", name: "Gold" }],
   definitionIssues: [],
   emailIssues: [],

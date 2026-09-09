@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { I18nextProvider } from "react-i18next";
+import { expect } from "vitest";
 
 import { dirFor, type Locale } from "~/i18n/config";
 import { createI18n } from "~/i18n/i18next";
@@ -76,6 +77,36 @@ const STYLES = `
  s-option{display:none}
 `;
 
+/**
+ * Catalog roots that must never reach the page as literal text.
+ *
+ * i18next falls back to the key when it cannot resolve one — a pluralised key
+ * called without a count is the usual way — and the merchant reads
+ * "applications.reason.met.years_in_business". Invisible to anyone skimming a
+ * screenshot, so it is checked on every capture.
+ */
+const CATALOG_ROOTS = [
+  "applications",
+  "approval",
+  "customers",
+  "forms",
+  "pricing",
+  "plans",
+  "csv",
+  "install",
+  "nav",
+  "error",
+  "scaffold",
+];
+
+export function expectNoRawCatalogKeys(html: string, name: string) {
+  for (const root of CATALOG_ROOTS) {
+    expect(html, `${name}: a raw "${root}." catalog key reached the markup`).not.toMatch(
+      new RegExp(`>[^<]*\\b${root}\\.[a-zA-Z_]`),
+    );
+  }
+}
+
 export interface CaptureHarness {
   render: (node: React.ReactNode, locale?: Locale) => string;
   capture: (
@@ -132,6 +163,9 @@ export async function createCaptureHarness(options: {
     },
 
     capture(name, html, locale: Locale = "en", note: string = STAND_IN_NOTE) {
+      // Checked whether or not captures are being written: a raw key is a bug
+      // in the page, not in the capture.
+      expectNoRawCatalogKeys(html, name);
       if (!enabled) return;
       writeFileSync(
         resolve(options.outFor(name), `${name}.html`),

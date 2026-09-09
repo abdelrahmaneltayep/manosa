@@ -154,6 +154,7 @@ function Toolbar({ view }: { view: CustomerListView }) {
   return (
     <s-stack direction="block" gap="small">
       <s-stack direction="inline" gap="small" alignItems="center">
+        <s-link href="/app/customers/applications">{t("applications.tab")}</s-link>
         <s-link href="/app/customers" aria-current="page">
           {t("customers.list.tabBuyers")}
         </s-link>

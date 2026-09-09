@@ -1015,5 +1015,128 @@
       "closedHeading": "This form is not accepting applications",
       "closedBody": "{{form}} is closed at the moment. Try again later, or get in touch with the store."
     }
+  },
+  "applications": {
+    "heading": "Applications",
+    "tab": "Applications",
+    "loading": "Loading applications…",
+    "emptyHeading": "No applications waiting",
+    "emptyBody": "When somebody applies through your form, they land here. Share the link and the first one will follow.",
+    "shareLabel": "Your form's link",
+    "openForm": "Open the form",
+    "createForm": "Create a registration form",
+    "searchLabel": "Search company or email",
+    "noResultsHeading": "Nothing matched that search",
+    "clearSearch": "Clear search",
+    "today": "Today",
+    "existingCustomer": "Already a customer",
+    "sameDomain_one": "{{count}} other application from this domain",
+    "sameDomain_other": "{{count}} other applications from this domain",
+    "screeningUnavailable": "✦ Screening unavailable — review this one yourself. It has never blocked approving anybody.",
+    "criteriaMet": "Meets your approval criteria",
+    "criteriaNotMet": "Does not meet your approval criteria",
+    "vatNote": {
+      "format": "The number does not match that country's format.",
+      "outside_eu": "Outside the EU, so VIES cannot confirm it.",
+      "vies_unreachable": "VIES could not be reached, so this is unchecked rather than wrong."
+    },
+    "reason": {
+      "met": {
+        "vat_valid": "VAT number confirmed by VIES.",
+        "years_in_business_one": "In business at least {{count}} year.",
+        "years_in_business_other": "In business at least {{count}} years.",
+        "country": "In {{detail}}.",
+        "has_upload": "The file you asked for is attached.",
+        "answer": "Answered {{detail}}.",
+        "existing_customer": "Already buys from you."
+      },
+      "unmet": {
+        "vat_valid": "VAT number is not confirmed. Unverified is not the same as wrong.",
+        "years_in_business_one": "Fewer than {{count}} year in business, or they did not say.",
+        "years_in_business_other": "Fewer than {{count}} years in business, or they did not say.",
+        "country": "Not in {{detail}}, or we do not know where they are.",
+        "has_upload": "No file attached.",
+        "answer": "Did not answer {{detail}}.",
+        "existing_customer": "Has not bought from you before."
+      }
+    },
+    "groupLabel": "Group",
+    "groupHelp": "The tier sets their prices and their payment terms.",
+    "approve": "Approve",
+    "editEmail": "Edit email",
+    "editEmailHeading": {
+      "approve": "The email they will get when you approve them",
+      "reject": "The email they will get when you turn them down"
+    },
+    "sendAnd": {
+      "approve": "Send and approve",
+      "reject": "Send and reject"
+    },
+    "cancelEdit": "Cancel",
+    "reasonLabel": "Reason",
+    "reasonHelp": "Kept internally. Only what you type below is sent.",
+    "noteLabel": "What to tell them",
+    "reject": "Reject",
+    "blockDomain": "Also block {{domain}}",
+    "rejection": {
+      "not_a_business": "Not a business",
+      "no_verification": "Could not verify them",
+      "outside_area": "Outside the area we sell to",
+      "competitor": "Competitor",
+      "duplicate": "Duplicate application",
+      "other": "Something else"
+    },
+    "approvedHeading": "{{who}} approved",
+    "undoBody_one": "You have {{count}} second to take this back.",
+    "undoBody_other": "You have {{count}} seconds to take this back.",
+    "undo": "Undo",
+    "undoExpiredHeading": "Too late to undo",
+    "undoExpiredBody": "Undo lasts ten seconds. To reverse an approval after that, reject the buyer — which is a decision with a reason, and undo is not.",
+    "noEmailHeading": "No email is going out",
+    "noEmailBody": "No mail provider is configured, so applicants are not being told when they are approved or turned down. Approving still works, and every message we would have sent is recorded.",
+    "needsInfo": "Ask for more",
+    "needsInfoLabel": "What do you need from them?",
+    "needsInfoHelp": "Emails them and leaves the application here, waiting on their reply.",
+    "reasonMet": "Met",
+    "reasonUnmet": "Not met"
+  },
+  "approval": {
+    "heading": "Approve automatically",
+    "intro": "Applications that meet every criterion below are approved without anyone looking. Off unless you switch it on.",
+    "enabled": "Decide these automatically",
+    "enabledHelp": "Nothing is decided automatically until this is on and at least one criterion is set.",
+    "otherwise": "When an application does not meet them",
+    "otherwiseHelp": "Sending them to you is the safe answer. Rejecting automatically turns somebody away without a person reading it.",
+    "otherwiseReview": "Send it to me to review",
+    "otherwiseReject": "Reject it",
+    "noCriteria": "No criteria yet, so every application waits for you.",
+    "allOf": "Approve when all of these are true:",
+    "addLabel": "Add a criterion",
+    "valueLabel": "Value",
+    "valueHelp": "Years for a minimum, country codes separated by commas, a field key for a file, or key=answer.",
+    "add": "Add",
+    "field": {
+      "vat_valid": "VAT number confirmed",
+      "years_in_business": "Years in business at least",
+      "country": "Country is one of",
+      "has_upload": "A file was attached",
+      "answer": "An answer matches",
+      "existing_customer": "Already a customer"
+    },
+    "criterion": {
+      "vat_valid": "VIES has confirmed their VAT number",
+      "years_in_business_one": "They have been trading at least {{count}} year",
+      "years_in_business_other": "They have been trading at least {{count}} years",
+      "country": "They are in one of: {{countries}}",
+      "has_upload": "They attached a file{{key}}",
+      "answer": "They answered {{key}} with “{{value}}”",
+      "existing_customer": "They already buy from you"
+    },
+    "issue": {
+      "no_criteria": "Approving automatically is switched on with nothing to check, so nothing will be decided. Add a criterion or switch it off.",
+      "years_negative": "A number of years cannot be negative.",
+      "no_countries": "Name at least one country.",
+      "no_key": "Name the field this answer belongs to."
+    }
   }
 }

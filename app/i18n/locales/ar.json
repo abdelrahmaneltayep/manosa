@@ -1211,5 +1211,148 @@
       "closedHeading": "هذا النموذج لا يستقبل طلبات",
       "closedBody": "{{form}} مغلق حالياً. حاول لاحقاً، أو تواصل مع المتجر."
     }
+  },
+  "applications": {
+    "heading": "الطلبات",
+    "tab": "الطلبات",
+    "loading": "جارٍ تحميل الطلبات…",
+    "emptyHeading": "لا توجد طلبات في الانتظار",
+    "emptyBody": "عندما يتقدّم أحدهم عبر نموذجك، يظهر هنا. شارك الرابط وسيصل أول طلب.",
+    "shareLabel": "رابط نموذجك",
+    "openForm": "فتح النموذج",
+    "createForm": "إنشاء نموذج تسجيل",
+    "searchLabel": "ابحث بالشركة أو البريد",
+    "noResultsHeading": "لا نتائج لهذا البحث",
+    "clearSearch": "مسح البحث",
+    "today": "اليوم",
+    "existingCustomer": "عميل بالفعل",
+    "sameDomain_zero": "لا طلبات أخرى من هذا النطاق",
+    "sameDomain_one": "طلب آخر واحد من هذا النطاق",
+    "sameDomain_two": "طلبان آخران من هذا النطاق",
+    "sameDomain_few": "{{count}} طلبات أخرى من هذا النطاق",
+    "sameDomain_many": "{{count}} طلباً آخر من هذا النطاق",
+    "sameDomain_other": "{{count}} طلب آخر من هذا النطاق",
+    "screeningUnavailable": "✦ الفحص غير متاح — راجع هذا الطلب بنفسك. وهو لم يمنع اعتماد أحد في أي وقت.",
+    "criteriaMet": "يستوفي معايير الاعتماد لديك",
+    "criteriaNotMet": "لا يستوفي معايير الاعتماد لديك",
+    "vatNote": {
+      "format": "الرقم لا يطابق صيغة تلك الدولة.",
+      "outside_eu": "خارج الاتحاد الأوروبي، لذا لا يستطيع VIES تأكيده.",
+      "vies_unreachable": "تعذّر الوصول إلى VIES، فالرقم غير مفحوص لا خاطئ."
+    },
+    "reason": {
+      "met": {
+        "vat_valid": "أكّد VIES الرقم الضريبي.",
+        "years_in_business_zero": "لا يوجد حد أدنى لسنوات العمل.",
+        "years_in_business_one": "يعمل منذ سنة واحدة على الأقل.",
+        "years_in_business_two": "يعمل منذ سنتين على الأقل.",
+        "years_in_business_few": "يعمل منذ {{count}} سنوات على الأقل.",
+        "years_in_business_many": "يعمل منذ {{count}} سنة على الأقل.",
+        "years_in_business_other": "يعمل منذ {{count}} سنة على الأقل.",
+        "country": "موجود في {{detail}}.",
+        "has_upload": "الملف الذي طلبته مرفق.",
+        "answer": "أجاب {{detail}}.",
+        "existing_customer": "يشتري منك بالفعل."
+      },
+      "unmet": {
+        "vat_valid": "الرقم الضريبي غير مؤكَّد. وغير المؤكَّد ليس خاطئاً.",
+        "years_in_business_zero": "لا يوجد حد أدنى لسنوات العمل.",
+        "years_in_business_one": "أقل من سنة واحدة في العمل، أو لم يذكر.",
+        "years_in_business_two": "أقل من سنتين في العمل، أو لم يذكر.",
+        "years_in_business_few": "أقل من {{count}} سنوات في العمل، أو لم يذكر.",
+        "years_in_business_many": "أقل من {{count}} سنة في العمل، أو لم يذكر.",
+        "years_in_business_other": "أقل من {{count}} سنة في العمل، أو لم يذكر.",
+        "country": "ليس في {{detail}}، أو لا نعرف أين هو.",
+        "has_upload": "لا ملف مرفق.",
+        "answer": "لم يجب {{detail}}.",
+        "existing_customer": "لم يشترِ منك من قبل."
+      }
+    },
+    "groupLabel": "المجموعة",
+    "groupHelp": "الفئة هي ما يحدد أسعاره وشروط دفعه.",
+    "approve": "اعتماد",
+    "editEmail": "تعديل الرسالة",
+    "editEmailHeading": {
+      "approve": "الرسالة التي ستصله عند الاعتماد",
+      "reject": "الرسالة التي ستصله عند الرفض"
+    },
+    "sendAnd": {
+      "approve": "إرسال واعتماد",
+      "reject": "إرسال ورفض"
+    },
+    "cancelEdit": "إلغاء",
+    "reasonLabel": "السبب",
+    "reasonHelp": "يُحفظ داخلياً. لا يُرسل إلا ما تكتبه بالأسفل.",
+    "noteLabel": "ما تريد إخباره به",
+    "reject": "رفض",
+    "blockDomain": "احجب أيضاً {{domain}}",
+    "rejection": {
+      "not_a_business": "ليس نشاطاً تجارياً",
+      "no_verification": "تعذّر التحقق منه",
+      "outside_area": "خارج نطاق بيعنا",
+      "competitor": "منافس",
+      "duplicate": "طلب مكرر",
+      "other": "سبب آخر"
+    },
+    "approvedHeading": "تم اعتماد {{who}}",
+    "undoBody_zero": "انتهى وقت التراجع.",
+    "undoBody_one": "أمامك ثانية واحدة للتراجع.",
+    "undoBody_two": "أمامك ثانيتان للتراجع.",
+    "undoBody_few": "أمامك {{count}} ثوانٍ للتراجع.",
+    "undoBody_many": "أمامك {{count}} ثانية للتراجع.",
+    "undoBody_other": "أمامك {{count}} ثانية للتراجع.",
+    "undo": "تراجع",
+    "undoExpiredHeading": "فات وقت التراجع",
+    "undoExpiredBody": "التراجع متاح لعشر ثوانٍ. لعكس اعتماد بعدها، ارفض المشتري — وهذا قرار له سبب، والتراجع ليس كذلك.",
+    "noEmailHeading": "لا رسائل تُرسَل",
+    "noEmailBody": "لم يُضبط مزوّد بريد، لذا لا يُبلَّغ المتقدّمون عند اعتمادهم أو رفضهم. الاعتماد يعمل، وكل رسالة كنا سنرسلها مسجّلة.",
+    "needsInfo": "اطلب المزيد",
+    "needsInfoLabel": "ما الذي تحتاجه منه؟",
+    "needsInfoHelp": "تُرسل إليه رسالة ويبقى الطلب هنا في انتظار رده.",
+    "reasonMet": "متحقق",
+    "reasonUnmet": "غير متحقق"
+  },
+  "approval": {
+    "heading": "الاعتماد التلقائي",
+    "intro": "الطلبات التي تستوفي كل المعايير أدناه تُعتمَد دون مراجعة أحد. ولا يعمل هذا إلا إذا فعّلته.",
+    "enabled": "اتخذ هذه القرارات تلقائياً",
+    "enabledHelp": "لا يُقرَّر شيء تلقائياً حتى تفعّل هذا وتضع معياراً واحداً على الأقل.",
+    "otherwise": "عندما لا يستوفي الطلب المعايير",
+    "otherwiseHelp": "إرساله إليك هو الخيار الآمن. الرفض التلقائي يصرف شخصاً دون أن يقرأ طلبه أحد.",
+    "otherwiseReview": "أرسله إليّ للمراجعة",
+    "otherwiseReject": "ارفضه",
+    "noCriteria": "لا معايير بعد، لذا ينتظرك كل طلب.",
+    "allOf": "اعتمِد عندما يتحقق كل ما يلي:",
+    "addLabel": "إضافة معيار",
+    "valueLabel": "القيمة",
+    "valueHelp": "عدد السنوات كحد أدنى، أو رموز دول مفصولة بفواصل، أو مفتاح حقل للملف، أو مفتاح=إجابة.",
+    "add": "إضافة",
+    "field": {
+      "vat_valid": "الرقم الضريبي مؤكَّد",
+      "years_in_business": "سنوات العمل لا تقل عن",
+      "country": "الدولة إحدى",
+      "has_upload": "أُرفق ملف",
+      "answer": "إجابة تطابق",
+      "existing_customer": "عميل بالفعل"
+    },
+    "criterion": {
+      "vat_valid": "أكّد VIES رقمه الضريبي",
+      "years_in_business_zero": "لا حد أدنى لسنوات العمل",
+      "years_in_business_one": "يعمل منذ سنة واحدة على الأقل",
+      "years_in_business_two": "يعمل منذ سنتين على الأقل",
+      "years_in_business_few": "يعمل منذ {{count}} سنوات على الأقل",
+      "years_in_business_many": "يعمل منذ {{count}} سنة على الأقل",
+      "years_in_business_other": "يعمل منذ {{count}} سنة على الأقل",
+      "country": "موجود في إحدى: {{countries}}",
+      "has_upload": "أرفق ملفاً{{key}}",
+      "answer": "أجاب على {{key}} بـ «{{value}}»",
+      "existing_customer": "يشتري منك بالفعل"
+    },
+    "issue": {
+      "no_criteria": "الاعتماد التلقائي مفعّل بلا شيء يُفحص، فلن يُقرَّر شيء. أضف معياراً أو أوقفه.",
+      "years_negative": "لا يمكن أن يكون عدد السنوات سالباً.",
+      "no_countries": "اذكر دولة واحدة على الأقل.",
+      "no_key": "اذكر الحقل الذي تخصّه هذه الإجابة."
+    }
   }
 }

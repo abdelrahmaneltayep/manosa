@@ -88,6 +88,26 @@ const SET_TAX_EXEMPT = `#graphql
     }
   }`;
 
+const CUSTOMER_BY_EMAIL = `#graphql
+  query MannonCustomerByEmail($query: String!) {
+    customers(first: 1, query: $query) {
+      nodes {${CUSTOMER_FIELDS}
+      }
+    }
+  }`;
+
+const CUSTOMER_CREATE = `#graphql
+  mutation MannonCustomerCreate($input: CustomerInput!) {
+    customerCreate(input: $input) {
+      customer {${CUSTOMER_FIELDS}
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }`;
+
 /** What a customer looks like coming back from the Admin API. */
 export interface CustomerNode {
   id: string;
@@ -220,5 +240,77 @@ export async function setTaxExempt(
       result: undefined,
       userErrors: (data.customerUpdate as { userErrors: [] }).userErrors,
     }),
+  );
+}
+
+/**
+ * Find a customer by email address.
+ *
+ * Used before creating one on approval: a wholesale applicant is very often
+ * already a retail customer of the same store, and a second account would
+ * split their order history in half.
+ */
+export async function findCustomerByEmail(
+  admin: AdminGraphql,
+  email: string,
+): Promise<CustomerNode | null> {
+  const response = await admin.graphql(CUSTOMER_BY_EMAIL, {
+    // Quoted, so an address containing a space or a colon cannot change the
+    // shape of the search.
+    variables: { query: `email:"${email.replace(/"/g, "")}"` },
+  });
+
+  const body = (await response.json()) as {
+    data?: { customers?: { nodes: CustomerNode[] } };
+    errors?: { message: string }[];
+  };
+
+  if (body.errors?.length) {
+    throw new Error(
+      `customer lookup failed: ${body.errors.map((e) => e.message).join("; ")}`,
+    );
+  }
+
+  return body.data?.customers?.nodes?.[0] ?? null;
+}
+
+export interface NewCustomer {
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  tags?: string[];
+  note?: string | null;
+}
+
+export async function createCustomer(
+  admin: AdminGraphql,
+  customer: NewCustomer,
+): Promise<CustomerNode> {
+  return runMutation<CustomerNode>(
+    admin,
+    "customerCreate",
+    CUSTOMER_CREATE,
+    {
+      input: {
+        email: customer.email,
+        ...(customer.firstName ? { firstName: customer.firstName } : {}),
+        ...(customer.lastName ? { lastName: customer.lastName } : {}),
+        // A phone Shopify rejects should not lose the whole approval, so it is
+        // sent only when it looks like something Shopify will take.
+        ...(customer.phone && /^\+/.test(customer.phone)
+          ? { phone: customer.phone }
+          : {}),
+        ...(customer.tags?.length ? { tags: customer.tags } : {}),
+        ...(customer.note ? { note: customer.note } : {}),
+      },
+    },
+    (data) => {
+      const payload = data.customerCreate as {
+        customer: CustomerNode;
+        userErrors: { message: string }[];
+      };
+      return { result: payload.customer, userErrors: payload.userErrors };
+    },
   );
 }
