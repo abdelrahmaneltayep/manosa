@@ -1,5 +1,6 @@
 import { backfillCustomers } from "~/lib/jobs/handlers/backfill-customers.server";
 import { backfillOrders } from "~/lib/jobs/handlers/backfill-orders.server";
+import { expireQuotes } from "~/lib/jobs/handlers/expire-quotes.server";
 import { decideApplications } from "~/lib/jobs/handlers/decide-applications.server";
 import { purgeShopPii } from "~/lib/jobs/handlers/purge-shop-pii.server";
 
@@ -14,6 +15,7 @@ export const JOB_HANDLERS = {
   "shop.purge_pii": purgeShopPii,
   "customers.backfill": backfillCustomers,
   "orders.backfill": backfillOrders,
+  "quotes.expire": expireQuotes,
   "forms.decide_applications": decideApplications,
 } as const;
 

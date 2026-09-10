@@ -1,0 +1,69 @@
+<!doctype html><html lang="en" dir="ltr"><head>
+<meta charset="utf-8"><title>Quotes — quote-expired</title><style>
+ body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+   margin:0;padding:1.5rem;background:#f6f6f7;color:#1c1d2b}
+ .note{background:#fff4e4;border:1px solid #e0b252;border-radius:8px;padding:.75rem 1rem;
+   margin-bottom:1.25rem;font-size:12px;color:#5e4200}
+ s-page,s-section,s-box{display:block}
+ s-section,s-box{background:#fff;border:1px solid #e3e3e3;border-radius:10px;
+   padding:1rem;margin-bottom:1rem}
+ s-stack{display:flex;gap:.45rem}
+ s-stack[direction=block]{flex-direction:column;align-items:flex-start}
+ s-stack[direction=inline]{flex-direction:row;align-items:center;flex-wrap:wrap}
+ s-heading{display:block;font-weight:700;margin:.25rem 0}
+ s-page[heading]::before{content:attr(heading);display:block;font-size:20px;
+   font-weight:800;margin-bottom:1rem}
+ s-section[heading]::before{content:attr(heading);display:block;font-weight:700;
+   margin-bottom:.5rem}
+ s-banner[heading]::before{content:attr(heading);display:block;font-weight:700}
+ s-paragraph{display:block;margin:.35rem 0}
+ s-banner{display:block;border-inline-start:4px solid #8a8a8a;background:#fafafa;
+   padding:.75rem 1rem;margin:.5rem 0;border-radius:6px}
+ s-banner[tone=critical]{border-color:#d64545;background:#fdeaea}
+ s-banner[tone=warning]{border-color:#b7791f;background:#fff2dd}
+ s-banner[tone=info]{border-color:#2f6bd6;background:#eaf1ff}
+ s-banner[tone=success]{border-color:#1f8a53;background:#e7f7ee}
+ s-badge{display:inline-block;background:#eef0ff;color:#4f46e5;border-radius:999px;
+   padding:.1rem .55rem;font-size:12px;margin-inline-end:.4rem}
+ /* Tones, so a capture can show what the checklist asks for — "overdue rows
+    red" is not verifiable against a page where every badge looks the same. */
+ s-badge[tone=critical]{background:#fdeaea;color:#a11f1f}
+ s-badge[tone=warning]{background:#fff2dd;color:#7a5200}
+ s-badge[tone=success]{background:#e7f7ee;color:#166b41}
+ s-badge[tone=neutral]{background:#f0f0f0;color:#4a4a4a}
+ s-button{display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;
+   padding:.45rem .9rem;margin-inline-end:.5rem;font-weight:700}
+ s-button[variant=tertiary]{background:transparent;color:#4f46e5;font-weight:600}
+ s-button[disabled]{opacity:.45}
+ s-table{display:table;width:100%;border-collapse:collapse}
+ s-table-body{display:table-row-group}
+ s-table-header-row,s-table-row{display:table-row}
+ s-table-header,s-table-cell{display:table-cell;padding:.4rem .5rem;
+   border-bottom:1px solid #eee;text-align:start;vertical-align:top}
+ s-table-header{font-weight:700}
+ s-text-field,s-number-field,s-money-field,s-select,s-text-area,s-date-field,
+ s-search-field,s-checkbox{display:block;margin:.4rem 0}
+ s-text-field::before,s-number-field::before,s-money-field::before,
+ s-select::before,s-text-area::before,s-date-field::before,
+ s-search-field::before,s-checkbox::before{content:attr(label);display:block;
+   font-weight:600;font-size:12px;margin-bottom:.15rem}
+ s-text-field::after,s-number-field::after,s-money-field::after,
+ s-select::after,s-text-area::after,s-date-field::after{
+   content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
+   padding:.35rem .5rem;min-height:1.1em;background:#fff;color:#444}
+ s-ordered-list{display:block;padding-inline-start:1.2rem}
+ s-unordered-list{display:block;padding-inline-start:1.1rem}
+ s-list-item{display:list-item;margin:.3rem 0}
+ s-link{color:#4f46e5;text-decoration:underline;margin-inline-end:.6rem}
+ s-text[accessibilityvisibility=exclusive]{position:absolute;width:1px;height:1px;
+   overflow:hidden;clip-path:inset(50%)}
+ ui-save-bar{display:none}
+ /* A real s-select renders its own menu; here the options would otherwise
+    print as a run-on line of text next to the field. */
+ s-option{display:none}
+</style></head><body>
+<div class="note"><strong>QA capture — structure only.</strong> Polaris web components
+are not upgraded here: this build environment has no egress to Shopify's CDN, so the
+styling below is a plain stand-in and is <em>not</em> what a merchant sees. What this
+capture verifies is which content and which states render.</div>
+<s-page heading="Q-1001"><s-section><s-link href="/app/orders/quotes">← All quotes</s-link></s-section><s-section heading="Buyer"><s-stack direction="block" gap="small"><s-stack direction="inline" gap="small-500" alignItems="center"><s-badge tone="critical">Expired</s-badge><s-text color="subdued">Expired 2 days ago</s-text></s-stack><s-link href="/app/customers/c1">Acme Ltd</s-link><s-text color="subdued">buyer@acme.test</s-text><s-text color="subdued">Gold · 4 orders, $1,200.50 lifetime</s-text></s-stack></s-section><s-section heading="What is being quoted"><s-stack direction="block" gap="base"><s-table><s-table-header-row><s-table-header>Item</s-table-header><s-table-header>Quantity</s-table-header><s-table-header>Unit price</s-table-header><s-table-header>Total</s-table-header></s-table-header-row><s-table-body><s-table-row><s-table-cell><s-stack direction="block" gap="small-500"><s-text>Blue Mug — Large</s-text><s-text color="subdued">MUG-BL-L</s-text></s-stack></s-table-cell><s-table-cell><s-text fontVariantNumeric="tabular-nums">100</s-text></s-table-cell><s-table-cell><s-stack direction="block" gap="small-500"><s-text fontVariantNumeric="tabular-nums">$6.50</s-text><s-text color="subdued">Wholesale 35%</s-text></s-stack></s-table-cell><s-table-cell><s-stack direction="block" gap="small-500"><s-text fontVariantNumeric="tabular-nums">$650.00</s-text></s-stack></s-table-cell></s-table-row></s-table-body></s-table><s-stack direction="inline" gap="small" alignItems="center"><s-text type="strong">Subtotal</s-text><s-text fontVariantNumeric="tabular-nums">$650.00</s-text></s-stack><s-text color="subdued">Prices fixed on 2026-09-10. They do not change unless you re-price this quote.</s-text></s-stack></s-section><s-section heading="✦ Suggested response"><s-stack direction="block" gap="small"><s-paragraph color="subdued">Claude will draft a reply here and check it against your margin floor. That arrives with the rest of the AI features.</s-paragraph><s-button disabled="true">✦ Draft a response</s-button></s-stack></s-section><s-section heading="Next"><s-stack direction="block" gap="base"><form method="post"><input type="hidden" name="intent" value="draft"/><s-stack direction="block" gap="small"><s-text-area name="message" label="Message to the buyer" details="Goes in the email and appears above the prices on their page." value=""></s-text-area><s-text-area name="internalNote" label="Internal note" details="Staff only. The buyer never sees this." value=""></s-text-area><s-button variant="primary" type="submit" disabled="true">Re-price at today&#x27;s rules</s-button></s-stack></form><s-stack direction="inline" gap="small"><form method="post"><input type="hidden" name="intent" value="send"/><s-button type="submit" disabled="true">Send to the buyer</s-button></form><form method="post"><input type="hidden" name="intent" value="withdraw"/><s-button variant="tertiary" tone="critical" type="submit" disabled="true">Withdraw</s-button></form><form method="post"><input type="hidden" name="intent" value="reopen"/><s-button variant="tertiary" type="submit">Reopen</s-button></form></s-stack></s-stack></s-section></s-page></body></html>

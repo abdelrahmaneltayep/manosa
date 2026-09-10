@@ -175,3 +175,112 @@ export interface LedgerView {
   };
   settingsError: boolean;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Quotes                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export type QuoteStatusKey =
+  "NEW" | "DRAFTED" | "SENT" | "ACCEPTED" | "DECLINED" | "EXPIRED";
+
+export interface QuoteRowView {
+  id: string;
+  number: string;
+  buyer: string;
+  buyerHref: string | null;
+  status: QuoteStatusKey;
+  /** Already-translated chip text and tone. */
+  statusLabel: string;
+  statusTone: PaymentChipTone;
+  /** Formatted money. Empty string before it has been priced. */
+  total: string;
+  lineCount: number;
+  /** Already-translated, e.g. "Expires in 3 days" or "Expired 2 days ago". */
+  expiryLabel: string | null;
+  /** ✦ Where it came from — the Buyer Agent chip. */
+  source: "MERCHANT" | "STOREFRONT" | "BUYER_AGENT";
+  createdAt: string;
+}
+
+export interface QuoteListView {
+  rows: QuoteRowView[];
+  total: number;
+  totalUnfiltered: number;
+  page: number;
+  pageCount: number;
+  filters: { search: string; status: string };
+  entitled: boolean;
+  requiredPlan: string;
+}
+
+export interface QuoteLineView {
+  id: string;
+  variantId: string;
+  title: string;
+  sku: string | null;
+  quantity: number;
+  /** Formatted, locked. */
+  unitPrice: string;
+  /** Decimal, for the editable field. */
+  unitPriceRaw: string;
+  listPrice: string;
+  lineTotal: string;
+  /** Which rules made this price, already composed. Null when none applied. */
+  ruleSummary: string | null;
+  /**
+   * What the store would charge today. Set only once a quote is locked and the
+   * two differ — the locked-price chip the checklist asks for.
+   */
+  currentPrice: string | null;
+}
+
+export interface QuoteDetailView {
+  id: string;
+  number: string;
+  status: QuoteStatusKey;
+  statusLabel: string;
+  statusTone: PaymentChipTone;
+  source: "MERCHANT" | "STOREFRONT" | "BUYER_AGENT";
+  buyer: {
+    name: string;
+    email: string | null;
+    href: string | null;
+    /** Already-translated tier and history, the "buyer context" card. */
+    context: string | null;
+  };
+  /** The buyer's own words, when the request came from outside. */
+  requestNote: string | null;
+  message: string;
+  internalNote: string;
+  lines: QuoteLineView[];
+  subtotal: string;
+  currencyCode: string;
+  /** Already-translated. Null before it is sent. */
+  expiryLabel: string | null;
+  lockedLabel: string | null;
+  /** The buyer's link, shown once it has been sent. */
+  publicUrl: string | null;
+  draftOrder: { name: string; href: string } | null;
+  /** Which buttons this state allows — from the shared state machine. */
+  actions: {
+    draft: boolean;
+    send: boolean;
+    withdraw: boolean;
+    reopen: boolean;
+  };
+  /** True when any line's locked price now differs from the live one. */
+  hasDrift: boolean;
+  /** ✦ The margin-floor check needs the AI layer (4.x). */
+  aiAvailable: boolean;
+  entitled: boolean;
+  requiredPlan: string;
+  /** A refused action, said next to what caused it. */
+  error: string | null;
+  /** The catalogue search box: what was typed, and what came back. */
+  search: {
+    query: string;
+    results: { variantId: string; title: string; sku: string | null; price: string }[];
+    /** True once a search ran and matched nothing. */
+    searched: boolean;
+  };
+}

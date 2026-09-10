@@ -99,6 +99,7 @@ const CATALOG_ROOTS = [
   "orders",
   "limits",
   "terms",
+  "quotes",
   "pricing",
   "plans",
   "csv",

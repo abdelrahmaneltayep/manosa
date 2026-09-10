@@ -23,6 +23,7 @@ state walkthrough, tenant boundary, invariants, bugs found and fixed, open items
 | 2.3  | Approval pipeline: queue, approve/reject, emails, evaluator   | Pass · open items             | [`qa/2.3/REPORT.md`](qa/2.3/REPORT.md) |
 | 3.1  | Wholesale order list, order limits, quantity increments       | Pass · open items             | [`qa/3.1/REPORT.md`](qa/3.1/REPORT.md) |
 | 3.2  | Net terms: eligibility, pay later, ledger, reminders          | Pass · open items             | [`qa/3.2/REPORT.md`](qa/3.2/REPORT.md) |
+| 3.3  | Quotes: pipeline, expiry, accept link, price locking          | Pass · open items             | [`qa/3.3/REPORT.md`](qa/3.3/REPORT.md) |
 
 ## What a capture proves, and what it does not
 

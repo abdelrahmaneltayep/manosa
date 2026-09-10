@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T11:05:00Z
+Updated: 2026-09-10T11:55:00Z
 Current milestone: 3 — Orders
-Current task: 3.3 Quotes and draft orders: request pipeline, expiry, accept link, price locking [in progress]
+Current task: 3.4 Quick order storefront blocks, inside the ≤10-point Lighthouse budget [in progress]
 
 ## Done
 
@@ -18,10 +18,10 @@ Current task: 3.3 Quotes and draft orders: request pipeline, expiry, accept link
 - [x] 2.3 Approval pipeline: queue, decisions, emails, evaluator — commit `3e0c403` — QA: `qa/2.3/REPORT.md`
 - [x] 3.1 Wholesale order list, order limits, quantity increments — commit `1722590` — QA: `qa/3.1/REPORT.md`
 - [x] 3.2 Net terms: eligibility, pay later, ledger with aging, reminders — commit `3575495` — QA: `qa/3.2/REPORT.md`
+- [x] 3.3 Quotes: pipeline, expiry, accept link, price locking — commit `PENDING` — QA: `qa/3.3/REPORT.md`
 
 ## Next up
 
-- 3.3 Quotes and draft orders: request pipeline, expiry, accept link, price locking
 - 3.4 Quick order storefront blocks, inside the ≤10-point Lighthouse budget
 - 4.1 AI infrastructure: client, streaming, timeouts, audit hooks
 - 4.2 Rule-from-a-sentence, margin guard
@@ -76,6 +76,11 @@ Current task: 3.3 Quotes and draft orders: request pipeline, expiry, accept link
   carry the numbers that make them useful. The pay-later button's name is built
   by the Function itself, which has no ICU, so it is English there too.
 - **✦ Net-terms risk signal** → 4.3. No chip is shown until the model exists.
+- **✦ Quote suggested response and margin-floor check** → 4.x. The section is on
+  the quote page, disabled, and says so.
+- **Editing a quote line's quantity in place** → a merchant removes and re-adds
+  it. A per-row quantity field is the obvious next increment; left out rather
+  than shipped half-wired.
 - **Automatic payment reminders** → the `autoRemind` opt-in is stored per buyer
   and read by nothing; every reminder is sent by a merchant clicking a button,
   which is the checklist's default anyway.
@@ -122,6 +127,9 @@ Neither is blocking; both would change product decisions if answered.
   (twice), a pluralised key called without `count`, and — new in 3.1 — a
   machine-readable code that ends in a plural suffix (`increment_below_two`),
   which i18next reads as Arabic `_two`.
+- **`npm test` needs Postgres running**, and it stops between sessions:
+  `service postgresql start`, then `pg_isready`. The failure looks like "No test
+  files found", not like a database error.
 - **Adding an optional field to a published payload is a silent-removal bug.**
   3.2 added `terms` to the buyer metafield; five existing callers would have
   published `null` and withdrawn a merchant's credit without a trace. Making
@@ -131,6 +139,10 @@ Neither is blocking; both would change product decisions if answered.
   three-valued logic makes the whole `NOT` unknown, and the row matches neither
   branch. 3.1 lost every order without net terms from page 2 this way; the fix
   is to spell the complement out as an `OR`.
+- **A fake admin in an integration test needs the discount-Function query.**
+  Anything that calls `createRule` publishes a ruleset, which resolves the
+  Function id first. Answer `MannonDiscountFunction` or the test fails with a
+  confusing "run `shopify app deploy`".
 - **The webhook registry test is a real gate.** Adding a topic to
   `WEBHOOK_SUBSCRIPTIONS` without adding it to `shopify.app.toml` fails the
   build, and the test also asserts a topic nothing handles — pick one Mannon

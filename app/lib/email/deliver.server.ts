@@ -44,7 +44,7 @@ configureEmailFromEnv();
  * `EMAIL_KEYS` — which would demand every merchant fill in a reminder template
  * on every registration form before they could save one.
  */
-export type TransactionalKey = "payment_reminder";
+export type TransactionalKey = "payment_reminder" | "quote_sent" | "quote_expiring";
 
 export interface DeliverInput {
   kind: EmailKey | TransactionalKey;

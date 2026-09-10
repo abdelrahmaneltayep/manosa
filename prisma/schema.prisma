@@ -126,6 +126,15 @@ model Shop {
   termsOverdueBlocks   Boolean   @default(true)
   termsSettingsHash    String?
   termsPublishedAt     DateTime?
+
+  // --- Quotes (phase 3.3) -------------------------------------------------
+  /// How long a sent quote stands. Copied onto the quote when it is sent, so
+  /// changing this never moves a date a buyer has already been given.
+  quoteExpiryDays   Int @default(14)
+  /// How many days before expiry the buyer is warned. Once per quote.
+  quoteReminderDays Int @default(3)
+  /// Sequence behind the "Q-1001" a merchant reads out.
+  quoteCounter      Int @default(1000)
   /// The deployed payment customization Function, and the customization that
   /// points at it.
   paymentFunctionId    String?
@@ -947,6 +956,124 @@ model Order {
 /// Recorded by the merchant, because Shopify does not know about money that
 /// arrived by bank transfer. Rows are never edited — a correction is another
 /// row — so the ledger can always be explained line by line.
+enum QuoteStatus {
+  /// A request has arrived and nobody has priced it yet.
+  NEW
+  /// Priced. Prices are locked from this moment.
+  DRAFTED
+  /// With the buyer, waiting on them or on the clock.
+  SENT
+  /// The buyer took it. A Shopify draft order exists.
+  ACCEPTED
+  /// The buyer said no, or the merchant withdrew it.
+  DECLINED
+  /// The date passed without an answer.
+  EXPIRED
+}
+
+enum QuoteSource {
+  /// The merchant built it in the admin.
+  MERCHANT
+  /// A buyer asked from the storefront (phase 3.4).
+  STOREFRONT
+  /// The Buyer Agent turned a conversation into a request (phase 5).
+  BUYER_AGENT
+}
+
+/// A price offered to one buyer, for a set time, at prices that do not move.
+///
+/// The point of a quote is that the number survives: a buyer quoted a price on
+/// Monday who accepts on Thursday pays Monday's price, whatever the merchant
+/// changed in between. That is why `QuoteLine` stores what the pricing engine
+/// said rather than what it would say now.
+model Quote {
+  id   String @id @default(cuid())
+  shop String
+  /// The unguessable token in the buyer's accept link. Globally unique, so the
+  /// public page can find it without knowing the shop.
+  publicId String @unique
+  /// What the merchant says out loud: "Q-1001".
+  number   String
+
+  customerId String?
+  email      String?
+  company    String?
+
+  status QuoteStatus @default(NEW)
+  source QuoteSource @default(MERCHANT)
+
+  currencyCode String @default("USD")
+  /// The locked total, in minor units. Recomputed from the lines on every
+  /// draft, never edited on its own.
+  subtotal     Int    @default(0)
+
+  /// What the buyer asked for, in their words.
+  requestNote  String?
+  /// What the merchant wants the buyer to read with the quote.
+  message      String?
+  /// Staff-only.
+  internalNote String?
+
+  /// Null means it stands until somebody acts. Set when it is sent.
+  expiresAt  DateTime?
+  /// Days of validity, copied from settings when it was sent, so changing the
+  /// setting does not move a date the buyer has already been told.
+  expiryDays Int?
+
+  /// When the prices on the lines were fixed.
+  lockedAt   DateTime?
+  sentAt     DateTime?
+  acceptedAt DateTime?
+  declinedAt DateTime?
+  /// The "3 days left" warning goes out once.
+  remindedAt DateTime?
+
+  /// Shopify's draft order, created on accept.
+  draftOrderId   String?
+  draftOrderName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  lines QuoteLine[]
+
+  @@index([shop, status, createdAt])
+  @@index([shop, expiresAt])
+  @@index([shop, customerId])
+}
+
+/// One line of a quote, at the price it was quoted.
+model QuoteLine {
+  id      String @id @default(cuid())
+  shop    String
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  variantId String
+  productId String?
+  title     String
+  sku       String?
+
+  quantity Int @default(1)
+
+  /// What the engine said, in minor units, at `Quote.lockedAt`. This is the
+  /// number the buyer is charged, whatever the rules say later.
+  unitPrice Int
+  /// What it would have cost with no Mannon rule, for the "was" figure.
+  listPrice Int
+
+  /// Which rules produced the price. Deciding shows its working, and a merchant
+  /// asked "why is this quote cheaper than the site?" needs an answer.
+  appliedRuleIds String[]
+  /// Already-composed summary, e.g. "Gold tier · 100+ units".
+  ruleSummary    String?
+
+  position Int @default(0)
+
+  @@index([shop, quoteId])
+}
+
 model Payment {
   id      String @id @default(cuid())
   shop    String

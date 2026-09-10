@@ -8,6 +8,42 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — A quote's accept link is a random token, not a cuid
+
+Registration forms use `@default(cuid())` for their public id. A quote's link
+reveals one buyer's negotiated prices and lets somebody act on them, so it is 24
+random bytes instead. Rejected: reusing the cuid default for consistency —
+consistency is not worth a guessable link to somebody's contract pricing.
+
+## 2026-09-10 — Price drift is shown on a quote, never applied
+
+Once a quote is locked the detail page re-runs the engine for display only, and
+marks any line the store would now price differently. A merchant honouring a
+fortnight-old quote wants to know; they do not want the app to change it under
+them. Rejected: silently re-pricing (breaks the promise), and hiding the
+difference (leaves a merchant unable to tell a good quote from a bad one).
+
+## 2026-09-10 — A sent quote cannot be re-priced
+
+The state machine allows `draft` from NEW and DRAFTED, not from SENT. A merchant
+who wants to change a quote already with a buyer withdraws it and starts again.
+Rejected: allowing a silent re-price, which would let a buyer accept one price
+and be charged another.
+
+## 2026-09-10 — The expiry job re-queues itself instead of running daily forever
+
+There is no recurring scheduler here. `quotes.expire` schedules its own next run
+just after midnight while any quote is still out, and stops when none is.
+Rejected: a fixed daily job per shop (a no-op forever on stores that never
+quote), and expiring on read (a quote nobody opens would never expire).
+
+## 2026-09-10 — Quote state lives in `app/lib/quotes/`, not a fourth package
+
+The pricing engine, order limits and net terms are packages because a Shopify
+Function needs them. Nothing about quotes runs in a Function, so the state
+machine is a pure module inside the app instead. Rejected: a fourth package for
+symmetry, which would add a workspace for no portability gain.
+
 ## 2026-09-10 — The terms Function fails closed; the limits Function fails open
 
 Both must never throw, but "safe" means opposite things. An unreadable order
