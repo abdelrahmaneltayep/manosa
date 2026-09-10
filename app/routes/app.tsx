@@ -10,8 +10,8 @@ import { NAV_PAGES, navHref, navLabelKey } from "~/lib/nav/pages";
 import { withAdmin } from "~/shopify.server";
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
-  withAdmin(request, async ({ session }) => {
-    await ensureShopRecord();
+  withAdmin(request, async ({ admin, session }) => {
+    await ensureShopRecord(admin);
     return json({ shop: session.shop });
   });
 

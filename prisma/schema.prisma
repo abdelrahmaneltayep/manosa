@@ -133,6 +133,11 @@ model Shop {
   /// it. Refreshed when a form is published.
   primaryDomain          String?
 
+  /// When the shop's own facts — currency, timezone, name — were last read
+  /// from Shopify. Null means never, and every money figure in the admin is
+  /// then labelled with the fallback currency rather than the real one.
+  shopFactsSyncedAt DateTime?
+
   // --- Orders and limits (phase 3.1) --------------------------------------
   /// Tag put on an order placed by a wholesale buyer, so the merchant can find
   /// them in Shopify's own admin as well as here.

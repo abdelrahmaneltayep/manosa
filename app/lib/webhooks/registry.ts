@@ -1,5 +1,6 @@
 import { handleAppSubscriptionsUpdate } from "~/lib/webhooks/handlers/app-subscriptions-update.server";
 import { handleCollectionsUpdate } from "~/lib/webhooks/handlers/collections-update.server";
+import { handleShopUpdate } from "~/lib/webhooks/handlers/shop-update.server";
 import { handleCustomersDelete } from "~/lib/webhooks/handlers/customers-delete.server";
 import { handleCustomersUpsert } from "~/lib/webhooks/handlers/customers-upsert.server";
 import { handleOrdersCancelled } from "~/lib/webhooks/handlers/orders-cancelled.server";
@@ -120,6 +121,14 @@ export const WEBHOOK_SUBSCRIPTIONS: readonly WebhookSubscription[] = [
     description:
       "Refresh membership for the products in a collection whose rules changed.",
     handler: handleCollectionsUpdate,
+  },
+  {
+    topic: "shop/update",
+    uri: "/webhooks/shop/update",
+    description:
+      "Keep the shop's currency and timezone current — every money figure and " +
+      "every chart in the admin is stated in them.",
+    handler: handleShopUpdate,
   },
 ] as const;
 

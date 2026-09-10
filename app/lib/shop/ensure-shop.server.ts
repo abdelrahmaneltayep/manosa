@@ -1,7 +1,18 @@
 import { db } from "~/db.server";
 import { recordAudit, SYSTEM_ACTOR } from "~/lib/audit/record.server";
 import { cancelPendingJobs, enqueueJob } from "~/lib/jobs/queue.server";
+import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
+import { syncShopFacts } from "~/lib/shop/domains.server";
 import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
+
+/**
+ * How stale the shop's own facts may get before they are read again.
+ *
+ * A merchant changes their currency or their timezone rarely, and `shop/update`
+ * catches it when they do — this is the belt to that brace, for an install
+ * whose webhook was missed.
+ */
+export const SHOP_FACTS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Make sure the install record exists for the active tenant.
@@ -14,12 +25,21 @@ import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
  * within 48 hours must not lose their setup to the scheduled PII purge, so
  * seeing them again cancels it.
  */
-export async function ensureShopRecord() {
+export async function ensureShopRecord(admin?: AdminGraphql) {
   const shop = shopScope.require("ensureShopRecord");
   const existing = await db.shop.findUnique({ where: { shop } });
 
+  if (existing && !existing.uninstalledAt) {
+    await refreshShopFacts(existing, admin);
+    return existing;
+  }
+
   if (!existing) {
     const created = await db.shop.create({ data: { ...tenant() } });
+    // The shop's own currency, timezone and name. Without this every money
+    // figure in the admin is labelled with the fallback currency, and §7's
+    // "timezone = store timezone" footer has nothing to state.
+    await refreshShopFacts(created, admin);
     await recordAudit({
       actor: SYSTEM_ACTOR,
       action: "app.installed",
@@ -51,8 +71,6 @@ export async function ensureShopRecord() {
     });
     return created;
   }
-
-  if (!existing.uninstalledAt) return existing;
 
   const restored = await db.shop.update({
     where: { shop },
@@ -101,5 +119,28 @@ export async function ensureShopRecord() {
     },
   });
 
+  await refreshShopFacts(restored, admin);
   return restored;
+}
+
+/**
+ * Read the shop's facts, if we have an admin client and they are stale.
+ *
+ * Never on every navigation: this costs an Admin API call, and a currency does
+ * not change between two page views. Failure is swallowed inside
+ * `syncShopFacts` — a page must not 500 because a fact could not be refreshed.
+ */
+async function refreshShopFacts(
+  record: { shopFactsSyncedAt: Date | null },
+  admin: AdminGraphql | undefined,
+  now = new Date(),
+): Promise<void> {
+  if (!admin) return;
+
+  const age = record.shopFactsSyncedAt
+    ? now.getTime() - record.shopFactsSyncedAt.getTime()
+    : Number.POSITIVE_INFINITY;
+  if (age < SHOP_FACTS_MAX_AGE_MS) return;
+
+  await syncShopFacts(admin);
 }
