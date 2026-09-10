@@ -17,7 +17,7 @@ Current task: 3.3 Quotes and draft orders: request pipeline, expiry, accept link
 - [x] 2.2 Registration form builder, theme block, VIES, spam protection — commit `1206e68` — QA: `qa/2.2/REPORT.md`
 - [x] 2.3 Approval pipeline: queue, decisions, emails, evaluator — commit `3e0c403` — QA: `qa/2.3/REPORT.md`
 - [x] 3.1 Wholesale order list, order limits, quantity increments — commit `1722590` — QA: `qa/3.1/REPORT.md`
-- [x] 3.2 Net terms: eligibility, pay later, ledger with aging, reminders — commit `PENDING` — QA: `qa/3.2/REPORT.md`
+- [x] 3.2 Net terms: eligibility, pay later, ledger with aging, reminders — commit `3575495` — QA: `qa/3.2/REPORT.md`
 
 ## Next up
 
