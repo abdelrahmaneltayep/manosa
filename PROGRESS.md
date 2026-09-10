@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T12:45:00Z
+Updated: 2026-09-10T13:30:00Z
 Current milestone: 4 — Claude
-Current task: 4.1 AI infrastructure: client, streaming, timeouts, audit hooks [in progress]
+Current task: 4.2 Rule-from-a-sentence, margin guard [in progress]
 
 ## Done
 
@@ -20,10 +20,10 @@ Current task: 4.1 AI infrastructure: client, streaming, timeouts, audit hooks [i
 - [x] 3.2 Net terms: eligibility, pay later, ledger with aging, reminders — commit `3575495` — QA: `qa/3.2/REPORT.md`
 - [x] 3.3 Quotes: pipeline, expiry, accept link, price locking — commit `c146e8a` — QA: `qa/3.3/REPORT.md`
 - [x] 3.4 Quick order storefront blocks, signed App Proxy — commit `224e4a0` — QA: `qa/3.4/REPORT.md`
+- [x] 4.1 AI infrastructure: client, streaming, timeouts, audit hooks — commit `PENDING` — QA: `qa/4.1/REPORT.md`
 
 ## Next up
 
-- 4.1 AI infrastructure: client, streaming, timeouts, audit hooks
 - 4.2 Rule-from-a-sentence, margin guard
 - 4.3 Registration screening, drafted emails, segments, CSV whisperer
 - 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order
@@ -61,8 +61,14 @@ Current task: 4.1 AI infrastructure: client, streaming, timeouts, audit hooks [i
   or `MANNON_EMAIL_TRANSPORT=log`), but there is no `MANNON_RESEND_API_KEY` here.
   **Unblocker:** that key. The request shape is asserted; the response is not.
   Every message the app would send is recorded in `EmailMessage` either way.
-- **`ANTHROPIC_API_KEY` is not set.** Needed from 4.1. Everything AI is built to
-  degrade to the manual path without it, so this blocks verification, not work.
+- **`ANTHROPIC_API_KEY` is not set.** The 4.1 infrastructure is built and
+  tested against an injected stub, and the product works without a key — but
+  **no call has ever been made to Anthropic**, so no prompt in this app has
+  ever been answered. Unblocker: that key. Blocks verification, not work.
+- **The model is `claude-sonnet-4-5`**, which the spec names and which is a
+  previous generation (`claude-sonnet-5` is the current equivalent). One
+  environment variable, `MANNON_AI_MODEL`. Flagged in `DECISIONS.md` rather
+  than silently upgraded — worth confirming with the user.
 
 ## Deferred on purpose, with the task that owns them
 
@@ -131,6 +137,13 @@ Neither is blocking; both would change product decisions if answered.
 - **The capture harness checks for raw i18n keys** on every capture. If a new
   catalog root appears, add it to `CATALOG_ROOTS` in
   `tests/support/state-capture.tsx`.
+- **Never `vi.spyOn` a Prisma delegate method.** A delegate resolves its
+  methods through a proxy, so `mockRestore()` leaves the method `undefined` and
+  silently breaks every later test in the file (4.1 lost three that way).
+  Inject a seam instead — the repo's idiom, as with `AdminForShop`.
+- **The AI wrapper takes an `AiDeps` bag** (`messages`, `record`) purely as a
+  test seam; nothing in the app passes it. That is how the timeout, the retry
+  rule and every failure path are driven with no key.
 - **Hardcoding a currency's ×100 is the recurring money bug.** It has now been
   written three times (3.2 shipped it, 3.3 avoided it, 3.4 caught it again in
   the SKU path). Always `parseMoney` for a decimal string, and prefer a source

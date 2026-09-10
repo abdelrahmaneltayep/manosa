@@ -8,6 +8,47 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — The model stays `claude-sonnet-4-5`, behind one setting (flagged)
+
+`CLAUDE.md` and the spec name `claude-sonnet-4-5`. It is a previous-generation
+id — the current equivalent is `claude-sonnet-5`, and `claude-opus-5` is the
+more capable default — but the spec names a model explicitly and silently
+upgrading a merchant's model is not a call to make on their behalf. It ships as
+the documented default of `MANNON_AI_MODEL`, so moving is one environment
+variable and no code. **Flagged for the user:** if the spec's id is simply older
+than the spec, say so and it changes in one line.
+
+## 2026-09-10 — Nothing in `app/lib/ai/*` can write to the database
+
+The wrapper returns text. Turning that into a change is the feature's job, and
+`recordAudit` already refuses an `aiAssisted` entry with no approver. Keeping
+the model's output and the write path in different modules is what makes "AI
+drafts, a person approves" a property of the architecture rather than of nine
+features remembering. Rejected: helpers that apply a suggestion directly.
+
+## 2026-09-10 — `askForJson` repairs once, then gives up
+
+A validator the caller supplies, one repair attempt carrying the error back, and
+then the manual path. At most two model calls. Rejected: repairing until it
+parses (a merchant paying for a loop), and returning a value that failed the
+caller's own check (a half-valid pricing rule is what invariant 1 exists to stop).
+
+## 2026-09-10 — The AI run log stores no prompt and no completion
+
+Feature, model, prompt version, token counts, latency, and the provider's error.
+Not the text either way — it carries the merchant's product data and their
+buyers' names, and "what has this been doing" and "what is it costing me" are
+both answerable without it. Rejected: storing prompts for debugging, which is
+how a support tool becomes a data-protection problem.
+
+## 2026-09-10 — Thinking and effort are not configured centrally
+
+They are model-dependent: `budget_tokens` on Sonnet 4.5, adaptive on the current
+generation, and `effort` errors on the older one. The wrapper sends neither, so
+it works on whichever model `MANNON_AI_MODEL` names; a feature that knows its
+model can opt in. Rejected: hardcoding one generation's shape into the one place
+every feature goes through.
+
 ## 2026-09-10 — Quick order is on the Pro plan (flagged assumption)
 
 The spec's plan ladder does not place the storefront quick-order tools. They sit

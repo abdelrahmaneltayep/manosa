@@ -29,6 +29,7 @@
     "qa:capture": "QA_CAPTURE=1 vitest run tests/unit/plans-page-states.test.tsx tests/unit/pricing-pages-states.test.tsx tests/unit/customers-pages-states.test.tsx tests/unit/forms-pages-states.test.tsx tests/unit/applications-page-states.test.tsx tests/unit/orders-pages-states.test.tsx tests/unit/quote-pages-states.test.tsx && playwright test tests/e2e/qa-states.spec.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "@prisma/client": "^6.19.3",
     "@remix-run/node": "^2.17.5",
     "@remix-run/react": "^2.17.5",

@@ -956,6 +956,68 @@ model Order {
 /// Recorded by the merchant, because Shopify does not know about money that
 /// arrived by bank transfer. Rows are never edited — a correction is another
 /// row — so the ledger can always be explained line by line.
+/// Why an AI call ended.
+enum AiRunStatus {
+  OK
+  /// Twenty seconds passed. The merchant got the manual path.
+  TIMEOUT
+  /// Anthropic said no, or asked us to slow down.
+  RATE_LIMITED
+  /// The model declined the request.
+  REFUSED
+  /// It answered, but not in a shape we could use — twice.
+  INVALID_OUTPUT
+  /// Anything else: a network fault, a bad request, an outage.
+  ERROR
+  /// No API key is configured. Recorded so the reason a feature is quiet is
+  /// visible rather than a mystery.
+  NO_KEY
+}
+
+/// One call to Claude.
+///
+/// Operational, not evidential: the audit log records what a merchant decided,
+/// this records what the app asked and what it cost. **No prompt and no
+/// completion are stored** — those carry a merchant's product data and their
+/// buyers' names, and this table is not the place for either. Token counts and
+/// a feature name are enough to answer "what has this been doing" and "what is
+/// it costing me".
+model AiRun {
+  id      String @id @default(cuid())
+  shop    String
+  /// One of `AI_FEATURES`. Grouped by in the log and counted by the limiter.
+  feature String
+
+  status AiRunStatus @default(OK)
+  model  String
+  /// The prompt version that produced it, so an old answer stays explicable.
+  promptVersion String
+
+  /// Anthropic's own request id, for a support conversation about one call.
+  requestId String?
+
+  inputTokens  Int @default(0)
+  outputTokens Int @default(0)
+  /// Cached reads are billed differently; kept apart so a cost figure is real.
+  cachedTokens Int @default(0)
+
+  latencyMs Int @default(0)
+  /// How many times it was tried. Two means the first attempt failed.
+  attempts  Int @default(1)
+
+  /// The failure, in the provider's words. Never the prompt, never the answer.
+  error String?
+
+  /// Who it was for. Null for scheduled work with nobody watching.
+  actorId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([shop, feature, createdAt])
+  @@index([shop, status, createdAt])
+}
+
 enum QuoteStatus {
   /// A request has arrived and nobody has priced it yet.
   NEW
