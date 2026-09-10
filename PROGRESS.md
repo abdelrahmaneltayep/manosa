@@ -18,7 +18,7 @@ Current task: 3.4 Quick order storefront blocks, inside the ≤10-point Lighthou
 - [x] 2.3 Approval pipeline: queue, decisions, emails, evaluator — commit `3e0c403` — QA: `qa/2.3/REPORT.md`
 - [x] 3.1 Wholesale order list, order limits, quantity increments — commit `1722590` — QA: `qa/3.1/REPORT.md`
 - [x] 3.2 Net terms: eligibility, pay later, ledger with aging, reminders — commit `3575495` — QA: `qa/3.2/REPORT.md`
-- [x] 3.3 Quotes: pipeline, expiry, accept link, price locking — commit `PENDING` — QA: `qa/3.3/REPORT.md`
+- [x] 3.3 Quotes: pipeline, expiry, accept link, price locking — commit `c146e8a` — QA: `qa/3.3/REPORT.md`
 
 ## Next up
 
