@@ -3,6 +3,18 @@
 Hat: senior QA engineer who did not write this code and does not trust it.
 Date: 2026-09-10 · Branch: `claude/mannon-b2b-wholesale-oc5b18`
 
+> **Status: clean pass, after a FAIL and a full fix round.** The independent
+> cold read ran after this report was first written and returned **FAIL** on
+> seventeen findings — the worst of them that "Take over" wrote a merchant's
+> reply into a table with no route to the buyer, while both sides were told it
+> had arrived. All seventeen are fixed; the findings, the probes and the fixes
+> are in `qa/5.3/COLD-READ.md`, and §8 below summarises. This is the second run.
+>
+> Two claims in the first version of this report were **wrong**, and are
+> corrected in §8 rather than quietly edited out: that the app embed caveat was
+> "stated on the screen" (it was not), and that take-over was idempotent (true
+> sequentially, false for a double-click).
+
 ## 1. Scope
 
 Checklist §6's three remaining blocks: the **guardrails panel** (abilities,
@@ -149,10 +161,54 @@ Properties worth naming:
    project keeps finding. `takeOver` and `replyAsMerchant` now refuse a
    `testMode` conversation themselves.
 
-## 7. Open, not passed
+## 8. What the cold read found, and what changed
 
-- **No independent cold read yet** — `autopilot:qa-engineer` runs next. The last
-  three tasks all passed this gate and all three came back FAIL.
+Seventeen findings, all fixed. The four that changed the design are in
+`docs/adr/0023` (addendum); the full evidence is in `qa/5.3/COLD-READ.md`.
+
+1. **Take over had no delivery path.** A merchant's reply reached a table and
+   stopped: no proxy GET, no polling, no mail — under a widget string promising
+   the buyer a person would reply there, and a green "Sent" in the admin. Now a
+   signed App Proxy GET the widget polls **only after a person joins**, proven
+   end to end in a real browser (`51-agent-taken-over`), with a second test
+   asserting a conversation nobody joined still makes **zero** GETs.
+2. **The announcement rendered as a failure.** An empty agent turn already
+   means "nobody could answer this", so the row that says a person joined said
+   the agent had failed. The row now carries real text and the transcript
+   checks for the marker first — and the capture is rebuilt from the rows the
+   writer actually writes.
+3. **"The agent is live" ignored the app embed.** Now reads `storefrontSeenAt`
+   and `embedConfirmedAt`, and says what it does not know.
+4. **No plan gate on the guardrails or transcript actions.** A free-plan shop
+   published and was told it was live while the storefront 402'd every turn.
+5. **A rehearsal spent the real buyer's rate limit**, so a buyer who had asked
+   nothing was told they had asked a lot of questions.
+6. **The fourth publish item ticked without the model.** A scripted off-limits
+   decline needs no API key; it now needs an agent turn with `aiModel` set.
+7. No contextual save bar on the guardrails form — and the navigation that lost
+   the work was the tab strip on the same page.
+8. **The capture guard was switched off for this whole page family.** Its
+   catalogue-root list was hand-maintained and had no `agent` entry — the same
+   gotcha `PROGRESS.md` records from 4.2. Now derived from the catalogue, so it
+   cannot happen a third time.
+9. Take over was not idempotent under concurrency (two announcements, two audit
+   entries on a double-click) — **contradicting a claim in the first version of
+   this report**. Now a conditional update.
+10. Take over overwrote a `CART` outcome with `ESCALATED`, so the log said no
+    cart was built in a conversation that built one.
+11. A reply over 2,000 characters was silently truncated. Now refused, with the
+    error beside the field.
+12. `saveGuardrails` still accepted `published` — a second publish path around
+    the checklist. Removed.
+13. The CSV export was unbounded and ignored the filters the merchant could see.
+14. The rehearsal picker capped at 50 and silently answered as a **different**
+    buyer, with that buyer's prices and terms.
+15. Dead view fields, one of them a query per page load.
+16. Raw refusal codes shown to merchants, untranslated in Arabic.
+17. The "I reviewed these guardrails" attestation recorded no audit entry, and
+    the publish entry did not record which items were true at the time.
+
+## 7. Open, not passed
 - **No merchant has seen any of these screens.** Polaris never upgrades here, so
   the 24 captures in this directory are structure only. They prove which content
   and which states render, and that no raw i18n key reached a page. They do not

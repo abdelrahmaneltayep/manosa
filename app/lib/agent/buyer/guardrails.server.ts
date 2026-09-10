@@ -51,8 +51,14 @@ export async function loadGuardrails(): Promise<AgentGuardrails> {
   });
 }
 
+/**
+ * What the panel may change.
+ *
+ * Deliberately **not** `published`. Publishing is gated on a four-item
+ * checklist that `publishAgent` re-checks, and a second write path that skips
+ * it is the gate quietly undone the first time somebody reuses this function.
+ */
 export interface GuardrailInput {
-  published?: boolean;
   canBuildCart?: boolean;
   canRequestQuote?: boolean;
   canReadOrders?: boolean;
@@ -99,12 +105,6 @@ export async function saveGuardrails(
   return db.agentGuardrails.update({
     where: { shop },
     data: {
-      ...(input.published === undefined
-        ? {}
-        : {
-            published: input.published,
-            publishedAt: input.published ? new Date() : null,
-          }),
       ...(input.canBuildCart === undefined ? {} : { canBuildCart: input.canBuildCart }),
       ...(input.canRequestQuote === undefined
         ? {}

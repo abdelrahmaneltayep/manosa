@@ -35,6 +35,17 @@ export interface PublishReadiness {
   publishedAt: string | null;
   /** Where a buyer would meet it. Null until we know the shop's domain. */
   storefrontUrl: string | null;
+  /**
+   * Whether the theme app embed is actually on.
+   *
+   * "Published" is our own switch; the block is an app embed the merchant
+   * turns on in the theme editor, and this app has no scope to read a theme.
+   * What it has is the App Proxy: a storefront request can only come from a
+   * theme that is rendering our blocks. So `seen` is proof, the merchant's own
+   * word is an attestation, and neither being set proves nothing — which is
+   * exactly what the screen then says, rather than "the agent is live".
+   */
+  embed: { live: boolean; attested: boolean };
 }
 
 const HREF: Record<PublishStep, string> = {
@@ -79,6 +90,11 @@ export async function publishReadiness(): Promise<PublishReadiness> {
     published: guardrails.published,
     publishedAt: guardrails.publishedAt?.toISOString() ?? null,
     storefrontUrl: storefrontUrl(shop?.primaryDomain ?? null, name),
+    // The same two columns Home's setup checklist reads, for the same reason.
+    embed: {
+      live: shop?.storefrontSeenAt !== null && shop?.storefrontSeenAt !== undefined,
+      attested: shop?.embedConfirmedAt !== null && shop?.embedConfirmedAt !== undefined,
+    },
   };
 }
 
@@ -121,6 +137,15 @@ export async function publishAgent(actorId: string | null): Promise<PublishReadi
     actor: { type: "STAFF", id: actorId },
     action: "agent.published",
     summary: "Published the Buyer Agent to the storefront.",
+    // Invariant 5, on the decision that puts this in front of customers: what
+    // was true at the moment it went live, not just that it did.
+    metadata: {
+      checklist: Object.fromEntries(
+        readiness.items.map((item) => [item.step, item.done]),
+      ),
+      embedSeen: readiness.embed.live,
+      embedAttested: readiness.embed.attested,
+    },
   });
 
   return publishReadiness();
@@ -159,5 +184,14 @@ export async function markGuardrailsReviewed(actorId: string | null): Promise<vo
   await db.agentGuardrails.update({
     where: { shop },
     data: { reviewedAt: new Date(), updatedBy: actorId },
+  });
+
+  // `updatedBy` is overwritten by the next Save, so without this "who said
+  // they had read the guardrails before this thing talked to customers" is
+  // recorded nowhere durable.
+  await recordAudit({
+    actor: { type: "STAFF", id: actorId },
+    action: "agent.guardrails_reviewed",
+    summary: "Reviewed the Buyer Agent's guardrails before publishing.",
   });
 }

@@ -181,6 +181,22 @@ const context = (overrides: Partial<ToolContext> = {}): ToolContext => ({
   ...overrides,
 });
 
+/**
+ * This shop's agent is live.
+ *
+ * Written straight onto the row rather than through a production path:
+ * publishing is gated on a four-item checklist that `publishAgent` re-checks,
+ * and satisfying all four is noise in a test about what the agent *says*.
+ * A fixture that says "assume it is published" says exactly that.
+ */
+const goLive = () =>
+  loadGuardrails().then((guardrails) =>
+    db.agentGuardrails.update({
+      where: { shop: guardrails.shop },
+      data: { published: true, publishedAt: new Date() },
+    }),
+  );
+
 beforeEach(async () => {
   await resetDatabase();
   vi.restoreAllMocks();
@@ -561,7 +577,7 @@ describe("answering a buyer", () => {
   async function published() {
     await seedBuyer();
     await createRule(wholesaleRule(35), { admin: fakeAdmin(), actor });
-    await saveGuardrails({ published: true }, "staff-1");
+    await goLive();
   }
 
   it("answers with a price the engine computed", async () => {
@@ -793,7 +809,7 @@ describe("answering a buyer", () => {
 
     await inBeta(async () => {
       await seedBuyer();
-      await saveGuardrails({ published: true }, "staff-1");
+      await goLive();
       await openConversation({
         customerId: BUYER_ID,
         company: "Acme Ltd",
@@ -1047,10 +1063,8 @@ describe("subjects the merchant put off limits", () => {
 
     await inAlpha(async () => {
       await seedBuyer();
-      await saveGuardrails(
-        { published: true, offLimits: ["our supplier", "lead times"] },
-        "staff-1",
-      );
+      await saveGuardrails({ offLimits: ["our supplier", "lead times"] }, "staff-1");
+      await goLive();
 
       const create = vi.fn(async () => reply(routed("price_for")));
       const turn = await answerBuyerTurn(
@@ -1079,7 +1093,8 @@ describe("subjects the merchant put off limits", () => {
 
     await inAlpha(async () => {
       await seedBuyer();
-      await saveGuardrails({ published: true, offLimits: ["cost"] }, "staff-1");
+      await saveGuardrails({ offLimits: ["cost"] }, "staff-1");
+      await goLive();
 
       // A merchant who bans "cost" has not banned "costume".
       const turn = await answerBuyerTurn(
@@ -1112,7 +1127,7 @@ describe("the log a merchant reads", () => {
 
     await inAlpha(async () => {
       await seedBuyer();
-      await saveGuardrails({ published: true }, "staff-1");
+      await goLive();
 
       await answerBuyerTurn(
         {
@@ -1136,7 +1151,7 @@ describe("the log a merchant reads", () => {
 
     await inAlpha(async () => {
       await seedBuyer();
-      await saveGuardrails({ published: true }, "staff-1");
+      await goLive();
 
       const conversation = await openConversation({
         customerId: BUYER_ID,

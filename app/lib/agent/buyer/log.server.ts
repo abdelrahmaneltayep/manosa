@@ -1,6 +1,7 @@
 import type { AgentConversation, AgentMessage, AgentOutcome } from "@prisma/client";
 
 import { db } from "~/db.server";
+import { recordOutcome } from "~/lib/agent/buyer/conversation.server";
 import { recordAudit } from "~/lib/audit/record.server";
 import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
 
@@ -131,19 +132,26 @@ export async function takeOver(id: string, actorId: string | null): Promise<void
 
   const now = new Date();
   await db.$transaction(async (tx) => {
-    await tx.agentConversation.update({
-      where: { id },
-      data: { takenOverAt: now, takenOverBy: actorId, outcome: "ESCALATED" },
+    // Conditional on the row still being un-taken-over, and the announcement
+    // is written only if this call is the one that won. A read-then-write here
+    // announced twice and audited twice on a double-click.
+    const claimed = await tx.agentConversation.updateMany({
+      where: { id, takenOverAt: null },
+      data: { takenOverAt: now, takenOverBy: actorId },
     });
+    if (claimed.count !== 1) return;
 
     // The agent announces the human, in the transcript, so the buyer's next
-    // view of the thread says who they are talking to.
+    // view of the thread says who they are talking to. Written as real text
+    // rather than an empty row with a reason: an empty agent turn is how this
+    // app records a turn nobody could answer, and the transcript renders it
+    // that way.
     await tx.agentMessage.create({
       data: {
         ...tenant(),
         conversationId: id,
         role: "AGENT",
-        text: "",
+        text: TAKEN_OVER_TEXT,
         refusal: "taken_over",
         createdAt: now,
       },
@@ -161,6 +169,32 @@ export async function takeOver(id: string, actorId: string | null): Promise<void
       tx,
     );
   });
+
+  // Outside the claim, and through `recordOutcome`, whose whole job is that the
+  // strongest thing that happened wins. Setting ESCALATED directly made the log
+  // say no cart was built in a conversation that built one.
+  await recordOutcome(id, "ESCALATED");
+}
+
+/**
+ * What the transcript shows where a person joined.
+ *
+ * Stored in English on the row because it is a record of an event, not a
+ * message anyone reads in their own language — the *buyer* is told a person
+ * joined by the widget, in the widget's locale (`agent.takenOver` in the theme
+ * catalogue). The merchant's transcript renders this row through
+ * `agent.transcript.joined`, so the marker here is never what they read.
+ */
+export const TAKEN_OVER_TEXT = "A person joined this conversation.";
+
+/** As long as a merchant's reply may be. Refused past this, never truncated. */
+export const MAX_REPLY_CHARS = 2_000;
+
+export class ReplyTooLongError extends Error {
+  constructor(readonly length: number) {
+    super(`Reply is ${length} characters; the limit is ${MAX_REPLY_CHARS}.`);
+    this.name = "ReplyTooLongError";
+  }
 }
 
 /** A merchant's own reply, typed into the transcript. */
@@ -171,8 +205,13 @@ export async function replyAsMerchant(
 ): Promise<void> {
   shopScope.require("reply as merchant");
 
-  const message = text.trim().slice(0, 2_000);
+  const message = text.trim();
   if (message === "") throw new Response("Nothing to send", { status: 422 });
+  // Refused rather than silently shortened. A merchant who typed 2,500
+  // characters, pressed Send and saw "Sent" had 500 of them thrown away.
+  if (message.length > MAX_REPLY_CHARS) {
+    throw new ReplyTooLongError(message.length);
+  }
 
   const conversation = await db.agentConversation.findUnique({ where: { id } });
   if (!conversation) throw new Response("Conversation not found", { status: 404 });
@@ -197,24 +236,65 @@ export async function replyAsMerchant(
         lastMessageAt: now,
         // Replying is taking over, whether or not the button was pressed
         // first: the agent must not answer over a person mid-thread.
-        ...(conversation.takenOverAt
-          ? {}
-          : { takenOverAt: now, takenOverBy: actorId, outcome: "ESCALATED" }),
+        ...(conversation.takenOverAt ? {} : { takenOverAt: now, takenOverBy: actorId }),
       },
     });
   });
+
+  // Ranked, for the same reason as `takeOver`: a conversation that built a cart
+  // and was then answered by a person still built a cart.
+  if (!conversation.takenOverAt) await recordOutcome(id, "ESCALATED");
 }
 
 /* -------------------------------------------------------------------------- */
 
-/** One CSV row per turn: the checklist's "export CSV". */
-export async function exportConversations(): Promise<string> {
+/** As many turns as one export carries. Ninety days of a busy shop is more. */
+export const EXPORT_LIMIT = 20_000;
+
+export interface ExportResult {
+  csv: string;
+  rows: number;
+  /** True when the shop has more turns than one export can carry. */
+  truncated: boolean;
+}
+
+/**
+ * One CSV row per turn: the checklist's "export CSV".
+ *
+ * Two things it now does that it did not. It honours the filters the merchant
+ * had on when they pressed the link — an Export button inside a filter toolbar
+ * that exports everything reads as a filtered export and is not one. And it is
+ * bounded: every message of every conversation, joined into one string in
+ * memory, fails as a timeout on the merchant's download exactly when their shop
+ * is busy enough for the export to matter.
+ */
+export async function exportConversations(
+  options: { outcome?: AgentOutcome | null; search?: string | null } = {},
+): Promise<ExportResult> {
   shopScope.require("export conversations");
 
+  const search = options.search?.trim();
+  const conversation = {
+    ...(options.outcome ? { outcome: options.outcome } : {}),
+    ...(search
+      ? {
+          OR: [
+            { company: { contains: search, mode: "insensitive" as const } },
+            { customerId: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
   const rows = await db.agentMessage.findMany({
+    where: Object.keys(conversation).length > 0 ? { conversation } : {},
     orderBy: { createdAt: "asc" },
+    take: EXPORT_LIMIT + 1,
     include: { conversation: true },
   });
+
+  const truncated = rows.length > EXPORT_LIMIT;
+  if (truncated) rows.length = EXPORT_LIMIT;
 
   const header = [
     "conversation",
@@ -246,7 +326,7 @@ export async function exportConversations(): Promise<string> {
       .join(","),
   );
 
-  return [header.join(","), ...lines].join("\n");
+  return { csv: [header.join(","), ...lines].join("\n"), rows: lines.length, truncated };
 }
 
 /**

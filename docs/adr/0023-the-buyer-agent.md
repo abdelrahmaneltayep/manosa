@@ -186,3 +186,78 @@ the agent answering over a person mid-thread.
 Neither is offered on a rehearsal: there is nobody on the other end to hand to,
 and `takeOver` and `replyAsMerchant` both refuse one rather than relying on the
 screen to hide the buttons.
+
+---
+
+## Addendum (5.3 fix round): what the cold read found
+
+An independent review returned **FAIL** on 5.3 with seventeen findings. Four
+changed the design rather than the code, and they are recorded here because the
+first version of each looked reasonable.
+
+### Take over had no delivery path, and both sides were told otherwise
+
+`replyAsMerchant` wrote an `AgentMessage` and stopped. There was no route from
+that row to the buyer: the proxy had no GET, the widget never polled, no mail
+was sent — while the widget told the buyer _"someone from the team has joined —
+they'll reply here"_ and the admin showed a green **Sent**. A spec failure
+("'Take over' hands live chat to merchant") and an invariant-4 failure at once,
+and the one on this page that reaches a real customer.
+
+The fix is the honest one rather than the cheap one: a signed App Proxy **GET**
+(`messagesForBuyer`) that the widget polls **only after a person has joined**.
+A conversation nobody took over still costs the storefront exactly one request
+per turn, which is the rule the whole widget is built on. The thread is matched
+on the signed customer id as well as its own, so another buyer's conversation
+reads as empty rather than refused; a rehearsal is never handed back to the
+buyer it imitates; and the "a person joined" marker is filtered out, because the
+buyer is told that by the widget in the buyer's own language.
+
+### An empty agent turn already meant something else
+
+The announcement was stored as `{ role: AGENT, text: "", refusal: "taken_over" }`
+— and an empty agent turn is exactly how this app records _a turn nobody could
+answer_. So the one row that exists to say "a person joined here" rendered as
+"the agent couldn't answer this one. Nothing was sent to the buyer."
+
+Two changes: the row carries real text, and the transcript checks for the
+marker **before** the empty-text branch. The state capture is now built from the
+rows `takeOver` and `replyAsMerchant` actually write — the old one flipped a flag
+on the happy-path fixture, so neither the announcement nor a `MERCHANT` turn had
+ever been rendered at all.
+
+### "Published" is our switch; the app embed is the merchant's
+
+`publishAgent` flipped a database flag and the panel said _"The agent is live"_.
+The block is an app embed (`target: body`), off until the merchant turns it on
+in the theme editor, and this app has no scope to read a theme. So for a
+merchant who had not enabled it, that sentence was a claim about somebody else's
+theme.
+
+The panel now reads the two columns Home's setup checklist already uses —
+`storefrontSeenAt` (proof: a proxy request can only come from a live embed) and
+`embedConfirmedAt` (the merchant's own word) — and when neither is set it says
+so instead.
+
+### The fourth checklist item could be satisfied without the model
+
+"A test conversation completed" ticked on any rehearsal that did not fail — and
+an off-limits subject is declined **from a script, before either model call**.
+So a shop with no API key at all could satisfy the gate with one message the
+model never saw, publish, and fail every real buyer turn with `no_key`. It now
+ticks on evidence that is already stored: an agent turn in a rehearsal with
+`aiModel` set.
+
+### The rest
+
+A rehearsal spent the real buyer's rate-limit budget (`overTurnLimit` now
+filters `testMode` and rehearsals have their own smaller ceiling); the publish,
+save and take-over actions had no server-side plan gate; take-over was not
+idempotent under concurrency and overwrote a `CART` outcome with `ESCALATED`;
+`saveGuardrails` still accepted `published`, a second publish path around the
+checklist; the CSV export was unbounded and ignored the filters the merchant
+could see; the rehearsal picker silently answered as a _different_ buyer when
+the id was outside its first fifty; refusal codes were shown to merchants raw;
+and the capture guard's catalogue-root list was hand-maintained, so it had been
+silently switched off for this whole page family — it is now derived from the
+catalogue, which is the second time that list has been the bug.

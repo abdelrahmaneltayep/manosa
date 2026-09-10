@@ -1,0 +1,327 @@
+import type { PricingRule } from "@mannon/pricing-engine";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { db } from "~/db.server";
+import { resetAnthropicClient, type MessagesApi } from "~/lib/ai/client.server";
+import { takeOver, replyAsMerchant, listConversations } from "~/lib/agent/buyer/log.server";
+import { saveGuardrails, loadGuardrails } from "~/lib/agent/buyer/guardrails.server";
+import {
+  markGuardrailsReviewed,
+  publishAgent,
+  publishReadiness,
+} from "~/lib/agent/buyer/publish.server";
+import { rehearsalCompleted } from "~/lib/agent/buyer/rehearsal.server";
+import { answerBuyerTurn } from "~/lib/agent/buyer/turn.server";
+import { overTurnLimit } from "~/lib/agent/buyer/conversation.server";
+import { loadEntitlements, hasFeature } from "~/lib/billing/entitlements.server";
+import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
+import { createRule } from "~/lib/pricing/rules.server";
+import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
+import { resetDatabase } from "../support/db";
+
+const ALPHA = "alpha.myshopify.com";
+const inAlpha = <T>(fn: () => Promise<T>) => shopScope.run(ALPHA, fn);
+const NOW = new Date("2026-09-10T12:00:00Z");
+const BUYER_ID = "gid://shopify/Customer/77";
+const actor = { type: "STAFF" as const, id: "staff-1" };
+
+const stub = (create: (...a: unknown[]) => unknown): MessagesApi =>
+  ({ create, stream: () => {} }) as unknown as MessagesApi;
+
+function fakeAdmin() {
+  return {
+    graphql: vi.fn(async (query: string) => {
+      if (query.includes("MannonVariantsBySku")) {
+        return { json: async () => ({ data: { productVariants: { nodes: [] } } }) };
+      }
+      if (query.includes("MannonDiscountFunction")) {
+        return {
+          json: async () => ({
+            data: { shopifyFunctions: { nodes: [{ id: "gid://fn/1", title: "Mannon" }] } },
+          }),
+        };
+      }
+      if (query.includes("discountAutomaticAppCreate")) {
+        return {
+          json: async () => ({
+            data: {
+              discountAutomaticAppCreate: {
+                automaticAppDiscount: { discountId: "gid://discount/1" },
+                userErrors: [],
+              },
+            },
+          }),
+        };
+      }
+      return {
+        json: async () => ({
+          data: { metafieldsSet: { metafields: [{ id: "gid://mf/1" }], userErrors: [] } },
+        }),
+      };
+    }),
+  } satisfies AdminGraphql;
+}
+
+const wholesaleRule = (percentage: number): PricingRule =>
+  ({
+    id: "new",
+    name: `Wholesale ${percentage}%`,
+    status: "active",
+    priority: 100,
+    combinable: false,
+    kind: "percentage",
+    value: { percentage },
+    targets: { mode: "all" },
+    audience: { mode: "tags", tags: ["wholesale"] },
+    markets: { mode: "all", marketIds: [] },
+    schedule: { startsAt: null, endsAt: null },
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+  }) as PricingRule;
+
+async function installShop(shop: string, planKey = "agentic") {
+  await shopScope.run(shop, () =>
+    db.shop.create({
+      data: {
+        ...tenant(),
+        planKey,
+        billingStatus: "ACTIVE",
+        currencyCode: "USD",
+        primaryLocale: "en",
+        primaryDomain: `${shop.replace(".myshopify.com", "")}.example`,
+      },
+    }),
+  );
+}
+
+const seedBuyer = () =>
+  db.customer.create({
+    data: {
+      ...tenant(),
+      customerId: BUYER_ID,
+      email: "buyer@acme.test",
+      company: "Acme Ltd",
+      status: "APPROVED",
+      tags: ["wholesale"],
+      currencyCode: "USD",
+    },
+  });
+
+beforeEach(async () => {
+  await resetDatabase();
+  vi.restoreAllMocks();
+  process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+  resetAnthropicClient();
+});
+
+afterAll(async () => {
+  delete process.env.ANTHROPIC_API_KEY;
+  resetAnthropicClient();
+  await resetDatabase();
+});
+
+describe("PROBE A — publishing on a rehearsal the model never answered", () => {
+  it("ticks item 4 from an off-limits decline with NO api key, and publishes", async () => {
+    await installShop(ALPHA);
+    await inAlpha(async () => {
+      await seedBuyer();
+      await createRule(wholesaleRule(35), { admin: fakeAdmin(), actor });
+      await markGuardrailsReviewed("staff-1");
+      await saveGuardrails({ offLimits: ["supplier"] }, "staff-1");
+    });
+
+    // The key is gone: no model call can succeed from here.
+    delete process.env.ANTHROPIC_API_KEY;
+    resetAnthropicClient();
+
+    const turn = await inAlpha(() =>
+      answerBuyerTurn({
+        message: "who is your supplier?",
+        customerId: BUYER_ID,
+        locale: "en",
+        admin: fakeAdmin(),
+        testMode: true,
+        now: NOW,
+      }),
+    );
+    console.log("PROBE A turn:", JSON.stringify(turn));
+
+    const completed = await inAlpha(() => rehearsalCompleted());
+    const readiness = await inAlpha(() => publishReadiness());
+    console.log("PROBE A completed:", completed, "items:", JSON.stringify(readiness.items));
+
+    const after = await inAlpha(() => publishAgent("staff-1"));
+    console.log("PROBE A published:", after.published);
+    expect(after.published).toBe(true);
+  });
+});
+
+describe("PROBE B — a rehearsal spends the real buyer's rate-limit budget", () => {
+  it("counts test-mode turns against the storefront ceiling for that buyer", async () => {
+    await installShop(ALPHA);
+    await inAlpha(async () => {
+      await seedBuyer();
+      await saveGuardrails({ offLimits: ["supplier"] }, "staff-1");
+    });
+
+    const before = await inAlpha(() =>
+      overTurnLimit({ customerId: BUYER_ID }, { now: NOW, limit: 2 }),
+    );
+
+    for (const message of ["supplier one", "supplier two"]) {
+      await inAlpha(() =>
+        answerBuyerTurn({
+          message,
+          customerId: BUYER_ID,
+          locale: "en",
+          admin: fakeAdmin(),
+          testMode: true,
+          now: NOW,
+        }),
+      );
+    }
+
+    const after = await inAlpha(() =>
+      overTurnLimit({ customerId: BUYER_ID }, { now: NOW, limit: 2 }),
+    );
+    console.log("PROBE B before:", before, "after two rehearsal turns:", after);
+    expect(after).toBe(true);
+  });
+});
+
+describe("PROBE C — publishing with no entitlement", () => {
+  it("publishes on the free plan, which cannot answer a single storefront turn", async () => {
+    await installShop(ALPHA, "free");
+    await inAlpha(async () => {
+      await seedBuyer();
+      await createRule(wholesaleRule(35), { admin: fakeAdmin(), actor });
+      await markGuardrailsReviewed("staff-1");
+      await db.agentConversation.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          company: "Acme Ltd",
+          testMode: true,
+          outcome: "ANSWERED",
+          startedAt: NOW,
+          lastMessageAt: NOW,
+        },
+      });
+    });
+
+    const entitled = await inAlpha(async () =>
+      hasFeature(await loadEntitlements(), "buyer_agent"),
+    );
+    const after = await inAlpha(() => publishAgent("staff-1"));
+    console.log("PROBE C entitled:", entitled, "published:", after.published);
+    expect(entitled).toBe(false);
+    expect(after.published).toBe(true);
+  });
+});
+
+describe("PROBE D — taking over rewrites what the log says happened", () => {
+  it("downgrades a CART conversation to ESCALATED", async () => {
+    await installShop(ALPHA);
+    const id = await inAlpha(async () => {
+      await seedBuyer();
+      const row = await db.agentConversation.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          company: "Acme Ltd",
+          outcome: "CART",
+          startedAt: NOW,
+          lastMessageAt: NOW,
+        },
+      });
+      return row.id;
+    });
+
+    await inAlpha(() => takeOver(id, "staff-1"));
+    const page = await inAlpha(() => listConversations());
+    console.log("PROBE D outcome after take over:", page.rows[0]?.outcome);
+    expect(page.rows[0]?.outcome).toBe("ESCALATED");
+  });
+});
+
+describe("PROBE E — the merchant's reply has no delivery path", () => {
+  it("is stored, and the buyer's next storefront turn only gets 'taken_over'", async () => {
+    await installShop(ALPHA);
+    await inAlpha(async () => {
+      await seedBuyer();
+      await saveGuardrails({ published: true }, "staff-1");
+    });
+
+    const id = await inAlpha(async () => {
+      const row = await db.agentConversation.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          company: "Acme Ltd",
+          outcome: "ANSWERED",
+          startedAt: NOW,
+          lastMessageAt: NOW,
+        },
+      });
+      return row.id;
+    });
+
+    await inAlpha(() => replyAsMerchant(id, "Yes — I can do 12% on 500 units.", "staff-1"));
+
+    const turn = await inAlpha(() =>
+      answerBuyerTurn({
+        message: "hello?",
+        customerId: BUYER_ID,
+        locale: "en",
+        admin: fakeAdmin(),
+        now: new Date(NOW.getTime() + 60_000),
+      }),
+    );
+    console.log("PROBE E buyer's next turn:", JSON.stringify(turn));
+    const stored = await inAlpha(() =>
+      db.agentMessage.findMany({ where: { conversationId: id }, orderBy: { createdAt: "asc" } }),
+    );
+    console.log(
+      "PROBE E stored roles:",
+      stored.map((m) => `${m.role}:${m.text.slice(0, 20)}|${m.refusal ?? ""}`),
+    );
+    expect(turn.failure).toBe("taken_over");
+    expect(turn.reply).toBeNull();
+  });
+});
+
+describe("PROBE F — guardrails changed after review still count as reviewed", () => {
+  it("lets a merchant publish guest mode they turned on after ticking the box", async () => {
+    await installShop(ALPHA);
+    await inAlpha(async () => {
+      await seedBuyer();
+      await createRule(wholesaleRule(35), { admin: fakeAdmin(), actor });
+      await markGuardrailsReviewed("staff-1");
+      await db.agentConversation.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          testMode: true,
+          outcome: "ANSWERED",
+          startedAt: NOW,
+          lastMessageAt: NOW,
+        },
+      });
+      // The riskiest switch in the panel, flipped after the attestation.
+      await saveGuardrails({ guestMode: true }, "staff-1");
+    });
+
+    const readiness = await inAlpha(() => publishReadiness());
+    const guardrails = await inAlpha(() => loadGuardrails());
+    console.log(
+      "PROBE F reviewedAt:",
+      guardrails.reviewedAt?.toISOString(),
+      "updatedAt:",
+      guardrails.updatedAt.toISOString(),
+      "ready:",
+      readiness.ready,
+      "guestMode:",
+      guardrails.guestMode,
+    );
+    expect(readiness.ready).toBe(true);
+  });
+});

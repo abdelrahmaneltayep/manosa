@@ -70,7 +70,13 @@ function Turn({ turn }: { turn: TranscriptTurnView }) {
           <s-text color="subdued">{turn.when}</s-text>
         </s-stack>
 
-        {turn.text === "" ? (
+        {turn.joined ? (
+          // The row that says a person joined. Checked *before* the empty-text
+          // branch: this used to be stored with no text, so the one row that
+          // exists to say "a person joined here" read as "the agent couldn't
+          // answer this one".
+          <s-paragraph>{t("agent.transcript.joined")}</s-paragraph>
+        ) : turn.text === "" ? (
           // Invariant 4 on the one screen that decides whether a merchant
           // trusts this: a turn that produced nothing says so.
           <s-paragraph color="subdued">{t("agent.transcript.emptyTurn")}</s-paragraph>
@@ -78,9 +84,9 @@ function Turn({ turn }: { turn: TranscriptTurnView }) {
           <s-paragraph>{turn.text}</s-paragraph>
         )}
 
-        {turn.refusal ? (
+        {turn.refusal && !turn.joined ? (
           <s-text color="subdued">
-            {t("agent.transcript.refusal", { reason: turn.refusal })}
+            {t("agent.transcript.refusal", { reason: turn.refusalLabel })}
           </s-text>
         ) : null}
 
@@ -149,9 +155,13 @@ function TakeOver({ view }: { view: TranscriptView }) {
             <s-text-area
               name="text"
               label={t("agent.transcript.replyLabel")}
-              details={t("agent.transcript.replyHelp")}
+              details={t("agent.transcript.replyHelp", { max: view.maxReplyChars })}
               rows={3}
+              maxLength={view.maxReplyChars}
               {...whenDisabled(!view.entitled)}
+              {...(view.tooLong
+                ? { error: t("agent.transcript.tooLong", { max: view.maxReplyChars }) }
+                : {})}
             />
             <s-stack direction="inline" gap="small" alignItems="center">
               <s-button type="submit" {...whenDisabled(!view.entitled)}>

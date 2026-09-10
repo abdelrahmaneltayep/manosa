@@ -197,18 +197,31 @@ export async function recordOutcome(
 export const TURN_LIMIT = 20;
 export const TURN_WINDOW_MS = 10 * 60_000;
 
+/**
+ * The ceiling on a merchant rehearsing.
+ *
+ * Its own, and smaller, because it is counted separately: a rehearsal used to
+ * be counted against the buyer it was rehearsing *as*, so twenty turns of the
+ * merchant tuning their off-limits list locked that buyer out of the live agent
+ * and told them they had asked a lot of questions. They had asked none.
+ */
+export const REHEARSAL_TURN_LIMIT = 10;
+
 export async function overTurnLimit(
   who: { customerId?: string | null; guestKey?: string | null },
-  options: { now?: Date; limit?: number } = {},
+  options: { now?: Date; limit?: number; testMode?: boolean } = {},
 ): Promise<boolean> {
   const now = options.now ?? new Date();
 
   // A guest is counted by their key, which is the one thing a signed-out
   // visitor has. Without this branch the only anonymous mode had no ceiling at
   // all, at two model calls a turn.
+  // A rehearsal's turns are stored as BUYER turns against the real customer id,
+  // so without this they are counted against that buyer's ceiling.
+  const testMode = options.testMode === true;
   const conversation = who.customerId
-    ? { customerId: who.customerId }
-    : { customerId: null, guestKey: who.guestKey ?? null };
+    ? { customerId: who.customerId, testMode }
+    : { customerId: null, guestKey: who.guestKey ?? null, testMode };
 
   const turns = await db.agentMessage.count({
     where: {
@@ -217,7 +230,82 @@ export async function overTurnLimit(
       conversation,
     },
   });
-  return turns >= (options.limit ?? TURN_LIMIT);
+  return turns >= (options.limit ?? (testMode ? REHEARSAL_TURN_LIMIT : TURN_LIMIT));
+}
+
+export interface BuyerVisibleTurn {
+  id: string;
+  role: "AGENT" | "MERCHANT";
+  text: string;
+  at: string;
+}
+
+/**
+ * What a buyer may read back from their own conversation.
+ *
+ * This is the delivery path for a merchant who has taken a conversation over.
+ * Without it, "Take over" wrote a row nobody could ever see: the widget was
+ * told a person had joined and would reply there, and nothing could appear.
+ *
+ * Three things make it safe to answer. The customer id comes from the App
+ * Proxy's signature and from nowhere else; the conversation is matched on that
+ * id as well as its own, so another buyer's thread reads as empty rather than
+ * refused; and only the two roles a buyer has already seen are returned —
+ * never their own turns echoed back, and never a refusal reason, which is the
+ * merchant's diagnostic and not the buyer's business.
+ */
+export async function messagesForBuyer(options: {
+  conversationId: string;
+  customerId: string;
+  /** Only turns after this one. Omitted, the whole thread comes back. */
+  afterId?: string | null;
+  limit?: number;
+}): Promise<{ takenOver: boolean; turns: BuyerVisibleTurn[] }> {
+  shopScope.require("buyer agent history");
+
+  const conversation = await db.agentConversation.findFirst({
+    where: {
+      id: options.conversationId,
+      customerId: options.customerId,
+      // A rehearsal belongs to the merchant, not to the buyer it imitates.
+      testMode: false,
+    },
+  });
+  if (!conversation) return { takenOver: false, turns: [] };
+
+  const after = options.afterId
+    ? await db.agentMessage.findFirst({
+        where: { id: options.afterId, conversationId: conversation.id },
+        select: { createdAt: true },
+      })
+    : null;
+
+  const rows = await db.agentMessage.findMany({
+    where: {
+      conversationId: conversation.id,
+      role: { in: ["AGENT", "MERCHANT"] },
+      ...(after ? { createdAt: { gt: after.createdAt } } : {}),
+    },
+    orderBy: { createdAt: "asc" },
+    take: options.limit ?? HISTORY_LIMIT,
+  });
+
+  return {
+    takenOver: conversation.takenOverAt !== null,
+    turns: rows
+      // A turn nobody could answer is stored with no text. The merchant's log
+      // shows it as exactly that; the buyer has nothing to read.
+      .filter((row) => row.text.trim() !== "")
+      // The "a person joined" marker is a record of an event, in English. The
+      // buyer is told the same thing by the widget, in the buyer's language.
+      .filter((row) => row.refusal !== "taken_over")
+      .map((row) => ({
+        id: row.id,
+        role: row.role === "MERCHANT" ? "MERCHANT" : "AGENT",
+        text: row.text,
+        at: row.createdAt.toISOString(),
+      })),
+  };
 }
 
 /** The last few turns, oldest first, for the model's context. */

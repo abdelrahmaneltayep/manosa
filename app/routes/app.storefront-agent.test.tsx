@@ -40,6 +40,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         entitled,
         requiredPlan: requiredPlan(entitled),
         buyerId: url.searchParams.get("buyer"),
+        search: url.searchParams.get("search"),
         hasKey: isAiAvailable(),
       }),
     });

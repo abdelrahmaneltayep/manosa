@@ -46,6 +46,7 @@ const readiness = (overrides: Partial<PublishReadiness> = {}): PublishReadiness 
   published: false,
   publishedAt: null,
   storefrontUrl: "https://acme.example/account",
+  embed: { live: true, attested: false },
   ...overrides,
 });
 
@@ -55,7 +56,6 @@ const view = (
   options: Parameters<typeof guardrailsView>[2] = {
     entitled: true,
     requiredPlan: null,
-    conversations: 0,
   },
 ) => guardrailsView(guardrails(g), readiness(r), options);
 
@@ -129,7 +129,6 @@ describe("the guardrails panel", () => {
     const panel = guardrailsView(guardrails(), readiness({ ready: false }), {
       entitled: true,
       requiredPlan: null,
-      conversations: 0,
       refused: ["test"],
     });
 
@@ -164,6 +163,9 @@ describe("reading a stored turn back", () => {
       tool: null,
       facts: ["kept"],
     });
+    // A tool name this version does not know renders as no tool, never as a
+    // raw `agent.tool.<name>` catalogue key on the merchant's screen.
+    expect(toolFacts({ tool: "teleport", facts: [] }).tool).toBeNull();
   });
 });
 

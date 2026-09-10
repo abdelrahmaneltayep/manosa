@@ -28,6 +28,15 @@ export function GuardrailsPage({ view }: { view: GuardrailsView }) {
 
       <form method="post">
         <input type="hidden" name="intent" value="save" />
+
+        {/* The navigation that loses the work is on this page: the tabs sit
+            above the form, so "type an off-limits subject, click Test mode to
+            try it" would discard it silently. */}
+        <ui-save-bar id="agent-guardrails-save-bar">
+          <button type="submit" variant="primary" />
+          <button type="reset" />
+        </ui-save-bar>
+
         <Abilities view={view} />
         <Tone view={view} />
         <Instructions view={view} />
@@ -128,10 +137,15 @@ function Publish({ view }: { view: GuardrailsView }) {
 function Live({ publish, entitled }: { publish: PublishView; entitled: boolean }) {
   const { t } = useTranslation();
 
+  // Our switch is on. Whether a buyer can actually reach it depends on a theme
+  // app embed the merchant turns on in the theme editor, and this app has no
+  // scope to read a theme — only the App Proxy, which a live embed calls.
+  const reaching = publish.embedLive || publish.embedAttested;
+
   return (
     <s-section heading={t("agent.publish.heading")}>
       <s-stack direction="block" gap="base">
-        <s-banner tone="success">
+        <s-banner tone={reaching ? "success" : "warning"}>
           <s-heading>
             {t(
               publish.justPublished
@@ -139,7 +153,18 @@ function Live({ publish, entitled }: { publish: PublishView; entitled: boolean }
                 : "agent.publish.liveHeading",
             )}
           </s-heading>
-          <s-paragraph>{t("agent.publish.liveBody")}</s-paragraph>
+          <s-paragraph>
+            {t(reaching ? "agent.publish.liveBody" : "agent.publish.embedUnknown")}
+          </s-paragraph>
+          {publish.embedLive ? null : (
+            <s-paragraph color="subdued">
+              {t(
+                publish.embedAttested
+                  ? "agent.publish.embedAttested"
+                  : "agent.publish.embedHow",
+              )}
+            </s-paragraph>
+          )}
           {publish.storefrontUrl ? (
             <s-link href={publish.storefrontUrl} target="_blank">
               {t("agent.publish.visit")}

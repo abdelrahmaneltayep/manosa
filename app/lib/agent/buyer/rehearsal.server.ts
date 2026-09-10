@@ -4,7 +4,11 @@ import type { TestCartLineView, TestTurnView, TestView } from "~/components/agen
 import { db } from "~/db.server";
 import type { Translate } from "~/i18n/translate";
 import { IDLE_MINUTES } from "~/lib/agent/buyer/conversation.server";
-import { testBuyers } from "~/lib/agent/buyer/view-model.server";
+import {
+  approvedBuyer,
+  refusalLabel,
+  testBuyers,
+} from "~/lib/agent/buyer/view-model.server";
 import type { TurnCart } from "~/lib/agent/buyer/turn.server";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 
@@ -54,12 +58,25 @@ export async function closeRehearsal(
   });
 }
 
-/** Has any rehearsal ever been answered? The pre-publish checklist's fourth item. */
+/**
+ * Has any rehearsal ever been answered *by the model*?
+ *
+ * The pre-publish checklist's fourth item, and the test is deliberately
+ * stricter than "did not fail". An off-limits subject is declined from a
+ * script, before either model call — so a shop with no API key at all could
+ * satisfy this item with one message the model never saw, publish, and then
+ * fail every real buyer turn with `no_key`. The evidence that a turn actually
+ * reached Claude is already stored on the turn: `aiModel`.
+ */
 export async function rehearsalCompleted(): Promise<boolean> {
   shopScope.require("buyer agent rehearsal completed");
 
-  const count = await db.agentConversation.count({
-    where: { testMode: true, outcome: { not: "FAILED" } },
+  const count = await db.agentMessage.count({
+    where: {
+      role: "AGENT",
+      aiModel: { not: null },
+      conversation: { testMode: true },
+    },
   });
   return count > 0;
 }
@@ -84,23 +101,26 @@ export async function rehearsalView(options: {
   entitled: boolean;
   requiredPlan: string | null;
   buyerId: string | null;
+  /** Narrows the picker, for a shop with more approved buyers than it lists. */
+  search?: string | null;
   hasKey: boolean;
   cart?: TurnCart | null;
   failure?: string | null;
   now?: Date;
 }): Promise<TestView> {
   const now = options.now ?? new Date();
-  const buyers = await testBuyers(options.t);
+  const buyers = await testBuyers(options.t, { search: options.search });
 
   // Whatever the merchant asked for, if it is really one of their approved
-  // buyers. A customer id in the query string is not proof of anything, and
-  // this is the one screen that reads a buyer's terms and order history.
-  const buyerId =
-    options.buyerId && buyers.some((buyer) => buyer.customerId === options.buyerId)
-      ? options.buyerId
-      : (buyers[0]?.customerId ?? null);
+  // buyers — resolved by id, not looked for in the page of names above. This
+  // is the one screen that reads a buyer's terms and order history, so a
+  // customer id in a query string is checked rather than trusted, and a miss
+  // is reported rather than quietly answered as somebody else.
+  const asked = options.buyerId ? await approvedBuyer(options.buyerId, options.t) : null;
+  const notFound = Boolean(options.buyerId) && asked === null;
 
-  const buyer = buyers.find((row) => row.customerId === buyerId) ?? null;
+  const buyerId =
+    asked?.customerId ?? (notFound ? null : (buyers[0]?.customerId ?? null));
 
   const conversation = buyerId ? await currentRehearsal(buyerId, now) : null;
   const messages = conversation
@@ -114,6 +134,7 @@ export async function rehearsalView(options: {
     role: message.role,
     text: message.text,
     refusal: message.refusal,
+    refusalLabel: refusalLabel(message.refusal, options.t),
     tool: null,
   }));
 
@@ -122,7 +143,8 @@ export async function rehearsalView(options: {
     requiredPlan: options.requiredPlan,
     buyers,
     buyerId,
-    buyerName: buyer?.name ?? null,
+    buyerNotFound: notFound,
+    search: options.search?.trim() ?? "",
     turns,
     cart: cartLines(options.cart ?? null),
     failure: options.failure ?? null,

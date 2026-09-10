@@ -163,6 +163,12 @@
     #mannon-agent-ag1 .mannon-agent__turn--buyer {
       align-self: flex-end;
     }
+    /* A person, not the agent. A rule rather than a colour, so it reads the
+       same in every theme. */
+    #mannon-agent-ag1 .mannon-agent__turn--merchant {
+      border-inline-start-width: 3px;
+      font-weight: 600;
+    }
     #mannon-agent-ag1 .mannon-agent__row {
       display: flex;
       gap: 0.5rem;
@@ -230,6 +236,13 @@
       var busy = false;
       var greeted = false;
 
+      // Set once a person joins the thread; from then on the widget listens,
+      // or the "they'll reply here" string is a promise it cannot keep.
+      var conversationId = null;
+      var lastSeenId = null;
+      var listenTimer = null;
+      var LISTEN_MS = 10000;
+
       /** A bubble whose last line is somewhere to go. Never a dead end. */
       function bubbleWithLink(textValue, href, label) {
         var div = bubble('agent', textValue);
@@ -244,8 +257,7 @@
       function bubble(who, textValue) {
         var div = document.createElement('div');
         div.className = 'mannon-agent__turn mannon-agent__turn--' + who;
-        // textContent throughout. Everything in here is either the merchant's
-        // data or a model's words, and neither is markup.
+        // textContent throughout: merchant data and model words, never markup.
         div.textContent = textValue;
         log.appendChild(div);
         log.scrollTop = log.scrollHeight;
@@ -272,6 +284,52 @@
         panel.hidden = true;
         launcher.hidden = false;
         launcher.focus();
+        stopListening();
+      }
+
+      function stopListening() {
+        if (listenTimer === null) return;
+        clearInterval(listenTimer);
+        listenTimer = null;
+      }
+
+      // Only ever after a take-over: a conversation nobody joined costs this
+      // block no requests at all.
+      function startListening() {
+        if (listenTimer !== null || !conversationId) return;
+        listenTimer = setInterval(listen, LISTEN_MS);
+        listen();
+      }
+
+      function listen() {
+        if (!conversationId || panel.hidden) return;
+
+        var query = 'conversation=' + encodeURIComponent(conversationId);
+        if (lastSeenId) query += '&after=' + encodeURIComponent(lastSeenId);
+
+        fetch(routes + 'apps/mannon/agent?' + query, {
+          headers: { Accept: 'application/json' }
+        })
+          .then(function (response) {
+            return response.json().catch(function () {
+              return { ok: false };
+            });
+          })
+          .then(function (data) {
+            if (!data || data.ok !== true) return;
+
+            for (var index = 0; index < data.turns.length; index += 1) {
+              var turn = data.turns[index];
+              lastSeenId = turn.id;
+              bubble(turn.role === 'MERCHANT' ? 'merchant' : 'agent', turn.text);
+            }
+
+            // The thread is the agent's again, or it rolled over.
+            if (data.takenOver !== true) stopListening();
+          })
+          .catch(function () {
+            // A failed poll changes nothing on screen.
+          });
       }
 
       launcher.addEventListener('click', openPanel);
@@ -354,9 +412,8 @@
         busy = true;
         send.disabled = true;
 
-        // The checklist asks for a typing indicator. There is no stream behind
-        // it — an answer is one database read — so this says "thinking", which
-        // is true, rather than animating a reply that does not exist yet.
+        // The checklist's typing indicator. Nothing streams behind it, so it
+        // says "thinking" rather than animating a reply that does not exist.
         var pending = bubble('agent', strings.thinking);
 
         var body = new URLSearchParams();
@@ -377,16 +434,24 @@
           .then(function (data) {
             pending.remove();
 
+            if (data && data.conversationId) conversationId = data.conversationId;
+
             if (!data || data.ok !== true) {
               var failure = (data && data.failure) || 'error';
               if (failure === 'not_available' || failure === 'not_published') {
-                // Nothing to say and nothing to fix from here: the widget goes
-                // away rather than leaving a dead panel on the storefront.
+                // Nothing to fix from here; better gone than a dead panel.
                 closePanel();
                 launcher.hidden = true;
                 return;
               }
               bubble('agent', failureText(failure));
+
+              // Somebody is coming, so no quick-order fallback.
+              if (data && data.takenOver === true) {
+                startListening();
+                return;
+              }
+
               bubbleWithLink(strings.fallback, fallbackUrl, strings.fallbackLink);
               return;
             }

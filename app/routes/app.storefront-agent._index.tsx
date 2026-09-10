@@ -4,15 +4,16 @@ import { useLoaderData } from "@remix-run/react";
 
 import { GuardrailsPage } from "~/components/agent/GuardrailsPage";
 import type { GuardrailsView } from "~/components/agent/types";
-import { db } from "~/db.server";
 import {
   GuardrailValidationError,
   loadGuardrails,
   saveGuardrails,
 } from "~/lib/agent/buyer/guardrails.server";
+import type { PublishStep } from "~/lib/agent/buyer/publish.server";
 import {
   markGuardrailsReviewed,
   NotReadyError,
+  PUBLISH_STEPS,
   publishAgent,
   publishReadiness,
   unpublishAgent,
@@ -36,11 +37,10 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
   withAdmin(request, async () => {
     const url = new URL(request.url);
 
-    const [guardrails, readiness, entitlements, conversations] = await Promise.all([
+    const [guardrails, readiness, entitlements] = await Promise.all([
       loadGuardrails(),
       publishReadiness(),
       loadEntitlements(),
-      db.agentConversation.count(),
     ]);
 
     const entitled = hasFeature(entitlements, "buyer_agent");
@@ -49,10 +49,16 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       view: guardrailsView(guardrails, readiness, {
         entitled,
         requiredPlan: entitled ? null : lowestPlanWithFeature("buyer_agent"),
-        conversations,
         saved: url.searchParams.get("saved") === "1",
         justPublished: url.searchParams.get("published") === "1",
-        refused: url.searchParams.getAll("refused"),
+        // Validated, not passed through: the panel renders
+        // `agent.publish.step.<step>`, so `?refused=nonsense` would print a
+        // raw i18n key to the merchant.
+        refused: url.searchParams
+          .getAll("refused")
+          .filter((step): step is PublishStep =>
+            (PUBLISH_STEPS as readonly string[]).includes(step),
+          ),
         error:
           url.searchParams.get("error") === "instructions"
             ? { field: "customInstructions", code: "too_long" }
@@ -76,6 +82,15 @@ export const action = ({ request }: ActionFunctionArgs) =>
     const form = await request.formData();
     const intent = form.get("intent");
     const actorId = session.id;
+
+    // Server-side, because a disabled button is a courtesy and this route is
+    // one POST away from anybody with a session. Without it a free-plan shop
+    // published successfully and was told its agent was live, while the
+    // storefront answered every turn with 402.
+    const entitlements = await loadEntitlements();
+    if (!hasFeature(entitlements, "buyer_agent")) {
+      return redirect(PAGE);
+    }
 
     if (intent === "save") {
       try {

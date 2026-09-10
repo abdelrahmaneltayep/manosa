@@ -7,6 +7,7 @@ import { expect } from "vitest";
 
 import { dirFor, type Locale } from "~/i18n/config";
 import { createI18n } from "~/i18n/i18next";
+import en from "~/i18n/locales/en.json";
 
 /**
  * Rendering admin screens to HTML so their states can be asserted, and looked at.
@@ -91,28 +92,16 @@ const STYLES = `
  * "applications.reason.met.years_in_business". Invisible to anyone skimming a
  * screenshot, so it is checked on every capture.
  */
-const CATALOG_ROOTS = [
-  "applications",
-  "approval",
-  "customers",
-  "forms",
-  "orders",
-  "limits",
-  "terms",
-  "quotes",
-  "pricing",
-  "describe",
-  "segments",
-  "home",
-  "ask",
-  "po",
-  "plans",
-  "csv",
-  "install",
-  "nav",
-  "error",
-  "scaffold",
-];
+/**
+ * Every top-level key in the English catalogue.
+ *
+ * Derived rather than listed. A hand-written list is a registration step to
+ * forget, and forgetting it switches the guard off for a whole page family
+ * silently — which has now happened twice: 4.2 added `describe` and 5.3 added
+ * `agent`, and in both cases the captures were unchecked until somebody
+ * noticed.
+ */
+const CATALOG_ROOTS = Object.keys(en as Record<string, unknown>);
 
 export function expectNoRawCatalogKeys(html: string, name: string) {
   for (const root of CATALOG_ROOTS) {

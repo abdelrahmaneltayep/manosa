@@ -9,6 +9,7 @@ import { translate } from "~/i18n/translate";
 import {
   readConversation,
   replyAsMerchant,
+  ReplyTooLongError,
   takeOver,
 } from "~/lib/agent/buyer/log.server";
 import { transcriptView } from "~/lib/agent/buyer/view-model.server";
@@ -43,6 +44,7 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
         t: translate(t),
         entitled: hasFeature(entitlements, "buyer_agent"),
         sent: url.searchParams.get("sent") === "1",
+        tooLong: url.searchParams.get("error") === "long",
       }),
     });
   });
@@ -53,6 +55,11 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
     const form = await request.formData();
     const intent = form.get("intent");
     const here = `/app/storefront-agent/log/${id}`;
+
+    // Gated server-side like every other write in this app. Joining a
+    // conversation is a thing the agent's plan pays for.
+    const entitlements = await loadEntitlements();
+    if (!hasFeature(entitlements, "buyer_agent")) return redirect(here);
 
     if (intent === "takeOver") {
       await takeOver(id, session.id);
@@ -65,7 +72,14 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
       // sent and the merchant is back where they were.
       if (text.trim() === "") return redirect(here);
 
-      await replyAsMerchant(id, text, session.id);
+      try {
+        await replyAsMerchant(id, text, session.id);
+      } catch (error) {
+        // Refused rather than silently shortened: a merchant who typed 2,500
+        // characters and saw "Sent" had 500 of them thrown away.
+        if (error instanceof ReplyTooLongError) return redirect(`${here}?error=long`);
+        throw error;
+      }
       return redirect(`${here}?sent=1`);
     }
 

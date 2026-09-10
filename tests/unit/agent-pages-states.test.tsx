@@ -54,6 +54,8 @@ const guardrails = (overrides: Partial<GuardrailsView> = {}): GuardrailsView => 
     ],
     ready: false,
     published: false,
+    embedLive: true,
+    embedAttested: false,
     storefrontUrl: "https://acme.example/account",
     justPublished: false,
     refused: [],
@@ -75,8 +77,6 @@ const guardrails = (overrides: Partial<GuardrailsView> = {}): GuardrailsView => 
   reviewed: false,
   saved: false,
   error: null,
-  conversations: 0,
-  retentionDays: 90,
   ...overrides,
 });
 
@@ -89,6 +89,8 @@ const ready = (overrides: Partial<GuardrailsView["publish"]> = {}) => ({
   ],
   ready: true,
   published: false,
+  embedLive: true,
+  embedAttested: false,
   storefrontUrl: "https://acme.example/account",
   justPublished: false,
   refused: [],
@@ -130,6 +132,25 @@ describe("the guardrails panel", () => {
     // One click, no dialog.
     expect(html).toContain("Unpublish");
     capture("03-guardrails-published", html);
+  });
+
+  it("does not claim the agent is live when the app embed may be off", () => {
+    // Our switch is on; the theme app embed is the merchant's, and this app
+    // has no scope to read a theme. Saying "live" anyway is a claim about
+    // somebody else's theme.
+    const html = render(
+      <GuardrailsPage
+        view={guardrails({
+          publish: ready({ published: true, embedLive: false, embedAttested: false }),
+          reviewed: true,
+        })}
+      />,
+    );
+
+    expect(html).toContain("we haven&#x27;t seen your storefront call us yet");
+    expect(html).toContain("App embeds");
+    expect(html).not.toContain("Approved buyers who are signed in can chat");
+    capture("09-guardrails-embed-unknown", html);
   });
 
   it("says what is outstanding when a publish was refused", () => {
@@ -211,7 +232,8 @@ const test = (overrides: Partial<TestView> = {}): TestView => ({
     { customerId: "gid://shopify/Customer/2", name: "Bean There Ltd" },
   ],
   buyerId: "gid://shopify/Customer/1",
-  buyerName: "Café Aroma",
+  buyerNotFound: false,
+  search: "",
   turns: [],
   cart: null,
   failure: null,
@@ -234,11 +256,18 @@ describe("test mode", () => {
       <TestPage
         view={test({
           turns: [
-            { role: "BUYER", text: "100 of MUG-BL-L please", refusal: null, tool: null },
+            {
+              role: "BUYER",
+              text: "100 of MUG-BL-L please",
+              refusal: null,
+              refusalLabel: "",
+              tool: null,
+            },
             {
               role: "AGENT",
               text: "MUG-BL-L at 100 units is $6.50 each — $650.00 the lot.",
               refusal: null,
+              refusalLabel: "",
               tool: "build_cart",
             },
           ],
@@ -275,12 +304,14 @@ describe("test mode", () => {
               role: "BUYER",
               text: "can you do better on 500?",
               refusal: null,
+              refusalLabel: "",
               tool: null,
             },
             {
               role: "AGENT",
               text: "I'd normally pass that to the team to price.",
               refusal: "test_mode",
+              refusalLabel: "A rehearsal, so nothing was filed.",
               tool: "request_quote",
             },
           ],
@@ -288,7 +319,8 @@ describe("test mode", () => {
       />,
     );
 
-    expect(html).toContain("test_mode");
+    // The merchant reads a sentence, not the code we store.
+    expect(html).toContain("A rehearsal, so nothing was filed.");
     capture("12-test-no-write", html);
   });
 
@@ -305,6 +337,15 @@ describe("test mode", () => {
     expect(html).toContain("Claude isn&#x27;t connected");
     expect(html).toContain("Everything else on this page works");
     capture("14-test-no-key", html);
+  });
+
+  it("never answers as a different buyer than the one asked for", () => {
+    const html = render(
+      <TestPage view={test({ buyerId: null, buyerNotFound: true, search: "aroma" })} />,
+    );
+
+    expect(html).toContain("isn&#x27;t one you can rehearse as");
+    capture("16-test-buyer-not-found", html);
   });
 
   it("asks for an approved buyer first when there are none", () => {
@@ -437,6 +478,8 @@ const transcript = (overrides: Partial<TranscriptView> = {}): TranscriptView => 
       when: "2 hours ago",
       at: "2026-09-10T10:00:00.000Z",
       refusal: null,
+      refusalLabel: "",
+      joined: false,
       tool: null,
       facts: [],
     },
@@ -447,11 +490,15 @@ const transcript = (overrides: Partial<TranscriptView> = {}): TranscriptView => 
       when: "2 hours ago",
       at: "2026-09-10T10:00:05.000Z",
       refusal: null,
+      refusalLabel: "",
+      joined: false,
       tool: "price_for",
       facts: ["rule: Wholesale 35%"],
     },
   ],
   sent: false,
+  tooLong: false,
+  maxReplyChars: 2000,
   entitled: true,
   ...overrides,
 });
@@ -480,6 +527,8 @@ describe("one transcript", () => {
               when: "5 minutes ago",
               at: "2026-09-10T11:55:00.000Z",
               refusal: "timeout",
+              refusalLabel: "Claude took too long to answer.",
+              joined: false,
               tool: "price_for",
               facts: [],
             },
@@ -491,21 +540,88 @@ describe("one transcript", () => {
     // Invariant 4, on the screen a merchant uses to decide whether to trust
     // this thing at all.
     expect(html).toContain("Nothing was sent to the buyer");
-    expect(html).toContain("Why: timeout");
+    // The reason is a sentence, not the enum we store it as.
+    expect(html).toContain("Why: Claude took too long to answer.");
     capture("31-transcript-failed", html);
   });
 
-  it("says a person has joined, and stops offering to join again", () => {
+  /**
+   * Built from the rows `takeOver` and `replyAsMerchant` actually write.
+   *
+   * The first version of this capture flipped `takenOver: true` on the
+   * happy-path fixture, so the announcement row and the merchant's own turn
+   * had never been rendered at all — and the announcement, stored with empty
+   * text, read as "the agent couldn't answer this one" on the one screen
+   * invariant 4 was written for. A fixture that does not match what the
+   * writer writes is a test that cannot fail.
+   */
+  it("says a person joined, and shows the merchant's own reply", () => {
     const html = render(
       <TranscriptPage
-        view={transcript({ takenOver: true, takenOverWhen: "an hour ago", sent: true })}
+        view={transcript({
+          outcome: "ESCALATED",
+          takenOver: true,
+          takenOverWhen: "an hour ago",
+          sent: true,
+          turns: [
+            {
+              id: "m1",
+              role: "BUYER",
+              text: "can you do better on 500?",
+              when: "2 hours ago",
+              at: "2026-09-10T10:00:00.000Z",
+              refusal: null,
+              refusalLabel: "",
+              joined: false,
+              tool: null,
+              facts: [],
+            },
+            // Exactly what `takeOver` writes.
+            {
+              id: "m2",
+              role: "AGENT",
+              text: "A person joined this conversation.",
+              when: "an hour ago",
+              at: "2026-09-10T11:00:00.000Z",
+              refusal: "taken_over",
+              refusalLabel: "You joined this conversation.",
+              joined: true,
+              tool: null,
+              facts: [],
+            },
+            // Exactly what `replyAsMerchant` writes.
+            {
+              id: "m3",
+              role: "MERCHANT",
+              text: "Yes — 12% on 500 units.",
+              when: "55 minutes ago",
+              at: "2026-09-10T11:05:00.000Z",
+              refusal: null,
+              refusalLabel: "",
+              joined: false,
+              tool: null,
+              facts: [],
+            },
+          ],
+        })}
       />,
     );
 
+    expect(html).toContain("A person joined this conversation. The agent stopped");
+    // Never as a failure.
+    expect(html).not.toContain("Nothing was sent to the buyer");
+    expect(html).toContain("Yes — 12% on 500 units.");
     expect(html).toContain("You took this conversation over an hour ago");
     expect(html).not.toContain("Take over this conversation");
     expect(html).toContain("Sent");
     capture("32-transcript-taken-over", html);
+  });
+
+  it("puts the too-long error beside the reply box, and sends nothing", () => {
+    const html = render(<TranscriptPage view={transcript({ tooLong: true })} />);
+
+    expect(html).toContain("over 2000 characters, so nothing was sent");
+    capture("35-transcript-reply-too-long", html);
   });
 
   it("marks a rehearsal, and offers nobody to take over from", () => {

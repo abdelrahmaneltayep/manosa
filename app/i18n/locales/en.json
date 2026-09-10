@@ -2234,7 +2234,10 @@
       "liveBody": "Approved buyers who are signed in can chat with it on your storefront.",
       "visit": "Open your storefront",
       "noDomain": "We don't know your storefront address yet. It will appear here after your next sync.",
-      "unpublish": "Unpublish"
+      "unpublish": "Unpublish",
+      "embedUnknown": "Published here — but we haven't seen your storefront call us yet.",
+      "embedHow": "The Mannon app embed also has to be switched on in your theme editor, under App embeds. If you've just turned it on, this will update the first time a buyer loads a page.",
+      "embedAttested": "You've told us the app embed is on. We'll confirm it the first time a buyer loads a page."
     },
     "abilities": {
       "heading": "What the agent may do",
@@ -2362,11 +2365,13 @@
       "takeOverHelp": "The agent stops answering and tells the buyer a person has joined. This can't be undone.",
       "takenOver": "You took this conversation over {{when}}. The agent is no longer answering it.",
       "replyLabel": "Reply as yourself",
-      "replyHelp": "Sending a reply takes the conversation over, whether or not you used the button.",
+      "replyHelp": "Sending a reply takes the conversation over, whether or not you used the button. Up to {{max}} characters.",
       "send": "Send",
       "sent": "Sent",
       "testBody": "This was your own test conversation. Nothing in it was sent to a buyer, and nothing was created.",
-      "testNoTakeOver": "There's nobody to take over from — this was your own test conversation."
+      "testNoTakeOver": "There's nobody to take over from — this was your own test conversation.",
+      "joined": "A person joined this conversation. The agent stopped answering here.",
+      "tooLong": "That's over {{max}} characters, so nothing was sent. Shorten it and send again."
     },
     "test": {
       "heading": "Test mode",
@@ -2394,7 +2399,29 @@
       "cartUnit": "Unit price",
       "cartTotal": "Line total",
       "cartSubtotal": "Subtotal {{total}}",
-      "cartNote": "A test cart. Nothing was added to anyone's basket."
+      "cartNote": "A test cart. Nothing was added to anyone's basket.",
+      "buyerNotFound": "That buyer isn't one you can rehearse as — they may have been removed, or their approval withdrawn. Pick one below.",
+      "searchLabel": "Find a buyer",
+      "searchAction": "Search"
+    },
+    "refusal": {
+      "taken_over": "You joined this conversation.",
+      "test_mode": "A rehearsal, so nothing was filed.",
+      "off_limits": "A subject you put off limits.",
+      "declined": "Outside what the agent answers.",
+      "nothing_matched": "None of those SKUs are in your catalogue.",
+      "cart_off": "Building carts is switched off.",
+      "quote_off": "Quote requests are switched off.",
+      "orders_off": "Reading order status is switched off.",
+      "terms_off": "Reading payment terms is switched off.",
+      "sign_in": "The buyer wasn't signed in.",
+      "no_key": "Claude isn't connected.",
+      "timeout": "Claude took too long to answer.",
+      "rate_limited": "Claude was rate-limited.",
+      "refused": "Claude declined to answer.",
+      "invalid_output": "Claude's answer came back in a shape we couldn't use.",
+      "error": "Something went wrong reaching Claude.",
+      "invented_figure": "The reply stated a figure this app hadn't computed, so it was thrown away."
     }
   }
 }

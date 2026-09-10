@@ -109,9 +109,18 @@ function Toolbar({ view }: { view: LogView }) {
         </s-stack>
       </form>
 
-      <s-link href="/app/storefront-agent/log/export">{t("agent.log.export")}</s-link>
+      <s-link href={exportHref(view)}>{t("agent.log.export")}</s-link>
     </s-stack>
   );
+}
+
+/** Export what the toolbar is filtered to, not everything. */
+function exportHref(view: LogView): string {
+  const params = new URLSearchParams();
+  if (view.filters.search) params.set("search", view.filters.search);
+  if (view.filters.outcome) params.set("outcome", view.filters.outcome);
+  const query = params.toString();
+  return `/app/storefront-agent/log/export${query ? `?${query}` : ""}`;
 }
 
 function LogTable({ view }: { view: LogView }) {

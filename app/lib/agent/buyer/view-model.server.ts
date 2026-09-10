@@ -19,8 +19,9 @@ import {
   TONES,
 } from "~/lib/agent/buyer/guardrails.server";
 import type { LogPage } from "~/lib/agent/buyer/log.server";
-import { OUTCOMES } from "~/lib/agent/buyer/log.server";
+import { MAX_REPLY_CHARS, OUTCOMES } from "~/lib/agent/buyer/log.server";
 import type { PublishReadiness } from "~/lib/agent/buyer/publish.server";
+import { isToolName } from "~/lib/agent/buyer/tools.server";
 import { displayName } from "~/lib/customers/view-model.server";
 
 /**
@@ -32,15 +33,63 @@ import { displayName } from "~/lib/customers/view-model.server";
  * publish button is live — is a decision.
  */
 
-/** Approved buyers, for the rehearsal picker. */
-export async function testBuyers(t: Translate, limit = 50): Promise<TestBuyerView[]> {
+/** How many approved buyers the rehearsal picker lists at once. */
+export const TEST_BUYER_PAGE = 50;
+
+/**
+ * Approved buyers, for the rehearsal picker.
+ *
+ * Searchable, because a shop with two hundred approved buyers cannot rehearse
+ * as most of them from a list of fifty — and the id the merchant asks for is
+ * resolved separately (`approvedBuyer` below) rather than being looked for in
+ * this window. Falling back to the first name in a truncated list meant
+ * `?buyer=<a genuinely approved id>` answering as somebody else, with somebody
+ * else's prices and terms, saying nothing.
+ */
+export async function testBuyers(
+  t: Translate,
+  options: { search?: string | null; limit?: number } = {},
+): Promise<TestBuyerView[]> {
+  const search = options.search?.trim();
+
   const rows = await db.customer.findMany({
-    where: { status: "APPROVED", deletedInShopifyAt: null },
+    where: {
+      status: "APPROVED",
+      deletedInShopifyAt: null,
+      ...(search
+        ? {
+            OR: [
+              { company: { contains: search, mode: "insensitive" as const } },
+              { email: { contains: search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    },
     orderBy: { company: "asc" },
-    take: limit,
+    take: options.limit ?? TEST_BUYER_PAGE,
   });
 
   return rows.map((row) => ({ customerId: row.customerId, name: displayName(row, t) }));
+}
+
+/**
+ * The buyer the merchant asked to rehearse as, if they may.
+ *
+ * Resolved by id against this shop's approved buyers rather than against
+ * whatever page of them the picker happens to be showing. A customer id in a
+ * query string is not proof of anything, and this screen reads a buyer's terms
+ * and order history — so it is checked, and a miss is a miss rather than a
+ * substitution.
+ */
+export async function approvedBuyer(
+  customerId: string,
+  t: Translate,
+): Promise<TestBuyerView | null> {
+  const row = await db.customer.findFirst({
+    where: { customerId, status: "APPROVED", deletedInShopifyAt: null },
+  });
+
+  return row ? { customerId: row.customerId, name: displayName(row, t) } : null;
 }
 
 export function guardrailsView(
@@ -49,7 +98,6 @@ export function guardrailsView(
   options: {
     entitled: boolean;
     requiredPlan: string | null;
-    conversations: number;
     saved?: boolean;
     justPublished?: boolean;
     refused?: string[];
@@ -65,6 +113,8 @@ export function guardrailsView(
       items: readiness.items.map((item) => ({ ...item })),
       ready: readiness.ready,
       published: readiness.published,
+      embedLive: readiness.embed.live,
+      embedAttested: readiness.embed.attested,
       storefrontUrl: readiness.storefrontUrl,
       justPublished: options.justPublished === true,
       refused: options.refused ?? [],
@@ -89,8 +139,6 @@ export function guardrailsView(
     reviewed: guardrails.reviewedAt !== null,
     saved: options.saved === true,
     error: options.error ?? null,
-    conversations: options.conversations,
-    retentionDays: CONVERSATION_RETENTION_DAYS,
   };
 }
 
@@ -155,7 +203,11 @@ export function toolFacts(toolCalls: unknown): { tool: string | null; facts: str
   }
 
   const record = toolCalls as Record<string, unknown>;
-  const tool = typeof record.tool === "string" ? record.tool : null;
+  // Only a tool this version knows: the transcript renders
+  // `agent.tool.<tool>`, so a row written by a later version with a new tool
+  // name would print a raw catalogue key to the merchant.
+  const tool =
+    typeof record.tool === "string" && isToolName(record.tool) ? record.tool : null;
   const facts = Array.isArray(record.facts)
     ? record.facts.filter((fact): fact is string => typeof fact === "string")
     : [];
@@ -170,9 +222,35 @@ export function toolFacts(toolCalls: unknown): { tool: string | null; facts: str
   };
 }
 
+/**
+ * A refusal code, as a sentence.
+ *
+ * The column holds a machine's word — `quote_off`, `off_limits: supplier`,
+ * `invented_figure` — and a merchant reading their own log should not have to
+ * learn our vocabulary. Anything the catalogue does not know is shown as
+ * itself rather than as a raw key, because a code we cannot explain is still
+ * more use than nothing.
+ */
+export function refusalLabel(refusal: string | null, t: Translate): string {
+  if (!refusal) return "";
+
+  // Some carry a subject: "off_limits: our supplier".
+  const [code = "", ...rest] = refusal.split(":");
+  const subject = rest.join(":").trim();
+  const key = `agent.refusal.${code.trim()}`;
+  const sentence = t(key);
+
+  if (sentence === key) return refusal;
+  return subject ? `${sentence} (${subject})` : sentence;
+}
+
+/** The row `takeOver` writes to record that a person joined. */
+const isJoinMarker = (message: Pick<AgentMessage, "role" | "refusal">) =>
+  message.role === "AGENT" && message.refusal === "taken_over";
+
 export function transcriptTurnView(
   message: AgentMessage,
-  options: { now: Date; locale: string },
+  options: { now: Date; locale: string; t: Translate },
 ): TranscriptTurnView {
   const { tool, facts } = toolFacts(message.toolCalls);
 
@@ -183,6 +261,8 @@ export function transcriptTurnView(
     when: whenLabel(message.createdAt, options.now, options.locale),
     at: message.createdAt.toISOString(),
     refusal: message.refusal,
+    refusalLabel: refusalLabel(message.refusal, options.t),
+    joined: isJoinMarker(message),
     tool,
     facts,
   };
@@ -196,6 +276,7 @@ export function transcriptView(
     t: Translate;
     entitled: boolean;
     sent?: boolean;
+    tooLong?: boolean;
   },
 ): TranscriptView {
   const { conversation } = transcript;
@@ -213,6 +294,8 @@ export function transcriptView(
       : null,
     turns: transcript.messages.map((message) => transcriptTurnView(message, options)),
     sent: options.sent === true,
+    tooLong: options.tooLong === true,
+    maxReplyChars: MAX_REPLY_CHARS,
     entitled: options.entitled,
   };
 }

@@ -80,22 +80,48 @@ function Chat({ view }: { view: TestView }) {
   return (
     <>
       <s-section heading={t("agent.test.buyerHeading")}>
-        <form method="get">
-          <s-stack direction="inline" gap="small" alignItems="end">
-            <s-select
-              name="buyer"
-              label={t("agent.test.buyerLabel")}
-              value={view.buyerId ?? ""}
-            >
-              {view.buyers.map((buyer) => (
-                <s-option key={buyer.customerId} value={buyer.customerId}>
-                  {buyer.name}
-                </s-option>
-              ))}
-            </s-select>
-            <s-button type="submit">{t("agent.test.choose")}</s-button>
-          </s-stack>
-        </form>
+        <s-stack direction="block" gap="base">
+          {view.buyerNotFound ? (
+            // Never silently answered as somebody else: this screen reads a
+            // buyer's terms and order history.
+            <s-banner tone="warning">
+              <s-paragraph>{t("agent.test.buyerNotFound")}</s-paragraph>
+            </s-banner>
+          ) : null}
+
+          {/* A shop with more approved buyers than the picker lists still has
+              to be able to reach all of them. */}
+          <form method="get">
+            <s-stack direction="inline" gap="small" alignItems="end">
+              <s-search-field
+                name="search"
+                label={t("agent.test.searchLabel")}
+                value={view.search}
+              />
+              <s-button type="submit">{t("agent.test.searchAction")}</s-button>
+            </s-stack>
+          </form>
+
+          <form method="get">
+            {view.search ? (
+              <input type="hidden" name="search" value={view.search} />
+            ) : null}
+            <s-stack direction="inline" gap="small" alignItems="end">
+              <s-select
+                name="buyer"
+                label={t("agent.test.buyerLabel")}
+                value={view.buyerId ?? ""}
+              >
+                {view.buyers.map((buyer) => (
+                  <s-option key={buyer.customerId} value={buyer.customerId}>
+                    {buyer.name}
+                  </s-option>
+                ))}
+              </s-select>
+              <s-button type="submit">{t("agent.test.choose")}</s-button>
+            </s-stack>
+          </form>
+        </s-stack>
       </s-section>
 
       <s-section heading={t("agent.test.conversationHeading")}>
@@ -169,7 +195,7 @@ function Turn({ turn }: { turn: TestTurnView }) {
         )}
         {turn.refusal ? (
           <s-text color="subdued">
-            {t("agent.transcript.refusal", { reason: turn.refusal })}
+            {t("agent.transcript.refusal", { reason: turn.refusalLabel })}
           </s-text>
         ) : null}
       </s-stack>

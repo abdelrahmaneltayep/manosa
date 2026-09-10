@@ -19,6 +19,15 @@ export interface PublishView {
   items: PublishItemView[];
   ready: boolean;
   published: boolean;
+  /**
+   * Whether we have seen the theme app embed actually serve a buyer.
+   *
+   * "Published" is our switch; the embed is the merchant's, in the theme
+   * editor. Saying "the agent is live" without this is a claim about somebody
+   * else's theme that this app cannot make.
+   */
+  embedLive: boolean;
+  embedAttested: boolean;
   /** Where a buyer meets it. Null when the shop's domain is not known yet. */
   storefrontUrl: string | null;
   /** True on the request that just published, for the confirmation. */
@@ -63,9 +72,6 @@ export interface GuardrailsView {
   saved: boolean;
   /** Field and reason, beside the field, never auto-dismissed. */
   error: { field: string; code: string } | null;
-  /** How many conversations there are, so the panel can link to the log. */
-  conversations: number;
-  retentionDays: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -73,8 +79,10 @@ export interface GuardrailsView {
 export interface TestTurnView {
   role: "BUYER" | "AGENT" | "MERCHANT";
   text: string;
-  /** Why it refused, when it did. Shown to the merchant, never to a buyer. */
+  /** The stored code, for tests and for the raw record. */
   refusal: string | null;
+  /** The same thing as a sentence, in the merchant's language. */
+  refusalLabel: string;
   tool: string | null;
 }
 
@@ -93,7 +101,10 @@ export interface TestView {
   /** Approved buyers whose context the merchant may rehearse against. */
   buyers: TestBuyerView[];
   buyerId: string | null;
-  buyerName: string | null;
+  /** The merchant asked for a buyer this shop cannot rehearse as. */
+  buyerNotFound: boolean;
+  /** What narrowed the picker, echoed back. */
+  search: string;
   turns: TestTurnView[];
   cart: { lines: TestCartLineView[]; subtotal: string } | null;
   /** Why the last turn could not be answered. */
@@ -141,6 +152,10 @@ export interface TranscriptTurnView {
   at: string;
   /** Why the agent refused or failed. The log's whole reason for existing. */
   refusal: string | null;
+  /** The same thing as a sentence, in the merchant's language. */
+  refusalLabel: string;
+  /** True for the row that records a person joining the conversation. */
+  joined: boolean;
   /** Which tool ran, and what it computed — "why did it say that?". */
   tool: string | null;
   facts: string[];
@@ -157,5 +172,8 @@ export interface TranscriptView {
   turns: TranscriptTurnView[];
   /** Set after the merchant's own message went in. */
   sent: boolean;
+  /** The reply was longer than `MAX_REPLY_CHARS` and was not sent. */
+  tooLong: boolean;
+  maxReplyChars: number;
   entitled: boolean;
 }

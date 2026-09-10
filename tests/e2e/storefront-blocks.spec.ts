@@ -677,6 +677,56 @@ test.describe("the Buyer Agent widget", () => {
     await expect(page.locator("[data-mannon-launch]")).toBeHidden();
   });
 
+  test("shows what a person said after taking the conversation over", async ({
+    page,
+  }) => {
+    // The POST answers "a person has joined"; the GET is what the widget then
+    // polls. Before this path existed, "Take over" wrote a reply the buyer
+    // could never see, under a string promising they would.
+    const stub = `
+      window.fetch = function (url, options) {
+        var settings = options || {};
+        window.__mannonRecord(
+          String(url),
+          settings.method || 'GET',
+          typeof settings.body === 'string' ? settings.body : ''
+        );
+        var body = String(url).indexOf('?conversation=') !== -1
+          ? { ok: true, takenOver: true, turns: [
+              { id: 'm1', role: 'MERCHANT', text: 'Yes — 12% on 500 units.', at: '' }
+            ] }
+          : { ok: false, failure: 'taken_over', conversationId: 'c1', takenOver: true };
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: function () { return Promise.resolve(body); }
+        });
+      };`;
+
+    await load(page, agentBlock(), stub, "51-agent-taken-over");
+    await ask(page, "can you do better on 500?");
+
+    await expect(page.locator("[data-mannon-log]")).toContainText(
+      "Someone from the team has joined",
+    );
+    // The merchant's own words, on the buyer's screen.
+    await expect(page.locator("[data-mannon-log]")).toContainText(
+      "Yes — 12% on 500 units.",
+    );
+    // And not the quick-order fallback: somebody is coming.
+    await expect(page.locator("[data-mannon-log]")).not.toContainText("quick order form");
+    await shot(page, "51-agent-taken-over");
+  });
+
+  test("asks for nothing until a person joins", async ({ page }) => {
+    const calls = await load(page, agentBlock(), proxyStub(ANSWERED), "52-agent-quiet");
+    await ask(page, "what's my price?");
+
+    // A conversation nobody took over costs this block one request, not a
+    // poll every ten seconds for as long as the panel is open.
+    expect(calls.filter((call) => call.method === "GET")).toHaveLength(0);
+  });
+
   test("closes on Escape, and comes back", async ({ page }) => {
     await load(page, agentBlock(), proxyStub(ANSWERED), "48-agent-escape");
     await page.click("[data-mannon-launch]");

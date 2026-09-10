@@ -1,0 +1,74 @@
+import { describe, it } from "vitest";
+
+import { TranscriptPage } from "~/components/agent/TranscriptPage";
+import { transcriptTurnView, transcriptView } from "~/lib/agent/buyer/view-model.server";
+import type { AgentConversation, AgentMessage } from "@prisma/client";
+import { createCaptureHarness } from "../support/state-capture";
+
+const NOW = new Date("2026-09-10T12:00:00Z");
+
+const message = (o: Partial<AgentMessage>): AgentMessage =>
+  ({
+    id: "m",
+    shop: "alpha.myshopify.com",
+    conversationId: "c1",
+    role: "AGENT",
+    text: "",
+    toolCalls: null,
+    refusal: null,
+    aiModel: null,
+    aiPromptVersion: null,
+    aiRequestId: null,
+    createdAt: new Date("2026-09-10T11:00:00Z"),
+    ...o,
+  }) as AgentMessage;
+
+describe("PROBE M — how a real taken-over transcript renders", () => {
+  it("prints the rows the state captures never built", async () => {
+    const harness = await createCaptureHarness({
+      title: "probe",
+      outFor: () => "/tmp/never",
+      dirs: [],
+    });
+
+    const conversation = {
+      id: "c1",
+      shop: "alpha.myshopify.com",
+      customerId: "gid://shopify/Customer/77",
+      guestKey: null,
+      company: "Café Aroma",
+      locale: "en",
+      outcome: "ESCALATED",
+      testMode: false,
+      closedAt: null,
+      takenOverAt: new Date("2026-09-10T11:00:00Z"),
+      takenOverBy: "staff-1",
+      startedAt: new Date("2026-09-10T10:00:00Z"),
+      lastMessageAt: new Date("2026-09-10T11:05:00Z"),
+    } as unknown as AgentConversation;
+
+    // Exactly what takeOver() writes, then what replyAsMerchant() writes.
+    const messages = [
+      message({ id: "m1", role: "BUYER", text: "can you do better on 500?" }),
+      message({ id: "m2", role: "AGENT", text: "", refusal: "taken_over" }),
+      message({
+        id: "m3",
+        role: "MERCHANT",
+        text: "Yes — 12% on 500 units.",
+        createdAt: new Date("2026-09-10T11:05:00Z"),
+      }),
+    ];
+
+    const view = transcriptView(
+      { conversation, messages },
+      { now: NOW, locale: "en", t: ((k: string) => k) as never, entitled: true },
+    );
+    console.log("M turn views:", JSON.stringify(view.turns, null, 1));
+
+    const html = harness.render(<TranscriptPage view={view} />);
+    const text = String(html).replace(/<[^>]+>/g, "|").replace(/\|+/g, "|");
+    console.log("M raw length:", String(html).length);
+    console.log("M rendered:", text);
+    console.log("M toolFacts of a taken-over row:", JSON.stringify(transcriptTurnView(messages[1]!, { now: NOW, locale: "en" })));
+  });
+});

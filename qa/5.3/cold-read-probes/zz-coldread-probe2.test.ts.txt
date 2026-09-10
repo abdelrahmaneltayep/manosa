@@ -1,0 +1,205 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { db } from "~/db.server";
+import {
+  listConversations,
+  readConversation,
+  replyAsMerchant,
+  takeOver,
+  exportConversations,
+} from "~/lib/agent/buyer/log.server";
+import { closeRehearsal, currentRehearsal } from "~/lib/agent/buyer/rehearsal.server";
+import { publishReadiness, markGuardrailsReviewed } from "~/lib/agent/buyer/publish.server";
+import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
+import { resetDatabase } from "../support/db";
+
+const ALPHA = "alpha.myshopify.com";
+const BETA = "beta.myshopify.com";
+const inAlpha = <T>(fn: () => Promise<T>) => shopScope.run(ALPHA, fn);
+const inBeta = <T>(fn: () => Promise<T>) => shopScope.run(BETA, fn);
+const NOW = new Date("2026-09-10T12:00:00Z");
+const BUYER_ID = "gid://shopify/Customer/77";
+
+async function installShop(shop: string) {
+  await shopScope.run(shop, () =>
+    db.shop.create({
+      data: {
+        ...tenant(),
+        planKey: "agentic",
+        billingStatus: "ACTIVE",
+        currencyCode: "USD",
+        primaryLocale: "en",
+      },
+    }),
+  );
+}
+
+beforeEach(async () => {
+  await resetDatabase();
+  vi.restoreAllMocks();
+});
+afterAll(async () => {
+  await resetDatabase();
+});
+
+async function alphaConversation(overrides: Record<string, unknown> = {}) {
+  return inAlpha(async () => {
+    const row = await db.agentConversation.create({
+      data: {
+        ...tenant(),
+        customerId: BUYER_ID,
+        company: "Acme Ltd",
+        outcome: "ANSWERED",
+        startedAt: NOW,
+        lastMessageAt: NOW,
+        ...overrides,
+      },
+    });
+    await db.agentMessage.create({
+      data: {
+        ...tenant(),
+        conversationId: row.id,
+        role: "BUYER",
+        text: "what's my price for MUG at 100?",
+        createdAt: NOW,
+      },
+    });
+    return row;
+  });
+}
+
+describe("PROBE G — cross-tenant on every new surface", () => {
+  it("fails closed for read, take over, reply, close and export", async () => {
+    await installShop(ALPHA);
+    await installShop(BETA);
+    const row = await alphaConversation();
+
+    const read = await inBeta(() => readConversation(row.id));
+    console.log("G readConversation from beta:", read);
+
+    let takeOverStatus = "no throw";
+    await inBeta(() => takeOver(row.id, "beta-staff")).catch((e: unknown) => {
+      takeOverStatus = e instanceof Response ? `Response ${e.status}` : String(e);
+    });
+    console.log("G takeOver from beta:", takeOverStatus);
+
+    let replyStatus = "no throw";
+    await inBeta(() => replyAsMerchant(row.id, "hello", "beta-staff")).catch((e: unknown) => {
+      replyStatus = e instanceof Response ? `Response ${e.status}` : String(e);
+    });
+    console.log("G replyAsMerchant from beta:", replyStatus);
+
+    const betaList = await inBeta(() => listConversations());
+    console.log("G beta list rows:", betaList.rows.length, "neverAny:", betaList.neverAny);
+
+    const betaCsv = await inBeta(() => exportConversations());
+    console.log("G beta csv:", JSON.stringify(betaCsv));
+
+    await inBeta(() => closeRehearsal(BUYER_ID));
+    const stillOpen = await inAlpha(() => db.agentConversation.findUnique({ where: { id: row.id } }));
+    console.log("G alpha row closedAt after beta closeRehearsal:", stillOpen?.closedAt);
+
+    const betaReadiness = await inBeta(() => publishReadiness());
+    console.log("G beta readiness items:", JSON.stringify(betaReadiness.items));
+
+    expect(read).toBeNull();
+    expect(takeOverStatus).toBe("Response 404");
+    expect(replyStatus).toBe("Response 404");
+    expect(betaList.rows).toHaveLength(0);
+    expect(stillOpen?.closedAt).toBeNull();
+  });
+});
+
+describe("PROBE H — two staff press Take over at the same instant", () => {
+  it("announces the human twice", async () => {
+    await installShop(ALPHA);
+    const row = await alphaConversation();
+
+    await Promise.all([
+      inAlpha(() => takeOver(row.id, "staff-1")).catch((e: unknown) => String(e)),
+      inAlpha(() => takeOver(row.id, "staff-2")).catch((e: unknown) => String(e)),
+    ]);
+
+    const announcements = await inAlpha(() =>
+      db.agentMessage.findMany({ where: { conversationId: row.id, refusal: "taken_over" } }),
+    );
+    console.log("H announcements:", announcements.length);
+    const audits = await inAlpha(() =>
+      db.auditLog.count({ where: { action: "agent.taken_over" } }),
+    );
+    console.log("H audit entries:", audits);
+  });
+});
+
+describe("PROBE I — a long merchant reply is silently truncated", () => {
+  it("stores 2000 chars of a 2500-char reply and says 'Sent'", async () => {
+    await installShop(ALPHA);
+    const row = await alphaConversation();
+    const long = "x".repeat(2_500);
+    await inAlpha(() => replyAsMerchant(row.id, long, "staff-1"));
+    const stored = await inAlpha(() =>
+      db.agentMessage.findFirst({ where: { conversationId: row.id, role: "MERCHANT" } }),
+    );
+    console.log("I typed:", long.length, "stored:", stored?.text.length);
+    expect(stored?.text.length).toBe(2_000);
+  });
+});
+
+describe("PROBE J — paging past the end", () => {
+  it("shows the 'nothing matched your filters' state on page 9 of 1", async () => {
+    await installShop(ALPHA);
+    await alphaConversation();
+    const page = await inAlpha(() => listConversations({ page: 9 }));
+    console.log("J:", JSON.stringify({ rows: page.rows.length, total: page.total, page: page.page, pageCount: page.pageCount, neverAny: page.neverAny }));
+    expect(page.rows).toHaveLength(0);
+  });
+});
+
+describe("PROBE K — the rehearsal that ticked the box is purged, the agent stays live", () => {
+  it("un-ticks item 4 after retention while published stays true", async () => {
+    await installShop(ALPHA);
+    await inAlpha(async () => {
+      await markGuardrailsReviewed("staff-1");
+      await db.agentConversation.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          testMode: true,
+          outcome: "ANSWERED",
+          startedAt: NOW,
+          lastMessageAt: NOW,
+        },
+      });
+    });
+    const before = await inAlpha(() => publishReadiness());
+    await inAlpha(() => db.agentConversation.deleteMany({ where: { testMode: true } }));
+    const after = await inAlpha(() => publishReadiness());
+    console.log(
+      "K test item before:",
+      before.items.find((i) => i.step === "test")?.done,
+      "after purge:",
+      after.items.find((i) => i.step === "test")?.done,
+    );
+  });
+});
+
+describe("PROBE L — a rehearsal against a buyer who is no longer approved", () => {
+  it("still answers, because answerBuyerTurn skips the approval gate in test mode", async () => {
+    await installShop(ALPHA);
+    const open = await inAlpha(async () => {
+      await db.customer.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          email: "buyer@acme.test",
+          company: "Acme Ltd",
+          status: "PENDING",
+          tags: [],
+          currencyCode: "USD",
+        },
+      });
+      return currentRehearsal(BUYER_ID, NOW);
+    });
+    console.log("L current rehearsal for a pending buyer:", open);
+  });
+});

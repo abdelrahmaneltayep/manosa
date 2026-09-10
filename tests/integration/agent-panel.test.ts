@@ -6,10 +6,13 @@ import { resetAnthropicClient, type MessagesApi } from "~/lib/ai/client.server";
 import {
   exportConversations,
   listConversations,
+  MAX_REPLY_CHARS,
   readConversation,
   replyAsMerchant,
+  ReplyTooLongError,
   takeOver,
 } from "~/lib/agent/buyer/log.server";
+import { messagesForBuyer, overTurnLimit } from "~/lib/agent/buyer/conversation.server";
 import { loadGuardrails, saveGuardrails } from "~/lib/agent/buyer/guardrails.server";
 import {
   markGuardrailsReviewed,
@@ -180,7 +183,7 @@ async function makeReady() {
   await seedBuyer();
   await createRule(wholesaleRule(35), { admin: fakeAdmin(), actor });
   await markGuardrailsReviewed("staff-1");
-  await db.agentConversation.create({
+  const rehearsal = await db.agentConversation.create({
     data: {
       ...tenant(),
       customerId: BUYER_ID,
@@ -191,7 +194,35 @@ async function makeReady() {
       lastMessageAt: NOW,
     },
   });
+  // The evidence the item actually asks for: a turn Claude answered. An
+  // outcome alone can be reached by a scripted decline with no key at all.
+  await db.agentMessage.create({
+    data: {
+      ...tenant(),
+      conversationId: rehearsal.id,
+      role: "AGENT",
+      text: "You're on net 30 days.",
+      aiModel: "claude-sonnet-4-5",
+      createdAt: NOW,
+    },
+  });
 }
+
+/**
+ * This shop's agent is live.
+ *
+ * Written straight onto the row rather than through a production path:
+ * publishing is gated on a four-item checklist that `publishAgent` re-checks,
+ * and satisfying all four is noise in a test about what the agent *says*.
+ * A fixture that says "assume it is published" says exactly that.
+ */
+const goLive = () =>
+  loadGuardrails().then((guardrails) =>
+    db.agentGuardrails.update({
+      where: { shop: guardrails.shop },
+      data: { published: true, publishedAt: new Date() },
+    }),
+  );
 
 beforeEach(async () => {
   await resetDatabase();
@@ -424,7 +455,7 @@ describe("a rehearsal", () => {
 
     await inAlpha(async () => {
       await seedBuyer();
-      await saveGuardrails({ published: true }, "staff-1");
+      await goLive();
 
       const deps = {
         messages: conversationStub([routed("decline"), written("I can't help there.")]),
@@ -493,7 +524,7 @@ describe("a rehearsal", () => {
     });
   });
 
-  it("ticks the publish checklist only once one has been answered", async () => {
+  it("does not tick the publish checklist for a decline the model wrote nothing for", async () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
@@ -514,7 +545,9 @@ describe("a rehearsal", () => {
         },
       );
 
-      expect(await rehearsalCompleted()).toBe(true);
+      // A decline is scripted from the catalogue — the writer is never called,
+      // so nothing here is evidence that this agent can answer a buyer.
+      expect(await rehearsalCompleted()).toBe(false);
     });
   });
 
@@ -549,7 +582,10 @@ describe("a rehearsal", () => {
         now: NOW,
       });
 
-      expect(view.buyerId).toBe("gid://shopify/Customer/1");
+      // Not substituted with α's own first buyer either: the merchant named a
+      // buyer, and the honest answer is that this shop has no such buyer.
+      expect(view.buyerNotFound).toBe(true);
+      expect(view.buyerId).toBeNull();
       expect(view.buyers.map((buyer) => buyer.customerId)).not.toContain(BUYER_ID);
     });
   });
@@ -713,7 +749,7 @@ describe("taking over", () => {
 
     await inAlpha(async () => {
       await seedBuyer();
-      await saveGuardrails({ published: true }, "staff-1");
+      await goLive();
       const row = await conversation();
       await takeOver(row.id, "staff-1");
 
@@ -811,7 +847,7 @@ describe("the CSV export", () => {
       return exportConversations();
     });
 
-    const [header, line] = csv.split("\n");
+    const [header, line] = csv.csv.split("\n");
     expect(header).toContain("test");
     expect(line).toContain('"yes"');
     expect(line).toContain(`"'=HYPERLINK`);
@@ -827,9 +863,389 @@ describe("the CSV export", () => {
 
     await inAlpha(async () => {
       await seedConversations(1, { company: "Alpha Buyer" });
-      const csv = await exportConversations();
+      const { csv } = await exportConversations();
       expect(csv).toContain("Alpha Buyer");
       expect(csv).not.toContain("Beta Buyer");
+    });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Regressions from the cold read                                              */
+/* -------------------------------------------------------------------------- */
+
+describe("a merchant's reply reaches the buyer", () => {
+  it("comes back on the buyer's own thread, and the marker does not", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const row = await db.agentConversation.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          company: "Acme Ltd",
+          outcome: "ANSWERED",
+          startedAt: NOW,
+          lastMessageAt: NOW,
+        },
+      });
+
+      await takeOver(row.id, "staff-1");
+      await replyAsMerchant(row.id, "Yes — 12% on 500 units.", "staff-1");
+
+      const { takenOver, turns } = await messagesForBuyer({
+        conversationId: row.id,
+        customerId: BUYER_ID,
+      });
+
+      // Before this existed, "Take over" wrote into a table with no way out:
+      // the widget told the buyer a person would reply here, and nothing could
+      // ever appear.
+      expect(takenOver).toBe(true);
+      expect(turns.map((turn) => turn.text)).toEqual(["Yes — 12% on 500 units."]);
+      expect(turns[0]?.role).toBe("MERCHANT");
+    });
+  });
+
+  it("returns only what is new when asked for what is new", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const row = await db.agentConversation.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          startedAt: NOW,
+          lastMessageAt: NOW,
+        },
+      });
+
+      await replyAsMerchant(row.id, "first", "staff-1");
+      const first = await messagesForBuyer({
+        conversationId: row.id,
+        customerId: BUYER_ID,
+      });
+
+      await replyAsMerchant(row.id, "second", "staff-1");
+      const since = await messagesForBuyer({
+        conversationId: row.id,
+        customerId: BUYER_ID,
+        afterId: first.turns[0]!.id,
+      });
+
+      expect(since.turns.map((turn) => turn.text)).toEqual(["second"]);
+    });
+  });
+
+  it("is another buyer's thread, and reads as empty", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const row = await db.agentConversation.create({
+        data: { ...tenant(), customerId: BUYER_ID, startedAt: NOW, lastMessageAt: NOW },
+      });
+      await replyAsMerchant(row.id, "commercially sensitive", "staff-1");
+
+      // The customer id comes from the App Proxy's signature. Somebody else's
+      // signature must not open this thread.
+      const seen = await messagesForBuyer({
+        conversationId: row.id,
+        customerId: "gid://shopify/Customer/999",
+      });
+
+      expect(seen.turns).toEqual([]);
+      expect(seen.takenOver).toBe(false);
+    });
+  });
+
+  it("does not hand a rehearsal back to the buyer it imitates", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const row = await db.agentConversation.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          testMode: true,
+          startedAt: NOW,
+          lastMessageAt: NOW,
+        },
+      });
+      await db.agentMessage.create({
+        data: {
+          ...tenant(),
+          conversationId: row.id,
+          role: "AGENT",
+          text: "a rehearsal answer",
+          createdAt: NOW,
+        },
+      });
+
+      const seen = await messagesForBuyer({
+        conversationId: row.id,
+        customerId: BUYER_ID,
+      });
+      expect(seen.turns).toEqual([]);
+    });
+  });
+});
+
+describe("the rehearsal does not spend the buyer's ceiling", () => {
+  it("counts a rehearsal separately from a real conversation", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const deps = {
+        messages: conversationStub([routed("decline"), written("I can't help there.")]),
+      };
+
+      for (let turn = 0; turn < 3; turn += 1) {
+        await answerBuyerTurn(
+          {
+            message: `rehearsal ${turn}`,
+            customerId: BUYER_ID,
+            locale: "en",
+            admin: fakeAdmin(),
+            now: NOW,
+            testMode: true,
+          },
+          deps,
+        );
+      }
+
+      // The buyer asked nothing. Telling them they had asked a lot of
+      // questions is the failure this guards.
+      expect(await overTurnLimit({ customerId: BUYER_ID }, { now: NOW, limit: 2 })).toBe(
+        false,
+      );
+      expect(
+        await overTurnLimit(
+          { customerId: BUYER_ID },
+          { now: NOW, limit: 2, testMode: true },
+        ),
+      ).toBe(true);
+    });
+  });
+});
+
+describe("the fourth publish item", () => {
+  it("does not tick on a scripted decline the model never saw", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      await saveGuardrails({ offLimits: ["supplier"] }, "staff-1");
+
+      const create = vi.fn(async () => reply("{}"));
+      await answerBuyerTurn(
+        {
+          message: "who is your supplier?",
+          customerId: BUYER_ID,
+          locale: "en",
+          admin: fakeAdmin(),
+          now: NOW,
+          testMode: true,
+        },
+        { messages: stub(create) },
+      );
+
+      // An off-limits subject is declined from a script, before either model
+      // call. A shop with no API key at all could otherwise satisfy this item
+      // and then fail every real buyer turn with `no_key`.
+      expect(create).not.toHaveBeenCalled();
+      expect(await rehearsalCompleted()).toBe(false);
+      expect(outstanding(await publishReadiness())).toContain("test");
+    });
+  });
+
+  it("ticks on a rehearsal Claude actually answered", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      await answerBuyerTurn(
+        {
+          message: "what are my terms?",
+          customerId: BUYER_ID,
+          locale: "en",
+          admin: fakeAdmin(),
+          now: NOW,
+          testMode: true,
+        },
+        {
+          messages: conversationStub([
+            routed("my_terms"),
+            written("You owe {{owed}} across {{invoices}} invoices."),
+          ]),
+        },
+      );
+
+      expect(await rehearsalCompleted()).toBe(true);
+    });
+  });
+});
+
+describe("taking over, under pressure", () => {
+  it("announces once when two presses land together", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      const row = await db.agentConversation.create({
+        data: { ...tenant(), customerId: BUYER_ID, startedAt: NOW, lastMessageAt: NOW },
+      });
+
+      // A double-click, or a retried request. The read-then-write this
+      // replaced announced twice and audited twice.
+      await Promise.all([takeOver(row.id, "staff-1"), takeOver(row.id, "staff-2")]);
+
+      expect(await db.agentMessage.count({ where: { conversationId: row.id } })).toBe(1);
+      expect(await db.auditLog.count({ where: { action: "agent.taken_over" } })).toBe(1);
+    });
+  });
+
+  it("does not rewrite what the log says happened", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      const row = await db.agentConversation.create({
+        data: {
+          ...tenant(),
+          customerId: BUYER_ID,
+          outcome: "CART",
+          startedAt: NOW,
+          lastMessageAt: NOW,
+        },
+      });
+
+      await takeOver(row.id, "staff-1");
+
+      // The strongest thing that happened wins. A conversation that built a
+      // cart and was then answered by a person still built a cart.
+      const after = await db.agentConversation.findUnique({ where: { id: row.id } });
+      expect(after?.outcome).toBe("CART");
+      expect(after?.takenOverAt).not.toBeNull();
+    });
+  });
+
+  it("refuses a reply longer than the cap rather than shortening it", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      const row = await db.agentConversation.create({
+        data: { ...tenant(), customerId: BUYER_ID, startedAt: NOW, lastMessageAt: NOW },
+      });
+
+      await expect(
+        replyAsMerchant(row.id, "x".repeat(MAX_REPLY_CHARS + 1), "staff-1"),
+      ).rejects.toBeInstanceOf(ReplyTooLongError);
+      expect(await db.agentMessage.count()).toBe(0);
+    });
+  });
+});
+
+describe("the export", () => {
+  it("carries the filters the merchant had on", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedConversations(1, { company: "Café Aroma", outcome: "CART" });
+      await seedConversations(1, { company: "Bean There", outcome: "ANSWERED" });
+
+      const { csv } = await exportConversations({ outcome: "CART", search: null });
+      expect(csv).toContain("Café Aroma");
+      // A link inside a filter toolbar that exports everything reads as a
+      // filtered export and is not one.
+      expect(csv).not.toContain("Bean There");
+    });
+  });
+
+  it("says so when it hit its ceiling", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedConversations(3);
+      const bounded = await exportConversations();
+      expect(bounded.truncated).toBe(false);
+      expect(bounded.rows).toBe(3);
+    });
+  });
+});
+
+describe("the rehearsal picker", () => {
+  it("resolves a buyer by id, not by whether they are on the current page", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      for (let index = 0; index < 3; index += 1) {
+        await db.customer.create({
+          data: {
+            ...tenant(),
+            customerId: `gid://shopify/Customer/${index}`,
+            email: `buyer${index}@acme.test`,
+            company: `Buyer ${index}`,
+            status: "APPROVED",
+            currencyCode: "USD",
+          },
+        });
+      }
+
+      const view = await rehearsalView({
+        t,
+        entitled: true,
+        requiredPlan: null,
+        buyerId: "gid://shopify/Customer/2",
+        hasKey: true,
+        now: NOW,
+      });
+
+      expect(view.buyerId).toBe("gid://shopify/Customer/2");
+      expect(view.buyerNotFound).toBe(false);
+    });
+  });
+
+  it("says so rather than answering as somebody else", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+
+      const view = await rehearsalView({
+        t,
+        entitled: true,
+        requiredPlan: null,
+        buyerId: "gid://shopify/Customer/does-not-exist",
+        hasKey: true,
+        now: NOW,
+      });
+
+      // Substituting silently meant reading a *different* buyer's terms and
+      // order history than the one the merchant named.
+      expect(view.buyerNotFound).toBe(true);
+      expect(view.buyerId).toBeNull();
+    });
+  });
+
+  it("will not rehearse as a buyer whose approval was withdrawn", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer({ status: "PENDING" });
+
+      const view = await rehearsalView({
+        t,
+        entitled: true,
+        requiredPlan: null,
+        buyerId: BUYER_ID,
+        hasKey: true,
+        now: NOW,
+      });
+
+      expect(view.buyerNotFound).toBe(true);
     });
   });
 });
