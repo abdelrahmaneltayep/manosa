@@ -171,6 +171,7 @@ const context = (overrides: Partial<ToolContext> = {}): ToolContext => ({
   currencyCode: "USD",
   locale: "en",
   now: NOW,
+  testMode: false,
   abilities: {
     canBuildCart: true,
     canRequestQuote: true,

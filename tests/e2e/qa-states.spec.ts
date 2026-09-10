@@ -165,6 +165,10 @@ test.describe("Merchant Agent, Ask bar and PO-to-order states", () => {
   captureSuite("4.4");
 });
 
+test.describe("Buyer Agent guardrails, test mode and conversation states", () => {
+  captureSuite("5.3");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)

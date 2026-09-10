@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T19:00:00Z
-Current milestone: 4 — Claude
-Current task: 5.3 Guardrails panel, conversation log, publish flow [next]
+Updated: 2026-09-10T19:45:00Z
+Current milestone: 5 — The Buyer Agent
+Current task: 5.3 Guardrails panel, conversation log, publish flow [in progress — own gate clean, cold read running]
 
 ## Done
 
@@ -27,12 +27,13 @@ Current task: 5.3 Guardrails panel, conversation log, publish flow [next]
 - [x] 4.5 Home assembled: KPI cards, setup checklist, activity log, ✦ Setup Wizard — commits `ef73ee3` + `5ca4e1d` — QA: `qa/4.5/REPORT.md` (cold read returned FAIL on 15 findings incl. 3 P0s; all fixed, gate re-run clean — `qa/4.5/COLD-READ.md`)
 - [x] 5.1 ✦ Buyer Agent server: guardrails, closed tool vocabulary, one turn — commits `47db22b` + `b86ea2b` — QA: `qa/5.1/REPORT.md` (cold read returned FAIL; the price guard was replaced, not patched — `qa/5.1/COLD-READ.md`)
 - [x] 5.2 Buyer Agent chat widget (theme app block), Arabic storefront locale — commit `d2b49f2` — QA: in `qa/3.4/` captures 40–50
+- [~] 5.3 Guardrails panel, test mode, conversation log, publish flow — QA: `qa/5.3/REPORT.md` (own gate clean: 1,823 unit+integration, 350 e2e; 3 bugs found and fixed). **Cold read pending.**
 
 ## Next up
 
-- 5.3 guardrails panel, conversation log, publish flow — **starts with an error
-  boundary in `withProxy`**: a throw from the Admin API is currently a bare 500
-  on every storefront endpoint, and can orphan a `NEW` quote
+- Fix whatever `qa/5.3/COLD-READ.md` returns, then commit the fix round
+- 5.2 has one unfinished piece: the widget's greeting is personalised by name
+  only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
 - 6.1–6.3 Analytics, Settings, polish · 7.1–7.3 Release
 
 ## Blocked

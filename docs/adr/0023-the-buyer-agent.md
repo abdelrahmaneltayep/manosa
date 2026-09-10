@@ -122,3 +122,67 @@ first conversation rather than from whenever somebody opens the admin.
 - The widget, the guardrails panel and the conversation log are 5.2 and 5.3.
   Until then the agent is unpublished by default and reachable only by a signed
   proxy request, which is the correct state for something with no UI.
+
+---
+
+## Addendum (phase 5.3): the three screens
+
+### The pre-publish checklist is a gate, not a nudge
+
+Four items, and `publishAgent` re-checks all four before it flips the switch —
+the disabled button is a courtesy, and the screen is one POST away from anybody
+with a session. Three are answered by a query (an **active** rule, an
+**approved** buyer, a rehearsal the agent actually **answered**), the way the
+setup checklist answers its six: a checklist that ticks on the existence of a
+row rather than on the state of it lies to the merchant about whether they are
+ready.
+
+The fourth cannot be a query. Nothing can tell whether a person read a page, so
+"guardrails reviewed" is the merchant saying they did, recorded with a
+timestamp, from a button deliberately separate from Save — a box that ticks
+itself whenever somebody presses Save is answering a different question.
+
+Unpublishing has no gate and no dialog. The checklist says "no confirm-shaming"
+and it is right: a merchant switching this off is usually doing it because
+something is wrong, and a confirmation is a sentence they read while it is
+still talking to their customers.
+
+### Test mode is a real conversation with the writes removed
+
+`answerBuyerTurn` takes `testMode`, and it changes exactly two things: an
+unpublished agent answers (rehearsing before publishing is the whole point of
+the fourth checklist item), and the two tools that write — `request_quote` and
+`escalate` — file nothing. Both **say so** in the reply rather than silently
+no-oping, because `refusal` is a fact the writer prompt is given: the merchant
+reads "I'd normally pass that on", not a quote number that does not exist.
+
+Everything else is identical, against a **real** buyer's context — their tags,
+their group, their rules, their terms. A rehearsal against an invented buyer
+proves nothing about the prices this agent will quote, which is the only
+question a rehearsal is for.
+
+A rehearsal is stored in the log like any other conversation, flagged
+`testMode`, and labelled on every surface it appears on: the row, the
+transcript, and a column in the CSV. A merchant reading their own test as a
+buyer's conversation is exactly what invariant 4 is about.
+
+### Closed, not deleted, not back-dated
+
+"Start a fresh test" needed a way to stop `openConversation` continuing the
+existing thread. `AgentConversation.closedAt` does it. The two alternatives were
+both worse: deleting the rehearsal loses evidence the merchant may want after
+changing a guardrail (and unticks the publish checklist), and moving
+`lastMessageAt` out of the idle window puts a lie in a column that the log then
+reports as fact.
+
+### Taking over is one-way, and replying is taking over
+
+The agent announces the human in the buyer's own thread, so "actually, never
+mind" would mean a buyer who was told a person had joined going back to talking
+to a model. Pressing it twice announces once. Sending a reply takes the
+conversation over whether or not the button was used first — the alternative is
+the agent answering over a person mid-thread.
+
+Neither is offered on a rehearsal: there is nobody on the other end to hand to,
+and `takeOver` and `replyAsMerchant` both refuse one rather than relying on the
+screen to hide the buttons.

@@ -8,6 +8,41 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — Test mode rehearses against a real buyer and writes nothing
+
+Checklist §6 asks for a merchant who "chats as a simulated buyer (pick any real
+buyer's context)". So a rehearsal is an ordinary conversation with `testMode`
+set: the same tools, the same rules, the same prices, and the two tools that
+write — `request_quote` and `escalate` — skipped and *said out loud* in the
+reply rather than silently no-oped. An unpublished agent answers in test mode,
+because rehearsing before publishing is the entire point of the fourth
+pre-publish item. Rejected: a simulated buyer built from made-up attributes (it
+proves nothing about the prices this agent will actually quote), and letting the
+writes happen "because it is only a test" (a panel that quietly files a real
+quote request teaches the merchant it is safe to press right up until the day it
+is not).
+
+## 2026-09-10 — A finished conversation is closed, never deleted or back-dated
+
+"Start a fresh test" needed some way to stop `openConversation` continuing the
+existing thread. Adding `AgentConversation.closedAt` was chosen over the two
+alternatives: deleting the old rehearsal (it is evidence the merchant may want
+to read back after changing a guardrail, and deleting it would untick the
+publish checklist), and moving `lastMessageAt` outside the idle window (a lie in
+a column, and the log would then misreport when the conversation happened).
+
+## 2026-09-10 — "Guardrails reviewed" is the merchant's word, with a timestamp
+
+Three of the four pre-publish items are answered by a query, the way the setup
+checklist answers its six. The fourth cannot be: no query knows whether somebody
+read a page. So `reviewedAt` records the merchant saying they did, from a button
+that is deliberately separate from Save — a box that ticks itself whenever
+somebody presses Save is answering a different question. Rejected: inferring it
+from a page view (a checklist that ticks itself off when you look at a screen is
+a checklist that lies), and dropping the item (it is the one thing on the list
+that is about the merchant having made a decision rather than about the shop
+having data).
+
 ## 2026-09-10 — The Buyer Agent's reply may only repeat figures the engine computed
 
 Checklist §6 asks for it twice — "the agent can never invent a price", "prices

@@ -171,6 +171,15 @@ export interface ToolContext {
   currencyCode: string;
   locale: string;
   now: Date;
+  /**
+   * A merchant rehearsing, not a buyer shopping.
+   *
+   * Every read works exactly as it does for a buyer — that is the point of a
+   * rehearsal — and every **write** is skipped and said out loud. A test that
+   * quietly files a real quote request would teach the merchant that the panel
+   * is safe to press right up until the day it is not.
+   */
+  testMode: boolean;
   abilities: {
     canBuildCart: boolean;
     canRequestQuote: boolean;
@@ -546,6 +555,10 @@ function breakQuantities(from: number): number[] {
 async function escalate(call: ToolCall, context: ToolContext): Promise<ToolResult> {
   const who = context.company ?? context.email ?? context.customerId ?? "A visitor";
 
+  if (context.testMode) {
+    return { ...empty("escalate"), refusal: "test_mode", facts: ["escalated"] };
+  }
+
   await recordAudit({
     actor: { type: "BUYER_AGENT", label: "Claude" },
     action: "agent.escalated",
@@ -571,6 +584,12 @@ async function requestQuote(call: ToolCall, context: ToolContext): Promise<ToolR
   if (!context.customerId) {
     return { ...empty("request_quote"), refusal: "sign_in" };
   }
+  // The one tool that writes, so the one tool a rehearsal must not run. The
+  // reply says a quote was not filed rather than naming a number that is not
+  // there: invariant 4 applies to the merchant reading their own test too.
+  if (context.testMode) {
+    return { ...empty("request_quote"), refusal: "test_mode", facts: ["would_quote"] };
+  }
 
   const quote = await createQuote(
     {
@@ -586,7 +605,20 @@ async function requestQuote(call: ToolCall, context: ToolContext): Promise<ToolR
   // Lines the buyer named are attached unpriced-by-the-agent: `draftQuote`
   // prices them through the engine, and the merchant sees what we would charge
   // before deciding what they will.
-  const { lines } = await priceLines(call.lines, context);
+  //
+  // Priced *after* the quote exists, and failing softly: a catalogue lookup
+  // that throws must not leave the buyer's request lost. A `NEW` quote with
+  // the buyer's own words on it is exactly what the merchant needs to answer;
+  // an exception here would have deleted that and told the buyer nothing.
+  const { lines } = await priceLines(call.lines, context).catch((error: unknown) => {
+    console.error(
+      `[mannon] could not price a Buyer Agent quote request: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return { lines: [] as PricedToolLine[] };
+  });
+
   if (lines.length > 0) {
     await draftQuote(
       quote.id,
@@ -605,7 +637,15 @@ async function requestQuote(call: ToolCall, context: ToolContext): Promise<ToolR
         })),
       },
       { actor: { type: "BUYER_AGENT", label: "Claude" }, now: context.now },
-    );
+    ).catch((error: unknown) => {
+      // Same reasoning: the request stands even when the pricing of it does
+      // not. The merchant prices a `NEW` quote by hand every day.
+      console.error(
+        `[mannon] could not draft a Buyer Agent quote request: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
   }
 
   return {

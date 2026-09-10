@@ -1360,6 +1360,11 @@ model AgentGuardrails {
   /// Subjects the agent declines rather than answers, one per line.
   offLimits String[]
 
+  /// When the merchant last said "I have read these". One of the four things
+  /// the pre-publish checklist asks for, and the reason it can ask: a default
+  /// nobody looked at is not a guardrail anybody chose.
+  reviewedAt DateTime?
+
   updatedAt DateTime @updatedAt
   updatedBy String?
 }
@@ -1385,6 +1390,17 @@ model AgentConversation {
 
   /// Starts at FAILED: a conversation is only "answered" once one turn was.
   outcome AgentOutcome @default(FAILED)
+
+  /// A merchant rehearsing against a real buyer's context. Nothing it does
+  /// writes: no quote is filed, no escalation is recorded. Flagged on the row
+  /// rather than inferred, so the log can never read a rehearsal as a buyer.
+  testMode Boolean @default(false)
+
+  /// Set when this thread is finished on purpose — today, a merchant asking
+  /// for a fresh rehearsal. A closed conversation is never continued, so the
+  /// next message opens a new one, and nothing is deleted or back-dated to
+  /// make that happen.
+  closedAt DateTime?
 
   /// Set when a merchant takes the conversation over. The agent stops
   /// answering from this moment and says a person has joined.

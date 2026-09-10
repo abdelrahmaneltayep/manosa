@@ -81,6 +81,15 @@ export interface TurnInput {
   locale: string;
   admin: AdminGraphql;
   now?: Date;
+  /**
+   * The merchant rehearsing from the guardrails panel.
+   *
+   * Two differences, both deliberate: an unpublished agent answers (rehearsing
+   * before publishing is the whole point), and every tool that writes is
+   * skipped. Nothing else changes — the same rules, the same prices, the same
+   * refusals, against a real buyer's real context.
+   */
+  testMode?: boolean;
 }
 
 const failed = (
@@ -124,12 +133,13 @@ export async function answerBuyerTurn(
   // Every gate that does not need a conversation is checked before one exists.
   // An unpublished shop, a visitor who is not a buyer and an empty POST used to
   // mint a row each, which is a table anyone could fill from the outside.
-  if (!guardrails.published) return failed("", "not_published");
+  const testMode = input.testMode === true;
+  if (!guardrails.published && !testMode) return failed("", "not_published");
 
   // A signed-out visitor, or one whose application has not been approved, is
   // not a wholesale buyer — and this agent knows nothing else.
   const approved = buyer?.status === "APPROVED";
-  if (!approved && !guardrails.guestMode) return failed("", "guest");
+  if (!approved && !guardrails.guestMode && !testMode) return failed("", "guest");
 
   if (message === "") return failed("", "empty");
 
@@ -138,6 +148,7 @@ export async function answerBuyerTurn(
     guestKey: input.guestKey ?? null,
     company: buyer?.company ?? null,
     locale: input.locale,
+    testMode,
     now,
   });
 
@@ -219,6 +230,7 @@ export async function answerBuyerTurn(
     currencyCode,
     locale: input.locale,
     now,
+    testMode,
     abilities: {
       canBuildCart: guardrails.canBuildCart,
       canRequestQuote: guardrails.canRequestQuote,

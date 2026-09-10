@@ -170,6 +170,24 @@ export async function withProxy<T>(
       });
     }
 
-    return handler(context);
+    try {
+      return await handler(context);
+    } catch (error) {
+      // A `Response` is a decision this app made — a 404, a 402, a 401 — and
+      // it goes out as written.
+      if (error instanceof Response) throw error;
+
+      // Anything else is Shopify's Admin API, or a bug. Either way a buyer
+      // standing on the merchant's storefront gets a sentence rather than a
+      // stack trace, and the operator gets the detail in the log. Without this
+      // a throw mid-handler was a bare 500 on every block, and could leave a
+      // half-written row behind with nothing said about it.
+      console.error(
+        `[mannon] proxy handler failed for ${context.shop}: ${
+          error instanceof Error ? (error.stack ?? error.message) : String(error)
+        }`,
+      );
+      throw new Response("Something went wrong", { status: 502 });
+    }
   });
 }

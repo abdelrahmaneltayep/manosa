@@ -43,6 +43,8 @@ export async function openConversation(options: {
   guestKey?: string | null;
   company: string | null;
   locale: string;
+  /** A merchant rehearsing from the panel, not a buyer on the storefront. */
+  testMode?: boolean;
   now?: Date;
 }): Promise<AgentConversation> {
   const now = options.now ?? new Date();
@@ -54,12 +56,19 @@ export async function openConversation(options: {
   // A guest gets a thread too. Without one, every message from a signed-out
   // visitor started a new conversation — which is both a useless log and a
   // rate limit with nothing to count.
+  // A rehearsal and a real conversation with the same buyer never join: the
+  // log would then hold one thread that is half test and half not, and no chip
+  // can honestly label that.
+  const testMode = options.testMode === true;
+
   const existing = key
     ? await db.agentConversation.findFirst({
         where: {
           ...(options.customerId
             ? { customerId: options.customerId }
             : { customerId: null, guestKey: options.guestKey }),
+          testMode,
+          closedAt: null,
           lastMessageAt: { gte: since },
         },
         orderBy: { lastMessageAt: "desc" },
@@ -75,6 +84,7 @@ export async function openConversation(options: {
       guestKey: options.customerId ? null : (options.guestKey ?? null),
       company: options.company,
       locale: options.locale,
+      testMode,
       startedAt: now,
       lastMessageAt: now,
     },
