@@ -23,7 +23,7 @@ Current task: 4.5 Home page assembled, Setup Wizard [in progress — 4.4's fix r
 - [x] 4.1 AI infrastructure: client, streaming, timeouts, audit hooks — commit `b8136b5` — QA: `qa/4.1/REPORT.md`
 - [x] 4.2 Rule-from-a-sentence, margin guard — commit `d45f02b` — QA: `qa/4.2/REPORT.md`
 - [x] 4.3 Screening, drafted emails, segments, CSV whisperer — commit `be3c6d0` — QA: `qa/4.3/REPORT.md`
-- [x] 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order — commits `b073b74` + fix round — QA: `qa/4.4/REPORT.md` (cold read returned FAIL on 17 findings; all fixed, gate re-run clean)
+- [x] 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order — commits `b073b74` + `e05190b` — QA: `qa/4.4/REPORT.md` (cold read returned FAIL on 17 findings; all fixed, gate re-run clean)
 
 ## Next up
 
