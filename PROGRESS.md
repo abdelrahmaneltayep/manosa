@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T18:20:00Z
+Updated: 2026-09-10T19:00:00Z
 Current milestone: 4 — Claude
-Current task: 5.2 Buyer Agent chat widget (theme app block) [next]
+Current task: 5.3 Guardrails panel, conversation log, publish flow [next]
 
 ## Done
 
@@ -25,11 +25,14 @@ Current task: 5.2 Buyer Agent chat widget (theme app block) [next]
 - [x] 4.3 Screening, drafted emails, segments, CSV whisperer — commit `be3c6d0` — QA: `qa/4.3/REPORT.md`
 - [x] 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order — commits `b073b74` + `e05190b` — QA: `qa/4.4/REPORT.md` (cold read returned FAIL on 17 findings; all fixed, gate re-run clean)
 - [x] 4.5 Home assembled: KPI cards, setup checklist, activity log, ✦ Setup Wizard — commits `ef73ee3` + `5ca4e1d` — QA: `qa/4.5/REPORT.md` (cold read returned FAIL on 15 findings incl. 3 P0s; all fixed, gate re-run clean — `qa/4.5/COLD-READ.md`)
-- [x] 5.1 ✦ Buyer Agent server: guardrails, closed tool vocabulary, one turn — QA: `qa/5.1/REPORT.md` (no cold read yet)
+- [x] 5.1 ✦ Buyer Agent server: guardrails, closed tool vocabulary, one turn — commits `47db22b` + `b86ea2b` — QA: `qa/5.1/REPORT.md` (cold read returned FAIL; the price guard was replaced, not patched — `qa/5.1/COLD-READ.md`)
+- [x] 5.2 Buyer Agent chat widget (theme app block), Arabic storefront locale — commit `d2b49f2` — QA: in `qa/3.4/` captures 40–50
 
 ## Next up
 
-- 5.2 Buyer Agent chat widget (theme app block) · 5.3 guardrails panel, conversation log, publish flow
+- 5.3 guardrails panel, conversation log, publish flow — **starts with an error
+  boundary in `withProxy`**: a throw from the Admin API is currently a bare 500
+  on every storefront endpoint, and can orphan a `NEW` quote
 - 6.1–6.3 Analytics, Settings, polish · 7.1–7.3 Release
 
 ## Blocked
@@ -209,11 +212,17 @@ Neither is blocking; both would change product decisions if answered.
   (twice), a pluralised key called without `count`, and — new in 3.1 — a
   machine-readable code that ends in a plural suffix (`increment_below_two`),
   which i18next reads as Arabic `_two`.
-- **Run the `qa-engineer` cold read on every task, and run it before committing.**
-  4.4 and 4.5 both passed the author's own seven-step gate and both came back
-  FAIL — 4.5 with three P0s, including a headline feature that did not work for
-  three ordinary inputs. The gate finds what the author thought to check; the
-  cold read finds what they did not. 5.1 has not had one yet.
+- **Run the `qa-engineer` cold read on every task.** 4.4, 4.5 and 5.1 all passed
+  the author's own seven-step gate and all three came back FAIL. 4.5's headline
+  feature did not work for three ordinary inputs; 5.1's price guard — the one
+  rule the spec states twice — was blind in five shapes and refused the two
+  flows the spec leads with. The gate finds what the author thought to check.
+- **A guard that pattern-matches free text is the wrong shape.** The Buyer
+  Agent's first price check scanned replies for money. `\d` is ASCII-only in
+  JavaScript even under `/u`, so Arabic was invisible to it. The fix was not a
+  better pattern: the model now writes `{{f1}}` and this app substitutes. When
+  a check has to be right in every locale, do not let the model produce the
+  thing being checked.
 - **A test fixture that sets a column the production writer never sets is a
   test that cannot fail.** 4.5's KPI fixture hand-set `Order.createdAt`, which
   `rowData()` leaves to its default — so a query reading the wrong column
