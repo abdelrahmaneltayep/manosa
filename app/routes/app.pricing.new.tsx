@@ -45,6 +45,22 @@ export const action = ({ request }: ActionFunctionArgs) =>
     const parsed = parseRuleForm(form, { currencyCode });
     const duplicate = await findDuplicateName(parsed.rule.name);
 
+    if (form.get("intent") === "prefill") {
+      // ✦ Describe a rule hands its draft to the builder, filled in. Nothing is
+      // saved: the merchant lands on the same form, one Save from the same
+      // validation and the same audit entry as a rule they typed themselves.
+      return json({
+        view: {
+          form: { ...emptyFormView(currencyCode), ...formEcho(form, currencyCode) },
+          issues: parsed.issues,
+          duplicateName: duplicate?.name ?? null,
+          preview: previewFor(parsed.rule, currencyCode, now),
+          conflict: null,
+          saving: false,
+        } satisfies RuleBuilderView,
+      });
+    }
+
     if (parsed.issues.length > 0) {
       // Come back with what they typed, errors beside the fields that caused
       // them. Losing a half-built rule to a validation error is unforgivable.

@@ -385,3 +385,77 @@ describe("tenant isolation", () => {
     expect(row.archivedAt).toBeNull();
   });
 });
+
+/* -------------------------------------------------------------------------- */
+
+describe("a rule Claude drafted", () => {
+  const provenance = {
+    ai: { model: "claude-sonnet-4-5", promptVersion: "1", requestId: "msg_01test" },
+    approvedById: "staff-1",
+    metadata: { sentence: "Buy 10 get 5%", approvedAnyway: false },
+  };
+
+  it("records who approved it, and what they were shown", async () => {
+    await installShop(ALPHA);
+    const created = await inAlpha(() => createRule(rule(), { ...ctx(), provenance }));
+
+    const entry = await inAlpha(() =>
+      db.auditLog.findFirstOrThrow({
+        where: { action: "pricing_rule.created", subjectId: created.id },
+      }),
+    );
+
+    expect(entry.aiAssisted).toBe(true);
+    expect(entry.approvedById).toBe("staff-1");
+    expect(entry.approvedAt).not.toBeNull();
+    expect(entry.aiModel).toBe("claude-sonnet-4-5");
+    expect(entry.aiRequestId).toBe("msg_01test");
+    // The prompt that made it, kept with the rule it made — checklist §2.
+    expect(entry.metadata).toMatchObject({ sentence: "Buy 10 get 5%" });
+  });
+
+  it("is an ordinary rule once approved: same validation, same publish", async () => {
+    await installShop(ALPHA);
+    const context = { ...ctx(), provenance };
+    const created = await inAlpha(() => createRule(rule(), context));
+
+    expect(created.status).toBe("ACTIVE");
+    expect(context.admin.calls.some((query) => query.includes("metafieldsSet"))).toBe(
+      true,
+    );
+  });
+
+  it("refuses to record an approval nobody gave", async () => {
+    await installShop(ALPHA);
+
+    await expect(
+      inAlpha(() =>
+        createRule(rule(), {
+          ...ctx(),
+          // The compiler stops this at every call site in the app; this proves
+          // the runtime refuses it too, because the invariant is the point.
+          provenance: { ...provenance, approvedById: "" },
+        }),
+      ),
+    ).rejects.toThrow(/aiAssisted/);
+
+    // And leaves no rule behind: a live price nobody approved is exactly what
+    // the refusal exists to prevent.
+    expect(await inAlpha(() => db.pricingRule.count())).toBe(0);
+  });
+
+  it("leaves a hand-built rule unmarked", async () => {
+    await installShop(ALPHA);
+    const created = await inAlpha(() => createRule(rule(), ctx()));
+
+    const entry = await inAlpha(() =>
+      db.auditLog.findFirstOrThrow({
+        where: { action: "pricing_rule.created", subjectId: created.id },
+      }),
+    );
+
+    expect(entry.aiAssisted).toBe(false);
+    expect(entry.approvedById).toBeNull();
+    expect(entry.aiModel).toBeNull();
+  });
+});

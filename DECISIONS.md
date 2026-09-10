@@ -8,6 +8,67 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — The ✦ composer does not stream, and the margin guard is not AI
+
+Checklist §2 lists "streaming draft (tiers appear as chips one by one)" as a
+state. It does not ship. Streaming into the admin needs client JavaScript in a
+page family that is deliberately props-only — every admin screen is a pure
+function of its view, which is the only reason any of their states can be
+exercised in an environment with no Polaris and no Shopify session. Adding a
+live channel to one page would cost that, to animate an answer that arrives in
+a few seconds anyway. `streamText` stays for the agents (4.4, 5.x), where the
+transport is already a live channel. Flagged as a user-visible difference: a
+merchant sees a working state, not chips appearing one at a time.
+
+Separately, `margin_guard` was removed from `AI_FEATURES`. The guard is
+arithmetic over real prices and real costs — `guardMargins` in the pricing
+engine — and appendix B says the model never computes what a module can. The
+closed list of AI features stays honest about where Claude is actually asked
+something. Rejected: an AI "second opinion" on the numbers, which would be a
+verdict a merchant cannot audit.
+
+## 2026-09-10 — The draft card is ✦ and indigo, not terracotta
+
+`feature-checklist.md` §2 says the draft-for-review card has a "terracotta
+border", and `states-research.md` says "terracotta ✦ accent". `brand.md` §2
+lists the whole palette — indigo primary, lime accent only, "never a large
+fill" — and has no terracotta in it. A spec contradiction; the brand document
+wins on colour, and Polaris web components expose tones rather than arbitrary
+borders, so a custom border would mean custom CSS that app review rejects. The
+draft is marked the way brand.md §5 asks: the ✦ glyph, an info-toned card, and
+the trust line verbatim in spirit — "✦ Drafted by Claude · review it before it
+goes live. You approve it, not the AI."
+
+## 2026-09-10 — Claude drafts targeting by collection, never by product
+
+The model may target `all` or `collections`. Products and variants are targeted
+by id, and a 10,000-product catalogue cannot be put in a prompt to pick from —
+so a sentence naming specific products drafts against everything and says so in
+its notes, and the merchant narrows it in the builder with the draft filled in.
+Rejected: a product search step before drafting (two round trips before the
+merchant sees anything), and letting the model name products for a fuzzy title
+match (a wrong match prices the wrong product at the right discount, which is
+the failure nobody notices).
+
+## 2026-09-10 — Rule-from-a-sentence is not plan-gated
+
+No `FeatureKey` gates it. The free plan's one-rule limit already decides what
+can be approved, and the composer says so before drafting rather than after.
+Rejected: gating it behind Growth like `merchant_agent` — the spec puts
+rule-from-a-sentence in the Pricing page's own feature list, and a merchant who
+cannot try the thing the product is sold on will not buy the plan that unlocks
+it.
+
+## 2026-09-10 — The draft lives in a hidden field, not in a table
+
+A merchant either approves a draft or leaves. Persisting every abandoned one
+means a retention policy, a cleanup job and a second place a half-made rule can
+be found. Everything in the envelope is re-read defensively and re-derived on
+every round trip, including the approve, so it carries no more authority than
+the builder's own form fields. Rejected: a `RuleDraft` table (a migration and a
+retention job for something nobody asked to keep) and a signed cookie (same
+storage question, smaller ceiling).
+
 ## 2026-09-10 — The model stays `claude-sonnet-4-5`, behind one setting (flagged)
 
 `CLAUDE.md` and the spec name `claude-sonnet-4-5`. It is a previous-generation

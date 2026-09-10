@@ -122,23 +122,37 @@ const forDateInput = (value: Date | null) =>
   value ? value.toISOString().slice(0, 10) : "";
 
 export function toFormView(row: PricingRuleRow, currencyCode: string): RuleFormView {
-  const rule = toEngineRule(row);
-  const targets = row.targets as Record<string, string[] | undefined>;
-  const audience = row.audience as Record<string, string[] | undefined>;
-  const markets = row.markets as { mode?: string; marketIds?: string[] };
-  const lines = (list: string[] | undefined) => (list ?? []).join("\n");
+  return formViewFromRule(toEngineRule(row), {
+    id: row.id,
+    version: row.version,
+    currencyCode,
+  });
+}
 
+/**
+ * An engine rule → the builder's fields.
+ *
+ * Shared by the edit page and by ✦ Describe a rule's "Edit" button, which
+ * hands a drafted rule to the manual builder pre-filled. One conversion, so a
+ * draft and a saved rule cannot render as two different forms.
+ */
+export function formViewFromRule(
+  rule: PricingRule,
+  options: { id?: string | null; version?: number; currencyCode: string },
+): RuleFormView {
+  const { currencyCode } = options;
+  const lines = (list: string[] | undefined) => (list ?? []).join("\n");
   const money = (value: { amount: number; currencyCode: string } | undefined) =>
     value ? formatMoney(value) : "";
 
   return {
-    id: row.id,
-    version: row.version,
-    name: row.name,
-    status: statusFromDb(row.status),
-    kind: kindFromDb(row.kind),
-    priority: row.priority,
-    combinable: row.combinable,
+    id: options.id ?? null,
+    version: options.version ?? 1,
+    name: rule.name,
+    status: rule.status,
+    kind: rule.kind,
+    priority: rule.priority,
+    combinable: rule.combinable,
     percentage:
       rule.kind === "percentage"
         ? String(rule.value.percentage)
@@ -163,19 +177,19 @@ export function toFormView(row: PricingRuleRow, currencyCode: string): RuleFormV
                 : formatMoney(tier.amount),
           }))
         : [],
-    targetMode: String(targets.mode ?? "all"),
-    targetCollectionIds: lines(targets.collectionIds),
-    targetProductIds: lines(targets.productIds),
-    targetVariantIds: lines(targets.variantIds),
-    excludeCollectionIds: lines(targets.excludeCollectionIds),
-    audienceMode: String(audience.mode ?? "all"),
-    audienceTags: lines(audience.tags),
-    audienceCustomerIds: lines(audience.customerIds),
-    audienceCompanyIds: lines(audience.companyIds),
-    marketMode: markets.mode ?? "all",
-    marketIds: (markets.marketIds ?? []).join("\n"),
-    startsAt: forDateInput(row.startsAt),
-    endsAt: forDateInput(row.endsAt),
+    targetMode: rule.targets.mode,
+    targetCollectionIds: lines(rule.targets.collectionIds),
+    targetProductIds: lines(rule.targets.productIds),
+    targetVariantIds: lines(rule.targets.variantIds),
+    excludeCollectionIds: lines(rule.targets.excludeCollectionIds),
+    audienceMode: rule.audience.mode,
+    audienceTags: lines(rule.audience.tags),
+    audienceCustomerIds: lines(rule.audience.customerIds),
+    audienceCompanyIds: lines(rule.audience.companyIds),
+    marketMode: rule.markets.mode,
+    marketIds: rule.markets.marketIds.join("\n"),
+    startsAt: forDateInput(rule.schedule.startsAt ?? null),
+    endsAt: forDateInput(rule.schedule.endsAt ?? null),
     currencyCode,
   };
 }

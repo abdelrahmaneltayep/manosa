@@ -100,12 +100,12 @@ function EmptyState({ view }: { view: RuleListView }) {
         <s-heading>{t("pricing.list.emptyHeading")}</s-heading>
         <s-paragraph color="subdued">{t("pricing.list.emptyBody")}</s-paragraph>
         <s-stack direction="inline" gap="small">
-          {/* Claude drafts rules in phase 4.2. Until then the control is
-              present but honest about not being ready, rather than absent —
-              the merchant should know it is coming. */}
+          {/* Disabled rather than hidden when there is no Anthropic key: a
+              merchant should know the capability exists and why it is quiet,
+              and the manual path beside it is never affected. */}
           <s-button
             variant="primary"
-            href="/app/pricing/new?ai=1"
+            href="/app/pricing/describe"
             {...whenDisabled(!view.aiAvailable)}
           >
             {t("pricing.list.emptyDescribe")}
@@ -147,6 +147,12 @@ function Toolbar({ view }: { view: RuleListView }) {
           {t("pricing.list.tabArchived")}
         </s-link>
         <s-link href="/app/pricing/csv">{t("pricing.list.csvLink")}</s-link>
+        <s-button
+          href="/app/pricing/describe"
+          {...whenDisabled(!view.aiAvailable || view.atRuleLimit)}
+        >
+          {t("pricing.list.emptyDescribe")}
+        </s-button>
         <s-button
           variant="primary"
           href="/app/pricing/new"

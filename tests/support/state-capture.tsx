@@ -101,6 +101,7 @@ const CATALOG_ROOTS = [
   "terms",
   "quotes",
   "pricing",
+  "describe",
   "plans",
   "csv",
   "install",

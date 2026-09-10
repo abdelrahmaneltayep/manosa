@@ -1473,5 +1473,95 @@
       "closedNotSent": "This quote is not ready yet. The seller will send it to you when it is.",
       "footer": "Sent by {{shopName}}."
     }
+  },
+  "describe": {
+    "heading": "✦ Describe a rule",
+    "composerHeading": "Say what you want in one sentence",
+    "sentenceLabel": "Your rule, in your words",
+    "sentenceHelp": "Claude drafts it. Nothing changes until you approve the draft.",
+    "draftAction": "✦ Draft the rule",
+    "buildManually": "Build it manually",
+    "examplesHeading": "For example:",
+    "example1": "Buy 10 get 5%, buy 50 get 12%, only for customers tagged wholesale, exclude sale items.",
+    "example2": "Gold group pays 30% off everything, from the first of next month.",
+    "example3": "Free-shipping tier: 10% off any order over 2,000.",
+    "offHeading": "✦ Drafting is switched off",
+    "offBody": "This store has no Anthropic API key, so Claude cannot draft rules here. Everything else works — build the rule yourself and it will price exactly the same.",
+    "atLimitHeading": "Your plan's rule limit is used up",
+    "atLimitBody": "You can still draft a rule, but approving it needs a free slot. Archive a rule you no longer use, or move to a bigger plan.",
+    "seePlans": "See plans",
+    "draftHeading": "Draft for review",
+    "draftIntro": "✦ Drafted by Claude · review it before it goes live. You approve it, not the AI.",
+    "appliesTo": "Applies to: {{targets}}",
+    "audience": "For: {{audience}}",
+    "schedule": "When: {{schedule}}",
+    "scheduleBetween": "{{from}} to {{to}}",
+    "scheduleFrom": "from {{from}}",
+    "scheduleUntil": "until {{to}}",
+    "combinable": "May combine with your other Mannon rules.",
+    "notCombinable": "Does not combine with your other Mannon rules.",
+    "notesHeading": "What Claude assumed",
+    "clarifyHeading": "Two things to confirm",
+    "clarifyBody": "Claude named something it could not match to this store. Pick what you meant — approving is off until you do.",
+    "whichOne": "Which did you mean by “{{term}}”?",
+    "noSuchThing": "Nothing in this store is called “{{term}}”. Open the builder to pick it yourself.",
+    "approveAction": "Approve & activate",
+    "editAction": "Edit in the builder",
+    "discardAction": "Discard",
+    "approveAnywayLabel": "I know this sells below cost, and I want it anyway",
+    "approveAnywayHelp": "Some merchants price a line at a loss on purpose. Mannon will not stop you — it just will not do it quietly.",
+    "confirmMissingHeading": "Tick the box to approve this one",
+    "confirmMissingBody": "This rule sells at least one product below what it costs you. Approving it needs the confirmation above.",
+    "chip": {
+      "from": "{{min}}+",
+      "range": "{{min}}–{{max}}",
+      "percentage": "{{percentage}}% off",
+      "amountOff": "{{amount}} off",
+      "fixedPrice": "{{amount}} each",
+      "cartTier": "Over {{subtotal}} · {{value}}"
+    },
+    "failure": {
+      "no_key": {
+        "heading": "Drafting is switched off",
+        "body": "This store has no Anthropic API key. Build the rule yourself — it will price exactly the same."
+      },
+      "timeout": {
+        "heading": "Claude did not answer in time",
+        "body": "Try again, or build the rule yourself. Nothing was saved."
+      },
+      "rate_limited": {
+        "heading": "Too many requests just now",
+        "body": "Wait a moment and try again, or build the rule yourself."
+      },
+      "refused": {
+        "heading": "Claude did not draft that one",
+        "body": "Try describing the rule differently, or build it yourself."
+      },
+      "invalid_output": {
+        "heading": "That draft could not be read",
+        "body": "Claude's answer did not make a valid rule, twice. Try a simpler sentence, or build it yourself."
+      },
+      "error": {
+        "heading": "Drafting failed",
+        "body": "Something went wrong on the way to Claude. Try again, or build the rule yourself."
+      },
+      "empty": {
+        "heading": "Say what the rule should do",
+        "body": "One sentence is enough — quantities, discount, and who it is for."
+      }
+    },
+    "margin": {
+      "clearHeading": "Nothing sells below cost",
+      "clearBody_one": "Checked {{count}} product against your recorded costs.",
+      "clearBody_other": "Checked {{count}} products against your recorded costs.",
+      "costUnknown_one": "{{count}} of them has no cost recorded in Shopify, so it could not be checked.",
+      "costUnknown_other": "{{count}} of them have no cost recorded in Shopify, so they could not be checked.",
+      "sampled": "This rule covers more products than were checked — the check is a sample, not the whole catalogue.",
+      "belowCostHeading_one": "{{count}} product sells below cost",
+      "belowCostHeading_other": "{{count}} products sell below cost",
+      "belowCostRow": "{{sku}} at {{quantity}}+: sells for {{price}}, costs you {{cost}}.",
+      "unavailableHeading": "Costs could not be checked",
+      "unavailableBody": "Shopify did not answer, so Mannon cannot say whether this rule sells anything below cost. You can still approve it."
+    }
   }
 }

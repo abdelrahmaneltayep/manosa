@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T13:30:00Z
+Updated: 2026-09-10T14:05:00Z
 Current milestone: 4 — Claude
-Current task: 4.2 Rule-from-a-sentence, margin guard [in progress]
+Current task: 4.3 Registration screening, drafted emails, segments, CSV whisperer [in progress]
 
 ## Done
 
@@ -21,10 +21,10 @@ Current task: 4.2 Rule-from-a-sentence, margin guard [in progress]
 - [x] 3.3 Quotes: pipeline, expiry, accept link, price locking — commit `c146e8a` — QA: `qa/3.3/REPORT.md`
 - [x] 3.4 Quick order storefront blocks, signed App Proxy — commit `224e4a0` — QA: `qa/3.4/REPORT.md`
 - [x] 4.1 AI infrastructure: client, streaming, timeouts, audit hooks — commit `b8136b5` — QA: `qa/4.1/REPORT.md`
+- [x] 4.2 Rule-from-a-sentence, margin guard — commit `PENDING` — QA: `qa/4.2/REPORT.md`
 
 ## Next up
 
-- 4.2 Rule-from-a-sentence, margin guard
 - 4.3 Registration screening, drafted emails, segments, CSV whisperer
 - 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order
 - 4.5 Home page assembled, Setup Wizard
@@ -61,6 +61,12 @@ Current task: 4.2 Rule-from-a-sentence, margin guard [in progress]
   or `MANNON_EMAIL_TRANSPORT=log`), but there is no `MANNON_RESEND_API_KEY` here.
   **Unblocker:** that key. The request shape is asserted; the response is not.
   Every message the app would send is recorded in `EmailMessage` either way.
+- **No unit cost has ever been read from a real store.** The margin guard reads
+  `inventoryItem.unitCost`, which needs `read_inventory` — added to the scopes
+  in 4.2, so **every existing install must re-authorize**. Until a dev-store
+  session exists, the query shape and the minor-unit conversion are pinned
+  against a fake admin and nothing else. With the scope missing the guard says
+  "costs could not be checked", which is the right thing for it to say.
 - **`ANTHROPIC_API_KEY` is not set.** The 4.1 infrastructure is built and
   tested against an injected stub, and the product works without a key — but
   **no call has ever been made to Anthropic**, so no prompt in this app has
@@ -136,7 +142,24 @@ Neither is blocking; both would change product decisions if answered.
   `captureSuite("<task>")` line in `tests/e2e/qa-states.spec.ts`.
 - **The capture harness checks for raw i18n keys** on every capture. If a new
   catalog root appears, add it to `CATALOG_ROOTS` in
-  `tests/support/state-capture.tsx`.
+  `tests/support/state-capture.tsx`. (4.2 added `describe` — the guard was
+  silently not covering the new page until then.)
+- **A write and its audit entry belong in one transaction.** 4.2 found
+  `createRule` doing them as two awaits: a refused AI-assisted entry — the very
+  thing the invariant produces — left a live pricing rule nobody was recorded as
+  approving. `recordAudit(entry, tx)` takes the transaction client. `updateRule`
+  and `archiveRule` still have the two-await shape; no AI path reaches them, but
+  it is the same latent gap.
+- **Claude is never given an id and never returns one.** 4.2's draft flow hands
+  the model collection titles and group names and resolves them against this
+  shop's own catalogue. That is also what closes the tenant hole: resolution can
+  only ever emit an id it was given, so a forged payload reads as an unanswered
+  question rather than a leak. Reuse the pattern for every later feature that
+  names a merchant's objects.
+- **`vitest` does not typecheck.** 4.2 shipped a fixture that silently dropped
+  its overrides (twenty assertions passing vacuously) and a helper typed as the
+  wrong interface; `npm run typecheck` caught the second, the first only showed
+  up because the assertions started failing. Run both.
 - **Never `vi.spyOn` a Prisma delegate method.** A delegate resolves its
   methods through a proxy, so `mockRestore()` leaves the method `undefined` and
   silently breaks every later test in the file (4.1 lost three that way).

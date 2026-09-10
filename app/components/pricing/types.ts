@@ -140,3 +140,83 @@ export interface PricingSettingsView {
   };
   orderSaved: boolean;
 }
+
+/* -------------------------------------------------------------------------- */
+/* ✦ Describe a rule                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** An ambiguous term from the draft, and the shop's best guesses at it. */
+export interface ClarificationView {
+  /** Stable form-field key: the field and the term the model used. */
+  key: string;
+  field: string;
+  term: string;
+  options: { id: string; label: string }[];
+}
+
+export interface MarginFindingView {
+  /** SKU when the merchant set one, otherwise the product's name. */
+  label: string;
+  title: string;
+  quantity: number;
+  unitPrice: string;
+  unitCost: string;
+  shortfall: string;
+}
+
+export interface MarginGuardView {
+  /** "unavailable" is a real answer: Shopify did not tell us, so we do not say. */
+  status: "checked" | "unavailable";
+  checked: number;
+  costUnknown: number;
+  /** The rule covers more than was priced. */
+  sampled: boolean;
+  belowCostCount: number;
+  /** The three worst, which is what the chip lists. */
+  worst: MarginFindingView[];
+}
+
+export interface DraftCardView {
+  name: string;
+  kindLabel: string;
+  /** Tiers and the headline discount, as chips: "10–49 · 5% off". */
+  chips: string[];
+  targetsSummary: string;
+  audienceSummary: string;
+  scheduleSummary: string | null;
+  combinable: boolean;
+  /** What the model said it assumed. Shown verbatim, never as a fact. */
+  notes: string | null;
+  /** The draft, carried back to the server on approve, edit and answer. */
+  payload: string;
+  /** The same rule as the manual builder's fields, for "Edit". */
+  builderFields: { name: string; value: string }[];
+}
+
+/** Why there is no draft on screen. Each one has a manual path beside it. */
+export type DescribeFailure =
+  | "no_key"
+  | "timeout"
+  | "rate_limited"
+  | "refused"
+  | "invalid_output"
+  | "error"
+  | "empty";
+
+export interface DescribeRuleView {
+  /** False when there is no Anthropic key: composer off, builder untouched. */
+  aiAvailable: boolean;
+  sentence: string;
+  /** Three localized examples, shown under the box. */
+  examples: string[];
+  failure: DescribeFailure | null;
+  draft: DraftCardView | null;
+  clarifications: ClarificationView[];
+  margin: MarginGuardView | null;
+  /** Below-cost findings mean approving takes an explicit tick. */
+  approveAnywayRequired: boolean;
+  /** They approved without ticking it. */
+  approveAnywayMissing: boolean;
+  /** Free plan has run out of rules — approve would fail, so it says so first. */
+  atRuleLimit: boolean;
+}

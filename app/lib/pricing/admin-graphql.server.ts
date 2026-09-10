@@ -58,3 +58,35 @@ export async function runMutation<T>(
 
   return result;
 }
+
+/**
+ * Run a read and hand back its `data`.
+ *
+ * Queries have no `userErrors`, so the only failures are transport and
+ * top-level GraphQL errors — both of which have to be loud. A margin guard
+ * that silently reports "nothing below cost" because the read failed is worse
+ * than no guard at all.
+ */
+export async function runQuery<T>(
+  admin: AdminGraphql,
+  operation: string,
+  query: string,
+  variables: Record<string, unknown> = {},
+): Promise<T> {
+  const response = await admin.graphql(query, { variables });
+  const body = (await response.json()) as {
+    data?: T;
+    errors?: { message: string }[];
+  };
+
+  if (body.errors?.length) {
+    throw new AdminApiError(
+      operation,
+      body.errors.map((error) => ({ message: error.message })),
+    );
+  }
+  if (!body.data)
+    throw new AdminApiError(operation, [{ message: "no data in response" }]);
+
+  return body.data;
+}

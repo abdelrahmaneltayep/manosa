@@ -88,6 +88,16 @@ export interface AskOptions {
   /** Who asked. Null for scheduled work. */
   actorId?: string | null;
   maxTokens?: number;
+  /**
+   * Left unset unless a feature has a reason.
+   *
+   * `docs/spec/brand.md` asks for temperature 0 on the surfaces where Claude
+   * pre-fills a form the merchant then approves: the same sentence should draft
+   * the same rule twice, or "why did it suggest that?" has no answer. Anything
+   * that reads back to a person as writing is better left at the model's own
+   * default.
+   */
+  temperature?: number;
   /** Overrides the deployment timeout. Only a test should need this. */
   timeoutMs?: number;
 }
@@ -205,6 +215,9 @@ export async function askForText(
             },
           ],
           messages: [{ role: "user", content: options.user }],
+          ...(options.temperature === undefined
+            ? {}
+            : { temperature: options.temperature }),
         }),
         options.timeoutMs ?? AI_TIMEOUT_MS,
       );

@@ -31,9 +31,14 @@ export function modelId(env: EnvLike = process.env): string {
  * the app has been doing on their behalf. A typo would quietly become a new
  * feature nobody can find.
  */
+/*
+ * `margin_guard` is deliberately absent. The guard is arithmetic over real
+ * prices and real costs — `guardMargins` in the pricing engine — and the model
+ * never computes what a module can (CLAUDE.md, appendix B). Claude drafts the
+ * rule; the guard decides whether the draft loses money.
+ */
 export const AI_FEATURES = [
   "rule_from_sentence",
-  "margin_guard",
   "registration_screening",
   "email_draft",
   "segment_builder",
@@ -78,7 +83,6 @@ export const AI_MAX_TOKENS = 8_000;
  */
 export const PROMPT_VERSIONS: Readonly<Record<AiFeature, string>> = {
   rule_from_sentence: "1",
-  margin_guard: "1",
   registration_screening: "1",
   email_draft: "1",
   segment_builder: "1",

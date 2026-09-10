@@ -2,7 +2,11 @@ import type { PricingRule as PricingRuleRow, Prisma } from "@prisma/client";
 import { validateRule, type PricingRule, type RuleIssue } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
-import { recordAudit, type AuditActor } from "~/lib/audit/record.server";
+import {
+  recordAudit,
+  type AiProvenance,
+  type AuditActor,
+} from "~/lib/audit/record.server";
 import { assertWithinLimit } from "~/lib/billing/gate.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { toEngineRule, toEngineRules, toRowData } from "~/lib/pricing/rule-mapper.server";
@@ -139,9 +143,26 @@ export async function findDuplicateName(name: string, exceptId?: string) {
   });
 }
 
+/**
+ * Where a saved rule came from, when Claude drafted it.
+ *
+ * `approvedById` is not optional: an AI-assisted entry with no approver is
+ * exactly what `recordAudit` refuses, and requiring it here means a future
+ * caller that forgets does not compile rather than throwing in production.
+ */
+export interface SaveProvenance {
+  ai: AiProvenance;
+  /** The merchant who pressed the button. */
+  approvedById: string;
+  /** Merged into the audit entry — the sentence, and what the guard found. */
+  metadata?: Prisma.InputJsonObject;
+}
+
 export interface SaveContext {
   admin: AdminGraphql;
   actor: AuditActor;
+  /** Absent for a rule the merchant built by hand, which is most of them. */
+  provenance?: SaveProvenance;
 }
 
 /**
@@ -161,7 +182,7 @@ export async function republish(admin: AdminGraphql) {
 
 export async function createRule(
   rule: PricingRule,
-  { admin, actor }: SaveContext,
+  { admin, actor, provenance }: SaveContext,
 ): Promise<PricingRuleRow> {
   const issues = validateRule(rule);
   if (issues.length > 0) throw new RuleValidationError(issues);
@@ -171,21 +192,37 @@ export async function createRule(
   const activeCount = await db.pricingRule.count({ where: { archivedAt: null } });
   await assertWithinLimit("pricingRules", activeCount);
 
-  const created = await db.pricingRule.create({
-    data: {
-      ...tenant(),
-      ...toRowData(rule),
-      createdBy: actor.id ?? null,
-      updatedBy: actor.id ?? null,
-    },
-  });
+  // The rule and the entry that says who made it commit together. Without the
+  // transaction an audit failure — an AI-assisted entry with no approver, most
+  // of all — leaves a live pricing rule nobody is recorded as having approved.
+  const created = await db.$transaction(async (tx) => {
+    const row = await tx.pricingRule.create({
+      data: {
+        ...tenant(),
+        ...toRowData(rule),
+        createdBy: actor.id ?? null,
+        updatedBy: actor.id ?? null,
+      },
+    });
 
-  await recordAudit({
-    actor,
-    action: "pricing_rule.created",
-    summary: `Created the pricing rule “${created.name}”.`,
-    subject: { type: "PricingRule", id: created.id },
-    metadata: { kind: created.kind, status: created.status },
+    await recordAudit(
+      {
+        actor,
+        action: "pricing_rule.created",
+        summary: provenance
+          ? `Approved Claude's draft and created the pricing rule “${row.name}”.`
+          : `Created the pricing rule “${row.name}”.`,
+        subject: { type: "PricingRule", id: row.id },
+        metadata: { kind: row.kind, status: row.status, ...provenance?.metadata },
+        ai: provenance?.ai ?? null,
+        // Live pricing, changed on Claude's suggestion. The approval is the point.
+        aiAssisted: Boolean(provenance),
+        approval: provenance ? { byId: provenance.approvedById } : null,
+      },
+      tx,
+    );
+
+    return row;
   });
 
   if (created.status === "ACTIVE") await republish(admin);

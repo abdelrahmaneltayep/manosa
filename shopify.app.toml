@@ -21,7 +21,10 @@ automatically_update_urls_on_dev = true
 # write_orders (3.1) is for one thing: tagging a wholesale order so the
 # merchant can find it in Shopify's own admin too. Note that read_orders only
 # reaches the last 60 days — see docs/adr/0014.
-scopes = "read_products,read_customers,write_customers,read_orders,write_orders,write_draft_orders,write_discounts"
+# read_inventory (4.2) is what the margin guard needs: unit cost lives on
+# InventoryItem, and without it "this tier sells SKU-123 below cost" cannot be
+# said at all — see docs/adr/0019.
+scopes = "read_products,read_inventory,read_customers,write_customers,read_orders,write_orders,write_draft_orders,write_discounts"
 
 [auth]
 redirect_urls = [

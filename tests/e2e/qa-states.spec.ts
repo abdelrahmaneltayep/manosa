@@ -149,6 +149,10 @@ test.describe("Quote states", () => {
   captureSuite("3.3");
 });
 
+test.describe("Describe-a-rule states", () => {
+  captureSuite("4.2");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)

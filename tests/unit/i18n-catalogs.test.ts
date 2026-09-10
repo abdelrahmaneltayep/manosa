@@ -125,6 +125,9 @@ describe("translation catalogs", () => {
       // the merchant's own tag, which is not ours to translate.
       "customers.tagging.addTag",
       "customers.tagging.removeTag",
+      // A quantity range chip: "10–49", "50+". Digits and punctuation only.
+      "describe.chip.from",
+      "describe.chip.range",
     ]);
     const untranslated = Object.keys(EN).filter(
       (key) => !allowed.has(key) && AR[key] !== undefined && EN[key] === AR[key],
