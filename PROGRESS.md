@@ -22,7 +22,7 @@ Current task: 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order [in progr
 - [x] 3.4 Quick order storefront blocks, signed App Proxy — commit `224e4a0` — QA: `qa/3.4/REPORT.md`
 - [x] 4.1 AI infrastructure: client, streaming, timeouts, audit hooks — commit `b8136b5` — QA: `qa/4.1/REPORT.md`
 - [x] 4.2 Rule-from-a-sentence, margin guard — commit `d45f02b` — QA: `qa/4.2/REPORT.md`
-- [x] 4.3 Screening, drafted emails, segments, CSV whisperer — commit `PENDING` — QA: `qa/4.3/REPORT.md`
+- [x] 4.3 Screening, drafted emails, segments, CSV whisperer — commit `be3c6d0` — QA: `qa/4.3/REPORT.md`
 
 ## Next up
 
