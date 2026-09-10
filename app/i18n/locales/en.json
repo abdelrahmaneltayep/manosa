@@ -2184,5 +2184,20 @@
       "pricing": "Pricing",
       "pricingCurrent": "Pricing ✓"
     }
+  },
+  "agent": {
+    "scripted": {
+      "off_limits": "That's not something I can help with here — someone from the team can. Send them a message and they'll pick it up.",
+      "decline": "That's outside what I can answer. If it's about your account or an order, someone from the team can help."
+    },
+    "lint": {
+      "discountAuthority": "You've asked the agent to offer or negotiate discounts. It never can: it only reads the prices your rules already produce.",
+      "inventedPrice": "You've asked the agent to estimate or make up a price. It never states a figure this app did not compute.",
+      "checkout": "You've asked the agent to place an order. It assembles a cart; the buyer pays on your Shopify checkout.",
+      "cart": "You've asked the agent to build carts, but building carts is switched off.",
+      "quote": "You've asked the agent to handle quotes, but quote requests are switched off.",
+      "orders": "You've asked the agent about order status, but reading orders is switched off.",
+      "terms": "You've asked the agent about terms or credit, but reading terms is switched off."
+    }
   }
 }

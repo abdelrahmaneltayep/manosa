@@ -22,7 +22,7 @@ export async function purgeShopPii() {
   if (!record.uninstalledAt) return { skipped: "reinstalled" as const };
   if (record.piiPurgedAt) return { skipped: "already purged" as const };
 
-  const [, redactedAudit] = await db.$transaction([
+  const [, redactedAudit, deletedConversations] = await db.$transaction([
     db.shop.update({
       where: { shop },
       data: { name: null, email: null, piiPurgedAt: new Date() },
@@ -33,6 +33,11 @@ export async function purgeShopPii() {
       where: { shop },
       data: { actorId: null, actorLabel: null, ip: null },
     }),
+    // Buyer Agent conversations are a buyer's own words to a merchant who no
+    // longer has this app. Deleted rather than redacted: there is nothing left
+    // in them worth keeping once the names are gone, and the messages go with
+    // them by cascade.
+    db.agentConversation.deleteMany({ where: { shop } }),
   ]);
 
   // Defence in depth: sessions are deleted the moment the uninstall webhook
@@ -42,10 +47,18 @@ export async function purgeShopPii() {
   await recordAudit({
     actor: SYSTEM_ACTOR,
     action: "shop.pii_purged",
-    summary: `Removed merchant contact details and redacted ${redactedAudit.count} audit entries after uninstall.`,
+    summary: `Removed merchant contact details, redacted ${redactedAudit.count} audit entries and deleted ${deletedConversations.count} agent conversations after uninstall.`,
     subject: { type: "Shop", id: shop },
-    metadata: { redactedAuditEntries: redactedAudit.count, deletedSessions: sessions },
+    metadata: {
+      redactedAuditEntries: redactedAudit.count,
+      deletedSessions: sessions,
+      deletedConversations: deletedConversations.count,
+    },
   });
 
-  return { redactedAuditEntries: redactedAudit.count, deletedSessions: sessions };
+  return {
+    redactedAuditEntries: redactedAudit.count,
+    deletedSessions: sessions,
+    deletedConversations: deletedConversations.count,
+  };
 }

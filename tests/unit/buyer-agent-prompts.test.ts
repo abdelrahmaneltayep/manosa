@@ -1,22 +1,34 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  normalizeFigure,
+  checkReply,
+  fillSlots,
+  inventedNumbers,
   readRoutedTurn,
-  statedFigures,
-  unbackedFigures,
+  slotsUsed,
+  withoutSlots,
   type AgentTurnGrounding,
 } from "~/lib/ai/prompts/buyer-agent.server";
 import { MAX_LINES } from "~/lib/agent/buyer/tools.server";
+import { formatCurrency } from "~/lib/money";
+import { money } from "@mannon/pricing-engine";
 
 /**
  * The two guards the Buyer Agent rests on.
  *
  * `readRoutedTurn` decides whether a model answer may reach a tool at all.
- * `unbackedFigures` decides whether a reply may reach a buyer. The second is
- * the one that matters most: checklist §6 says "the agent can never invent a
- * price — it only reads your published rules", and a prompt cannot enforce
- * that. This can.
+ * `checkReply` decides whether a sentence may reach a buyer. The second is the
+ * one that matters most, because §6 says the agent can never invent a price and
+ * a prompt cannot enforce that.
+ *
+ * **The first version of this file tested the wrong thing.** It scanned the
+ * reply for money and compared it with a list of formatted figures. An
+ * independent review got five different invented prices past it — Arabic-Indic
+ * digits, "900 dollars", a swapped currency symbol, a comma-decimal collision,
+ * a percentage colliding with a yen amount — and found it refused the two
+ * examples the spec leads with, because "NET 30" and "SKU 450" look like money
+ * to a regex. So the model no longer writes numbers at all. It writes slots,
+ * and these are the tests of that.
  */
 
 const grounding = (overrides: Partial<AgentTurnGrounding> = {}): AgentTurnGrounding => ({
@@ -37,6 +49,7 @@ const grounding = (overrides: Partial<AgentTurnGrounding> = {}): AgentTurnGround
     "decline",
   ],
   signedIn: true,
+  buyerSaid: "",
   ...overrides,
 });
 
@@ -60,7 +73,6 @@ describe("routing a turn", () => {
 
     expect(result.value.call.tool).toBe("price_for");
     expect(result.value.call.lines).toEqual([{ sku: "MUG-BL-L", quantity: 100 }]);
-    expect(result.value.acknowledgement).toContain("look that up");
   });
 
   it("refuses a tool that does not exist", () => {
@@ -82,8 +94,7 @@ describe("routing a turn", () => {
 
   it("refuses a quantity that is not a whole number of units", () => {
     for (const quantity of [0, -5, 2.5, "many", null]) {
-      const result = route(answer({ lines: [{ sku: "MUG", quantity }] }));
-      expect(result.ok).toBe(false);
+      expect(route(answer({ lines: [{ sku: "MUG", quantity }] })).ok).toBe(false);
     }
   });
 
@@ -98,9 +109,9 @@ describe("routing a turn", () => {
     if (result.ok) expect(result.value.call.lines).toHaveLength(MAX_LINES);
   });
 
-  it("refuses an acknowledgement that states a price", () => {
-    // It has not looked anything up yet, so any figure is a guess — and the
-    // buyer reads it before the real answer arrives.
+  it("refuses an acknowledgement that states a figure out of nowhere", () => {
+    // Nothing has been looked up at this point, so any figure it writes is a
+    // guess the buyer reads before the real answer arrives.
     for (const acknowledgement of [
       "Your price is $4.10 — checking the rest.",
       "That'll be about 12% off, one moment.",
@@ -110,13 +121,31 @@ describe("routing a turn", () => {
     }
   });
 
-  it("allows an acknowledgement with a quantity in it", () => {
-    // "100 units" is not a price, and refusing it would make the agent unable
-    // to repeat what the buyer just asked for.
-    const result = route(
-      answer({ acknowledgement: "Checking 100 units of MUG-BL-L for you." }),
+  it("lets the acknowledgement repeat what the buyer typed", () => {
+    // The two flows §6 leads with are "SKU-450 at 100 units" and a budget.
+    // Repeating what somebody said invents nothing, and the first version of
+    // this check refused both.
+    const said = grounding({
+      buyerSaid: "what's my price for SKU-450 at 100 units?",
+    });
+
+    expect(
+      route(answer({ acknowledgement: "Checking SKU-450 at 100 units for you." }), said)
+        .ok,
+    ).toBe(true);
+
+    // But not a figure they did not say.
+    expect(
+      route(answer({ acknowledgement: "Checking SKU-450 at 250 units." }), said).ok,
+    ).toBe(false);
+  });
+
+  it("finds the numbers a sentence added to what was said", () => {
+    expect(inventedNumbers("SKU-450 at 100 units", "price for SKU-450 at 100")).toEqual(
+      [],
     );
-    expect(result.ok).toBe(true);
+    expect(inventedNumbers("that's $3.95", "price for SKU-450")).toEqual(["3.95"]);
+    expect(inventedNumbers("nothing numeric here", "")).toEqual([]);
   });
 
   it("refuses an empty acknowledgement, and anything that is not an object", () => {
@@ -128,66 +157,132 @@ describe("routing a turn", () => {
 
 /* -------------------------------------------------------------------------- */
 
-describe("finding the money in a reply", () => {
-  it("finds it in the shapes a model writes it", () => {
-    expect(statedFigures("Your price is $4.10 each.")).toContain("$4.10");
-    expect(statedFigures("That comes to 1,200.50 USD.")).toContain("1,200.50USD");
-    expect(statedFigures("Total: EUR 90.00")).toContain("EUR90.00");
-    expect(statedFigures("You'd save 12% on that.")).toContain("12%");
+describe("slots", () => {
+  const slots = { f1: "$6.50", t1: "$650.00", q1: "100", s1: "MUG-BL-L" };
+
+  it("finds the ones a reply used, and reads the rest as prose", () => {
+    const reply = "Your price is {{f1}} each, so {{t1}} for {{q1}} of {{s1}}.";
+    expect(slotsUsed(reply)).toEqual(["f1", "t1", "q1", "s1"]);
+    expect(withoutSlots(reply)).not.toMatch(/\{\{/u);
   });
 
-  it("does not mistake a quantity for a price", () => {
-    // The distinction the whole check depends on: a wholesale agent talks
-    // about hundreds of units all day.
-    expect(statedFigures("That's 100 units, 12 cases, order 500 if you like.")).toEqual(
-      [],
+  it("fills them with what the engine computed", () => {
+    expect(fillSlots("That's {{f1}} each — {{t1}} the lot.", slots)).toBe(
+      "That's $6.50 each — $650.00 the lot.",
     );
-    expect(statedFigures("SKU-450 comes in boxes of 24.")).toEqual([]);
+  });
+
+  it("tolerates the spacing a model might use", () => {
+    expect(fillSlots("It's {{ f1 }} each.", slots)).toBe("It's $6.50 each.");
   });
 });
 
 describe("the rule the feature rests on", () => {
-  const allowed = ["$4.10", "$410.00"];
+  const slots = { f1: "$6.50", t1: "$650.00", q1: "100" };
 
-  it("passes a reply that only repeats what the engine computed", () => {
+  it("passes a reply whose every number is a slot", () => {
+    expect(checkReply("Your price is {{f1}} each — {{t1}} for {{q1}}.", slots).ok).toBe(
+      true,
+    );
+  });
+
+  it("passes a reply with no numbers in it at all", () => {
+    expect(checkReply("I'll get that priced for you.", {}).ok).toBe(true);
+  });
+
+  it("refuses a price the model typed out", () => {
+    expect(checkReply("Your price is $3.95 each.", slots).ok).toBe(false);
+  });
+
+  it("refuses arithmetic the model did itself", () => {
+    // The most plausible way for this to go wrong: the figures are right and
+    // the sum is the model's.
+    expect(checkReply("{{f1}} each, so $820.00 for 200.", slots).ok).toBe(false);
+  });
+
+  it("refuses a slot it was never given", () => {
+    const checked = checkReply("That's {{f9}} each.", slots);
+    expect(checked.ok).toBe(false);
+    expect(checked.error).toContain("f9");
+  });
+
+  it("refuses a number in any script, not just this one", () => {
+    // `\\d` is ASCII-only in JavaScript even under /u, which is how an entire
+    // language got past the first version of this check.
+    for (const reply of [
+      "سعرك ٦٫٥٠ للوحدة.", // Arabic-Indic
+      "Your price is ６.５０ each.", // fullwidth
+      "قيمتها ۹۰٫۰۰.", // Eastern Arabic-Indic
+    ]) {
+      expect(checkReply(reply, slots).ok).toBe(false);
+    }
+  });
+
+  it("refuses a price written in words", () => {
+    // No digit at all, and still a quote the merchant would have to honour.
+    for (const reply of [
+      "That's nine hundred dollars.",
+      "About nine hundred USD.",
+      "Fifteen percent off for you.",
+      "سعرها تسعمئة ريال.",
+    ]) {
+      expect(checkReply(reply, slots).ok).toBe(false);
+    }
+  });
+
+  it("refuses a currency word even beside a correct slot", () => {
+    // "{{f1}} dollars" invites the model to convert, and a swapped currency
+    // with the right number was one of the ways past the old check.
+    expect(checkReply("That's {{f1}} dollars.", slots).ok).toBe(false);
+    expect(checkReply("That's {{f1}} euros.", slots).ok).toBe(false);
+    expect(checkReply("{{f1}}، أي ما يعادل بالريال.", slots).ok).toBe(false);
+  });
+
+  it("keeps the two sentences §6 leads with sayable", () => {
+    // "NET 30" and "SKU 450" both looked like money to the old regex, which
+    // made the terms answer and the flagship price question unusable.
+    const terms = { days: "30", owed: "$1,000.00" };
     expect(
-      unbackedFigures("Your price is $4.10 each, so $410.00 for 100.", allowed),
-    ).toEqual([]);
-  });
+      checkReply("You're on net {{days}} days, with {{owed}} outstanding.", terms).ok,
+    ).toBe(true);
 
-  it("passes a reply with no money in it at all", () => {
-    expect(unbackedFigures("I'll get that priced for you.", [])).toEqual([]);
+    const priced = { s1: "SKU-450", q1: "100", f1: "$4.10" };
+    expect(checkReply("{{s1}} at {{q1}} units is {{f1}} each.", priced).ok).toBe(true);
   });
+});
 
-  it("catches a price the tools never computed", () => {
-    expect(unbackedFigures("Your price is $3.95 each.", allowed)).toEqual(["$3.95"]);
-  });
+/**
+ * The locales this app actually formats money in.
+ *
+ * Every one of these is a shape the old scanner was blind to or tripped over.
+ * The check now reads "is there a digit outside a slot", which is true in every
+ * script — so the assertion is the same in all of them, in both directions.
+ */
+describe("across the locales this app formats in", () => {
+  const CASES: { locale: string; currency: string; minor: number }[] = [
+    { locale: "en", currency: "USD", minor: 650 },
+    { locale: "ar", currency: "SAR", minor: 650 },
+    { locale: "ar-EG", currency: "EGP", minor: 9000 },
+    { locale: "ja", currency: "JPY", minor: 900 },
+    { locale: "fr", currency: "EUR", minor: 120050 },
+    { locale: "de", currency: "EUR", minor: 120050 },
+    { locale: "ar-KW", currency: "KWD", minor: 9000 },
+    { locale: "ar-BH", currency: "BHD", minor: 9000 },
+  ];
 
-  it("catches arithmetic the agent did itself", () => {
-    // $4.10 × 200 is a number the engine was never asked for. It is also the
-    // most plausible-looking way for this to go wrong.
-    expect(unbackedFigures("For 200 that's $820.00.", allowed)).toEqual(["$820.00"]);
-  });
+  for (const { locale, currency, minor } of CASES) {
+    it(`substitutes and guards in ${locale}/${currency}`, () => {
+      const formatted = formatCurrency(money(minor, currency), locale);
+      const slots = { f1: formatted };
 
-  it("catches a discount stated as a percentage", () => {
-    expect(unbackedFigures("That's 15% off list.", allowed)).toEqual(["15%"]);
-  });
+      // The right answer goes through untouched, whatever the digits look like.
+      const filled = fillSlots("{{f1}}", slots);
+      expect(checkReply("{{f1}}", slots).ok).toBe(true);
+      expect(filled).toBe(formatted);
 
-  it("catches a figure when nothing at all was computed", () => {
-    expect(unbackedFigures("Roughly $5 a unit, I'd say.", [])).toEqual(["$5"]);
-  });
-
-  it("is not fooled by spacing or case", () => {
-    expect(unbackedFigures("Your price is $4.10 each.", ["$4.10 "])).toEqual([]);
-    expect(unbackedFigures("Total 90.00 usd.", ["90.00 USD"])).toEqual([]);
-  });
-
-  it("accepts a percentage the tools did compute", () => {
-    expect(unbackedFigures("That unlocks the 12% tier.", ["12%"])).toEqual([]);
-  });
-
-  it("normalises the way the checker compares", () => {
-    expect(normalizeFigure(" $1,200.00 ")).toBe("$1,200.00");
-    expect(normalizeFigure("90.00 usd")).toBe("90.00USD");
-  });
+      // And the model writing that same figure out by hand does not, because
+      // it is a digit outside a slot.
+      expect(checkReply(formatted, slots).ok).toBe(false);
+    });
+  }
 });

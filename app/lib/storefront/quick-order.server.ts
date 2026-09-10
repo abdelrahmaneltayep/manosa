@@ -38,7 +38,7 @@ const VARIANTS_BY_SKU = `#graphql
     }
   }`;
 
-interface VariantNode {
+export interface VariantNode {
   id: string;
   sku: string | null;
   title: string | null;
@@ -257,7 +257,7 @@ export async function buyerFacts(customerId: string | null): Promise<BuyerForPri
   };
 }
 
-function variantTitle(node: VariantNode): string {
+export function variantTitle(node: VariantNode): string {
   const product = node.product?.title?.trim();
   const variant = node.title?.trim();
   // Shopify calls a single-variant product's only variant "Default Title",

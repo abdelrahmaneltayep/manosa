@@ -32,6 +32,12 @@ const actor = { type: "STAFF" as const, id: "staff-1" };
 
 function signedRequest(params: Record<string, string>) {
   const search = new URLSearchParams(params);
+  // Shopify signs a timestamp along with everything else, and the app refuses
+  // a signature older than `MAX_SIGNATURE_AGE_MS`. A fixture without one is a
+  // fixture of a request Shopify does not send.
+  if (!search.has("timestamp")) {
+    search.set("timestamp", String(Math.floor(Date.now() / 1000)));
+  }
   search.set(
     "signature",
     createHmac("sha256", process.env.SHOPIFY_API_SECRET ?? "test-api-secret")
@@ -553,5 +559,40 @@ describe("tenant boundary", () => {
       tags: [],
       groupIds: [],
     });
+  });
+});
+
+describe("a signature that has been sitting around", () => {
+  it("is refused once it is too old", async () => {
+    await installShop(ALPHA);
+
+    const stale = signedRequest({
+      shop: ALPHA,
+      timestamp: String(Math.floor((Date.now() - 4 * 60 * 60_000) / 1000)),
+    });
+
+    // The signed URL carries `logged_in_customer_id`. Anyone who comes by one —
+    // a shared link, a referrer header, a proxy log — could otherwise replay it
+    // forever, and since the Buyer Agent that buys order history.
+    await expect(withProxy(stale, async () => "reached")).rejects.toMatchObject({
+      status: 401,
+    });
+  });
+
+  it("is refused when it carries no timestamp at all", async () => {
+    const search = new URLSearchParams({ shop: ALPHA });
+    search.set(
+      "signature",
+      createHmac("sha256", process.env.SHOPIFY_API_SECRET ?? "test-api-secret")
+        .update(signablePayload(search))
+        .digest("hex"),
+    );
+
+    await expect(
+      withProxy(
+        new Request(`https://mannon.test/proxy/quick-order?${search.toString()}`),
+        async () => "reached",
+      ),
+    ).rejects.toMatchObject({ status: 401 });
   });
 });

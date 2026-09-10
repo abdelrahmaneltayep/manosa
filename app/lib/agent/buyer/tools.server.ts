@@ -2,18 +2,22 @@ import {
   formatMoney,
   money,
   multiplyMoney,
-  nextVolumeTier,
   type Money,
   type PricingRule,
 } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
+import { recordAudit } from "~/lib/audit/record.server";
 import { formatCurrency } from "~/lib/money";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { activeEngineRules } from "~/lib/pricing/rules.server";
 import { priceLine, type BuyerForPricing } from "~/lib/quotes/pricing.server";
 import { createQuote, draftQuote } from "~/lib/quotes/quotes.server";
-import { findVariantsBySku, toMoney } from "~/lib/storefront/quick-order.server";
+import {
+  findVariantsBySku,
+  toMoney,
+  variantTitle,
+} from "~/lib/storefront/quick-order.server";
 
 /**
  * Everything the Buyer Agent can do, and nothing else.
@@ -75,12 +79,21 @@ export interface PricedToolLine {
   sku: string;
   title: string;
   variantId: string;
+  productId: string;
   quantity: number;
   /** Formatted in the buyer's language, from the engine. */
   unitPrice: string;
   lineTotal: string;
   /** Minor units, for anything that compares rather than displays. */
   unitPriceAmount: number;
+  /**
+   * What the variant costs before any rule.
+   *
+   * Carried because anything that re-prices this line — a quote draft, most of
+   * all — has to start from the list price. Handing the *discounted* price to
+   * something that prices it again applies the discount twice.
+   */
+  listPrice: Money;
   /** Which rule set it — deciding shows its working, for buyers too. */
   ruleSummary: string | null;
 }
@@ -93,13 +106,16 @@ export interface ToolResult {
   /** SKUs the catalogue does not have. Listed, never quietly dropped. */
   unknownSkus: string[];
   /**
-   * Every figure this turn is allowed to state, already formatted.
+   * Everything the reply is allowed to state, keyed by slot name.
    *
-   * The model may only repeat these. `statedFigures` in the prompt module
-   * checks the reply against this set, so a price the agent invented is a
-   * refused turn rather than a promise the merchant has to honour.
+   * The model does not write numbers at all: it writes `{{f1}}` and this app
+   * substitutes the value. So a price the agent invented is not a price that
+   * slipped past a scanner — it is a digit outside a slot, which is refused.
+   *
+   * `f*` figures, `q*` quantities, `s*` codes and names, `d*` dates, `b*`
+   * something the buyer themselves said.
    */
-  figures: string[];
+  slots: Record<string, string>;
   /** Facts the model may use in its sentence, as short strings. */
   facts: string[];
   /** Set when the tool created something: a quote number, a cart token. */
@@ -113,11 +129,37 @@ const empty = (tool: ToolName): ToolResult => ({
   lines: [],
   subtotal: null,
   unknownSkus: [],
-  figures: [],
+  slots: {},
   facts: [],
   created: null,
   refusal: null,
 });
+
+/**
+ * Build the slot table for a set of priced lines.
+ *
+ * One figure per unit price and per line total, one quantity and one code per
+ * line, plus the subtotal. Named rather than numbered where it helps the model
+ * pick the right one: `{{f1}}` is the first line's unit price, `{{t1}}` its
+ * total, `{{q1}}` its quantity, `{{s1}}` its SKU.
+ */
+function slotsFor(
+  lines: readonly PricedToolLine[],
+  subtotal: string | null,
+): Record<string, string> {
+  const slots: Record<string, string> = {};
+
+  lines.forEach((line, index) => {
+    const at = index + 1;
+    slots[`f${at}`] = line.unitPrice;
+    slots[`t${at}`] = line.lineTotal;
+    slots[`q${at}`] = String(line.quantity);
+    slots[`s${at}`] = line.sku;
+  });
+
+  if (subtotal) slots.total = subtotal;
+  return slots;
+}
 
 export interface ToolContext {
   admin: AdminGraphql;
@@ -169,9 +211,31 @@ async function priceLines(
   const unknownSkus: string[] = [];
   let subtotal = 0;
 
+  // Two lines naming the same SKU are one line. A buyer who says "50 of the
+  // blue mug, and another 50" means a hundred, not two lines the cart will
+  // merge behind their back.
+  const merged = new Map<string, ToolLineRequest>();
   for (const line of wanted) {
+    const key = line.sku.trim().toLowerCase();
+    const already = merged.get(key);
+    merged.set(
+      key,
+      already
+        ? { sku: already.sku, quantity: already.quantity + line.quantity }
+        : { ...line },
+    );
+  }
+
+  for (const line of merged.values()) {
     const node = variants.get(line.sku.trim().toLowerCase());
     if (!node) {
+      unknownSkus.push(line.sku);
+      continue;
+    }
+    if (node.product?.status && node.product.status.toUpperCase() !== "ACTIVE") {
+      // A draft or archived product is not something a buyer can order. The
+      // quick-order block refuses it for the same reason; the agent must not
+      // be the softer door into the same catalogue.
       unknownSkus.push(line.sku);
       continue;
     }
@@ -183,7 +247,7 @@ async function priceLines(
       {
         variantId: node.id,
         productId: node.product?.id ?? node.id,
-        title: node.product?.title ?? node.sku ?? node.id,
+        title: variantTitle(node),
         sku: node.sku ?? line.sku,
         quantity,
         listPrice,
@@ -200,10 +264,12 @@ async function priceLines(
       sku: node.sku ?? line.sku,
       title: priced.title,
       variantId: node.id,
+      productId: node.product?.id ?? node.id,
       quantity,
       unitPrice: formatCurrency(priced.unitPrice, context.locale),
       lineTotal: formatCurrency(lineTotal, context.locale),
       unitPriceAmount: priced.unitPrice.amount,
+      listPrice,
       ruleSummary: priced.ruleSummary,
     });
   }
@@ -239,7 +305,7 @@ export async function runTool(call: ToolCall, context: ToolContext): Promise<Too
     case "request_quote":
       return requestQuote(call, context);
     case "escalate":
-      return { ...empty("escalate"), facts: ["escalated"] };
+      return escalate(call, context);
     case "decline":
     default:
       return { ...empty("decline"), refusal: "off_limits" };
@@ -250,12 +316,13 @@ async function priceFor(call: ToolCall, context: ToolContext): Promise<ToolResul
   const { lines, unknownSkus, subtotal } = await priceLines(call.lines, context);
   const formattedSubtotal = formatCurrency(subtotal, context.locale);
 
+  const showTotal = lines.length > 1 ? formattedSubtotal : null;
   return {
     ...empty("price_for"),
     lines,
     unknownSkus,
-    subtotal: lines.length > 1 ? formattedSubtotal : null,
-    figures: figuresOf(lines, lines.length > 1 ? formattedSubtotal : null),
+    subtotal: showTotal,
+    slots: slotsFor(lines, showTotal),
     facts: lines.map((line) =>
       line.ruleSummary ? `${line.sku}: ${line.ruleSummary}` : `${line.sku}: list price`,
     ),
@@ -278,7 +345,7 @@ async function buildCart(call: ToolCall, context: ToolContext): Promise<ToolResu
     lines,
     unknownSkus,
     subtotal: formattedSubtotal,
-    figures: figuresOf(lines, formattedSubtotal),
+    slots: slotsFor(lines, formattedSubtotal),
     facts: ["cart_built"],
   };
 }
@@ -305,13 +372,22 @@ async function orderStatus(context: ToolContext): Promise<ToolResult> {
     },
   });
 
-  const figures = orders.map((order) =>
-    formatCurrency(money(order.totalPrice, order.currencyCode), context.locale),
-  );
+  const slots: Record<string, string> = {};
+  orders.forEach((order, index) => {
+    const at = index + 1;
+    slots[`s${at}`] = order.name;
+    slots[`f${at}`] = formatCurrency(
+      money(order.totalPrice, order.currencyCode),
+      context.locale,
+    );
+    slots[`d${at}`] = new Intl.DateTimeFormat(context.locale, {
+      dateStyle: "medium",
+    }).format(order.processedAt);
+  });
 
   return {
     ...empty("order_status"),
-    figures,
+    slots,
     facts: orders.map(
       (order) =>
         `${order.name} · ${order.processedAt.toISOString().slice(0, 10)} · ${
@@ -367,7 +443,12 @@ async function myTerms(context: ToolContext): Promise<ToolResult> {
 
   return {
     ...empty("my_terms"),
-    figures: [owedLabel, ...(limitLabel ? [limitLabel] : [])],
+    slots: {
+      owed: owedLabel,
+      ...(limitLabel ? { limit: limitLabel } : {}),
+      ...(buyer?.netTermsDays ? { days: String(buyer.netTermsDays) } : {}),
+      invoices: String(outstanding.length),
+    },
     facts: [
       buyer?.netTermsDays
         ? `net_terms_days: ${buyer.netTermsDays}`
@@ -390,44 +471,89 @@ async function nextTier(call: ToolCall, context: ToolContext): Promise<ToolResul
   const first = call.lines[0];
   if (!first) return { ...empty("next_tier"), refusal: "nothing_matched" };
 
-  const { lines, unknownSkus, rules } = await priceLines([first], context);
+  const { lines, unknownSkus } = await priceLines([first], context);
   const line = lines[0];
   if (!line) return { ...empty("next_tier"), unknownSkus, refusal: "nothing_matched" };
 
-  const breaks = rules.flatMap((rule) =>
-    rule.kind === "volume_tier" ? rule.value.tiers : [],
-  );
-  const next = nextVolumeTier(breaks, line.quantity);
+  /**
+   * The next break, found by asking the engine rather than by reading rules.
+   *
+   * Flattening every volume tier in the shop was wrong twice over: a tier
+   * belonging to a rule aimed at somebody else's tag is not a break this buyer
+   * can reach, and a tier that happens to be *worse* at a higher quantity would
+   * be offered as an upgrade. So each candidate quantity is priced through the
+   * same engine, for this buyer, on this product — and a break only counts if
+   * the unit price actually falls.
+   */
+  const candidates = [...new Set(breakQuantities(line.quantity))].sort((a, b) => a - b);
 
-  if (!next) {
+  for (const quantity of candidates) {
+    const at = await priceLines([{ sku: line.sku, quantity }], context);
+    const upgraded = at.lines[0];
+    if (!upgraded) break;
+    if (upgraded.unitPriceAmount >= line.unitPriceAmount) continue;
+
     return {
       ...empty("next_tier"),
       lines,
-      figures: figuresOf(lines, null),
-      facts: [`no_further_tier_above: ${line.quantity}`],
+      slots: {
+        ...slotsFor(lines, null),
+        better: upgraded.unitPrice,
+        atQuantity: String(quantity),
+        addUnits: String(quantity - line.quantity),
+      },
+      facts: [
+        `current_quantity: ${line.quantity}`,
+        `next_break_at: ${quantity}`,
+        `units_to_add: ${quantity - line.quantity}`,
+        `unit_price_at_break: ${upgraded.unitPrice}`,
+        ...(upgraded.ruleSummary ? [`rule_at_break: ${upgraded.ruleSummary}`] : []),
+      ],
     };
   }
-
-  const atNext = await priceLines(
-    [{ sku: line.sku, quantity: next.minQuantity }],
-    context,
-  );
-  const upgraded = atNext.lines[0];
 
   return {
     ...empty("next_tier"),
     lines,
-    figures: [
-      ...figuresOf(lines, null),
-      ...(upgraded ? figuresOf(atNext.lines, null) : []),
-    ],
-    facts: [
-      `current_quantity: ${line.quantity}`,
-      `next_break_at: ${next.minQuantity}`,
-      `units_to_add: ${next.minQuantity - line.quantity}`,
-      ...(upgraded ? [`unit_price_at_break: ${upgraded.unitPrice}`] : []),
-    ],
+    slots: slotsFor(lines, null),
+    facts: [`no_better_price_above: ${line.quantity}`],
   };
+}
+
+/**
+ * Quantities worth pricing when looking for the next break.
+ *
+ * Every tier boundary a merchant is likely to have set, above what the buyer
+ * asked for. Cheap — each is one call to a pure function over rules already in
+ * memory — and it needs no knowledge of which rule might apply, which is the
+ * knowledge that made the first version of this wrong.
+ */
+function breakQuantities(from: number): number[] {
+  const rounds = [5, 10, 12, 20, 24, 25, 48, 50, 96, 100, 144, 200, 250, 500, 1_000];
+  const above = rounds.filter((value) => value > from);
+  // Plus the next round hundred, for a buyer already past the usual breaks.
+  const hundred = (Math.floor(from / 100) + 1) * 100;
+  return [...above, hundred].filter((value) => value > from && value <= MAX_QUANTITY);
+}
+
+/**
+ * Hand the buyer to a person, and leave the merchant something to answer.
+ *
+ * The checklist asks for an escalation "which files a message in the admin".
+ * An audit entry is that message: it carries the buyer, their words and the
+ * time, and it is already what Home's activity feed reads.
+ */
+async function escalate(call: ToolCall, context: ToolContext): Promise<ToolResult> {
+  const who = context.company ?? context.email ?? context.customerId ?? "A visitor";
+
+  await recordAudit({
+    actor: { type: "BUYER_AGENT", label: "Claude" },
+    action: "agent.escalated",
+    summary: `${who} asked the Buyer Agent something only you can answer.`,
+    metadata: { asked: (call.note ?? "").slice(0, 500) },
+  });
+
+  return { ...empty("escalate"), facts: ["escalated"] };
 }
 
 /**
@@ -465,13 +591,17 @@ async function requestQuote(call: ToolCall, context: ToolContext): Promise<ToolR
     await draftQuote(
       quote.id,
       {
+        // The **list** price, and the real product id. `draftQuote` prices
+        // these through the engine itself; handing it the price the engine
+        // already produced would apply the rule twice, and dropping the
+        // product id would lose every product-scoped rule that just matched.
         lines: lines.map((line) => ({
           variantId: line.variantId,
-          productId: null,
+          productId: line.productId,
           title: line.title,
           sku: line.sku,
           quantity: line.quantity,
-          listPrice: money(line.unitPriceAmount, context.currencyCode),
+          listPrice: line.listPrice,
         })),
       },
       { actor: { type: "BUYER_AGENT", label: "Claude" }, now: context.now },
@@ -481,19 +611,9 @@ async function requestQuote(call: ToolCall, context: ToolContext): Promise<ToolR
   return {
     ...empty("request_quote"),
     created: { kind: "quote", id: quote.id, label: quote.number },
+    slots: { reference: quote.number },
     facts: [`quote_number: ${quote.number}`],
   };
-}
-
-/** Every figure a turn may repeat, deduplicated. */
-function figuresOf(lines: readonly PricedToolLine[], subtotal: string | null): string[] {
-  const figures = new Set<string>();
-  for (const line of lines) {
-    figures.add(line.unitPrice);
-    figures.add(line.lineTotal);
-  }
-  if (subtotal) figures.add(subtotal);
-  return [...figures];
 }
 
 /** The engine's own decimal, for anything that has to round-trip a price. */

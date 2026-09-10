@@ -1,6 +1,8 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 
+import { createHash } from "node:crypto";
+
 import { db } from "~/db.server";
 import { overTurnLimit } from "~/lib/agent/buyer/conversation.server";
 import { answerBuyerTurn } from "~/lib/agent/buyer/turn.server";
@@ -43,8 +45,11 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     // Costed per turn, so the ceiling is per buyer rather than per shop: one
     // buyer cannot spend the merchant's whole budget, and a runaway script
-    // cannot either.
-    if (context.customerId && (await overTurnLimit(context.customerId))) {
+    // cannot either. A signed-out visitor is counted by a key derived here —
+    // guest mode used to have no ceiling at all, which is the one mode where
+    // an attacker needs no account.
+    const guestKey = context.customerId ? null : guestKeyFor(request, context.shop);
+    if (await overTurnLimit({ customerId: context.customerId, guestKey })) {
       return json({ ok: false as const, failure: "rate_limited" }, { status: 429 });
     }
 
@@ -54,6 +59,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
     const turn = await answerBuyerTurn({
       message,
       customerId: context.customerId,
+      guestKey,
       locale: context.locale ?? record?.primaryLocale ?? "en",
       admin,
     });
@@ -75,6 +81,23 @@ export const action = ({ request }: ActionFunctionArgs) =>
       refusal: turn.refusal,
     });
   });
+
+/**
+ * Who a signed-out visitor is, for the purpose of counting their turns.
+ *
+ * The forwarded address and the user agent, hashed with the shop so the value
+ * is meaningless outside it and is not itself a piece of personal data sitting
+ * in a column. Derived here rather than taken from the request body: a key the
+ * caller chooses is a ceiling the caller can step over.
+ */
+function guestKeyFor(request: Request, shop: string): string {
+  const address =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("cf-connecting-ip") ??
+    "";
+  const agent = request.headers.get("user-agent") ?? "";
+  return createHash("sha256").update(`${shop}|${address}|${agent}`).digest("hex");
+}
 
 /** A GET here is a mistake, not a question. Said plainly. */
 export const loader = () => {

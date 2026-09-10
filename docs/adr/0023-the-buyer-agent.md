@@ -27,33 +27,41 @@ that the model was confident.
 
 ## Decision
 
-### The reply may only repeat figures the tools computed
+### The model does not write numbers
 
 A turn runs in this order: route the question to one tool → **run the tool** →
-write the reply → check the reply → store both halves.
+write the reply → check the reply → substitute → store both halves.
 
-Every tool returns a `figures` list: exactly the amounts it computed, already
-formatted. Those are handed to the model _and kept_. The reply is then scanned
-for money, and any money in it that is not in that list makes the turn a
-refusal. The buyer is told something went wrong; they are never told a price.
+Every tool returns a **slot table**: `{{f1}}` a unit price, `{{t1}}` a line
+total, `{{q1}}` a quantity, `{{s1}}` a code, `{{total}}` a subtotal — each
+already formatted in the buyer's own locale. The model writes prose around those
+names and never a figure. `checkReply` then refuses a reply containing any
+Unicode digit outside a slot, any currency or percent word, or a slot that was
+not supplied; `fillSlots` puts the values in afterwards.
 
-The scanner recognises money and percentages — a symbol or an ISO code on either
-side of a number, a bare decimal, `15%` — and deliberately does **not** treat a
-bare integer as money, because a wholesale agent says "100 units" and "boxes of
-24" all day and a check that flagged those would be switched off within a week.
-Comparison is on the number rather than the formatting, so a model that writes
-`90.00` where the engine said `90.00 USD` has not invented anything, while every
-other number still fails.
+**The first version of this was a scanner, and it did not work.** It looked for
+things that resembled money in the model's reply and compared them with a list
+of formatted figures. An independent review got five different invented prices
+past it: `\d` is ASCII-only in JavaScript even under `/u`, so an Arabic reply
+reading "٩٫٠٠" was invisible; a currency symbol could be swapped and the number
+left alone; "1 200,50" and "120 050" collapse to the same digits; "900 dollars"
+carries no symbol at all; and a percentage collided with a yen amount. It also
+**refused the two flows the spec leads with**, because `\b[A-Z]{3}\s*\d` reads
+"NET 30" and "SKU 450" as money.
+
+Every one of those is closed by construction now rather than by a better
+pattern, which is the point: the check is "is there a digit outside a slot",
+and that is a question with a right answer in every script.
 
 This is the same shape as the Merchant Agent's rule that a briefing reason may
 not contain a digit (`docs/adr/0021`), and for the same reason: a prompt is a
 request, a check is a rule.
 
 Rejected: asking the model nicely (the failure is silent and the merchant is
-liable); templating the reply from fixed sentences (a concierge that cannot form
-a sentence is not a concierge, and the checklist asks for Arabic and English
-both); and verifying afterwards by re-pricing what the model said (it says
-things that are not prices, and re-pricing a hallucinated SKU proves nothing).
+liable); templating whole sentences (a concierge that cannot form one is not a
+concierge, and this ships in Arabic too); and re-pricing what the model said
+afterwards (it says things that are not prices, and re-pricing a hallucinated
+SKU proves nothing).
 
 ### The model chooses a tool; it never runs one
 

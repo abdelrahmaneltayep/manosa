@@ -3,9 +3,12 @@
 Hat: senior QA engineer who did not write this code and does not trust it.
 Date: 2026-09-10 · Branch: `claude/mannon-b2b-wholesale-oc5b18`
 
-> **Status: gate run, clean. No independent cold read yet.** The last two tasks
-> both came back FAIL from that second pass, on findings this gate missed — so
-> its absence here is a stated gap, and the first thing 5.2 should do.
+> **Status: clean pass, after a FAIL and a full fix round.** The cold read ran
+> after this report was first written and returned **FAIL**: the check this
+> whole feature rests on was blind to invented prices in five shapes and refused
+> the two flows §6 leads with. It has been **replaced**, not patched — the model
+> no longer writes numbers at all. Findings, evidence and fixes are in
+> `qa/5.1/COLD-READ.md`; §6 below summarises. This is the second run.
 
 ## 1. Scope, and what is not in it
 
@@ -37,7 +40,8 @@ and is told how many units.
 | Ability switched off                    | the tool refuses; nothing is written  |
 | SKU the catalogue does not have         | listed, never dropped from a subtotal |
 | Model unreachable / malformed           | the turn fails; the buyer is told     |
-| Reply states a figure nothing computed  | the turn is thrown away               |
+| Reply writes a number itself            | the turn is thrown away               |
+| Subject the merchant put off limits     | scripted decline, no model call       |
 | Buyer over the turn ceiling             | 429, per buyer                        |
 | Conversation older than 90 days         | deleted, with its messages            |
 
@@ -48,9 +52,9 @@ and is told how many units.
    `-5`, of `2.5`, of `"many"`; thirty lines when the cap is twenty; an
    acknowledgement that quotes a price before anything has been looked up.
 2. **A model inventing money.** Rounding `$6.50` to "about $6"; inventing a bulk
-   price nobody asked for; doing its own arithmetic (`$4.10 × 200`); describing
-   a discount as a percentage the engine never computed; quoting a figure when
-   the tool computed none at all.
+   price; doing its own arithmetic; a percentage the engine never computed; a
+   figure when the tools computed none; the same in Arabic-Indic and fullwidth
+   digits; a price spelled out in words; a currency word beside a correct slot.
 3. **Wrong-tenant everything.** Pricing in shop α against a 90%-off rule created
    in β; reading another customer's orders through `order_status`; β publishing
    its agent and α checking whether that published anything on its storefront.
@@ -59,21 +63,25 @@ and is told how many units.
 
 New:
 
-- `tests/unit/buyer-agent-prompts.test.ts` — 19
-- `tests/integration/buyer-agent.test.ts` — 26
+- `tests/unit/buyer-agent-prompts.test.ts` — 29, including the locale matrix
+- `tests/integration/buyer-agent.test.ts` — 37
+- `tests/unit/proxy-signature.test.ts` — 3 added (signature age)
+- `tests/integration/storefront.test.ts` — 2 added (signature age)
 
-**Whole suite: 1,726 unit + integration across 93 files, green.**
-`npx playwright test`: 313 e2e, green. `npm run lint`, `npm run typecheck`,
+**Whole suite: 1,759 unit + integration across 93 files, green.**
+`npx playwright test`: 325 e2e, green. `npm run lint`, `npm run typecheck`,
 `npm run build`, `npm run format:check` clean. No key and no prompt in the
 client bundle — grepped after a real build.
 
 Properties worth naming:
 
-- **A reply may only repeat what the engine computed.** Five separate ways of
-  getting it wrong are asserted, including the plausible one: arithmetic the
-  agent did itself.
-- **"100 units" is not a price.** The same check, asserted from the other side —
-  a scanner that flagged quantities would be switched off in a week.
+- **The model cannot write a number.** Every figure, quantity, code and date in
+  a reply is a slot the tools supplied; the check refuses any Unicode digit
+  outside one, in any script, plus any currency or percent word. Asserted in
+  eight locale/currency pairs, in both directions.
+- **The two sentences §6 leads with are sayable.** "net 30 days" and "SKU-450 at
+  100 units" are slots, and the first version of this check refused both.
+- **An acknowledgement may repeat what the buyer typed, and nothing else.**
 - **An unpublished agent costs nothing.** The model stub is asserted
   *not called*.
 - **A switched-off ability writes nothing.** All four refuse, and
@@ -99,9 +107,9 @@ Properties worth naming:
 
 1. **Every price comes from the engine.** `priceLines` calls `priceLine` — the
    same function the quote path and PO-to-order use — and the line total is
-   `multiplyMoney`. The next-tier answer is `nextVolumeTier` over the same rules
-   plus the engine's price at that break. Nothing in this feature computes a
-   price, and the reply cannot state one that was not computed.
+   `multiplyMoney`. The next-tier answer prices candidate quantities through the
+   engine rather than reading tiers off rules. Nothing here computes a price,
+   and the reply cannot contain a number this app did not put there.
 2. **Every query is shop-scoped.** Every new Prisma call is inside the scoped
    client; §4 probes it three ways.
 3. **AI drafts; a person approves.** The agent has no write path to live pricing
@@ -115,10 +123,41 @@ Properties worth naming:
    guardrail refused it.
 5. **Deciding shows its working.** Every priced line carries the rule that set
    it — for buyers, not just merchants. Every stored turn carries the tool that
-   ran, the figures it computed and the facts it was given, so a merchant
-   reading the log later can see why the agent said what it said.
+   ran, the slots it computed and the facts it was given, so a merchant reading
+   the log later can see why the agent said what it said — and the sentence the
+   model actually wrote, slots and all, beside the one the buyer read.
 
 ## 6. Bugs found, and fixed
+
+**From the independent cold read** (evidence and fix log in
+`qa/5.1/COLD-READ.md`):
+
+1. **The price guard did not hold.** Invented prices got past it in five shapes
+   — Arabic-Indic digits, a price in words, a swapped currency, a comma-decimal
+   collision, a percentage colliding with a yen amount — and it refused both
+   flagship flows because "NET 30" and "SKU 450" look like money to a regex.
+   Replaced: the model writes slots, this app substitutes the figures.
+2. **A quote request was discounted twice.** `draftQuote` was handed the
+   already-priced figure and a null product id, so a 35% rule became 58% and
+   the `listPrice` column claimed the discounted price was full price.
+3. **`next_tier` offered breaks the buyer could not reach**, from rules aimed at
+   other audiences, without checking the price actually fell.
+4. **Draft and archived products were orderable** through the agent, though the
+   quick-order block refuses them.
+5. **Guest mode had no rate ceiling and no thread** — the one anonymous mode,
+   at two model calls a turn.
+6. **The proxy signature never expired.** A signed URL carries
+   `logged_in_customer_id`; before this feature that bought a price list, and
+   after it, order history and a credit limit.
+7. **Rows before gates**: an unpublished shop, a visitor who is not a buyer and
+   an empty POST each minted a conversation.
+8. **The log lied.** Every failed turn read "Answered", and a buyer's message to
+   a merchant who had taken over was discarded rather than stored.
+9. Plus: off-limits subjects were prompt-only; the decline was written by the
+   model; `escalate` filed nothing; `loadGuardrails` raced itself; and the new
+   tables were absent from the uninstall purge.
+
+**Found by the author's own gate:**
 
 1. **A hand-rolled money parser.** `priceLines` re-implemented decimal parsing
    with its own table of currency exponents, next to a `toMoney` in
@@ -146,7 +185,10 @@ Properties worth naming:
   post from.
 - **No widget, no panel, no log** — 5.2 and 5.3. Until then the agent is
   unpublished by default and reachable only by a signed request.
-- **The reply scanner is heuristic.** It reads money and percentages, not bare
-  integers, on purpose. A model that writes "410" meaning $410 would pass; a
-  model that writes "$410" would not. Stated rather than implied, and the
-  reasoning is in `docs/adr/0023`.
+- **No error boundary around the Admin API.** A throw from Shopify is still a
+  bare 500 rather than a sentence, and can leave a `NEW` quote with no lines.
+  Every proxy route has the same shape, so the fix is one boundary in
+  `withProxy` — the first item of 5.3.
+- **A price spelled out in words with no currency named** — "nine hundred" — is
+  not caught. It is also not a quote anybody can act on. Stated rather than
+  implied; the currency words that would make it one are refused.

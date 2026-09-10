@@ -27,14 +27,22 @@ const source = (name: string) => readFileSync(join(BLOCKS, name), "utf8");
 const MAX_BYTES = 16 * 1024;
 
 describe("the blocks exist", () => {
-  it("ships the three the app has", () => {
+  it("ships the four the app has", () => {
     expect(files.sort()).toEqual([
+      "buyer-agent.liquid",
       "quick-order.liquid",
       "registration-form.liquid",
       "variants-table.liquid",
     ]);
   });
 });
+
+/**
+ * A block a merchant adds to a section needs a preset to be addable at all.
+ * A `body` block is an app embed, which the merchant switches on in the theme
+ * editor's App embeds list and which a preset would be meaningless for.
+ */
+const isAppEmbed = (liquid: string) => /"target"\s*:\s*"body"/.test(liquid);
 
 describe.each(files)("%s", (name) => {
   const liquid = source(name);
@@ -60,9 +68,9 @@ describe.each(files)("%s", (name) => {
     expect(statSync(join(BLOCKS, name)).size).toBeLessThan(MAX_BYTES);
   });
 
-  it("declares its schema and a preset, so a merchant can actually add it", () => {
+  it("declares its schema, and a preset when a preset is what adds it", () => {
     expect(liquid).toContain("{% schema %}");
-    expect(liquid).toContain('"presets"');
+    if (!isAppEmbed(liquid)) expect(liquid).toContain('"presets"');
   });
 
   it("writes text with textContent, never innerHTML", () => {

@@ -19,12 +19,17 @@ import {
 
 const SECRET = "test-api-secret";
 
-/** Sign a set of params the way Shopify does. */
+/** Sign a set of params the way Shopify does, timestamp and all. */
 function signed(params: Record<string, string | string[]>): URLSearchParams {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (Array.isArray(value)) value.forEach((entry) => search.append(key, entry));
     else search.set(key, value);
+  }
+  // Shopify signs one, and the app refuses a request without one — a signed URL
+  // that never expires carries `logged_in_customer_id` forever.
+  if (!search.has("timestamp")) {
+    search.set("timestamp", String(Math.floor(Date.now() / 1000)));
   }
   search.set(
     "signature",
@@ -159,5 +164,47 @@ describe("the context it produces", () => {
       requestFor(signed({ shop: "alpha.myshopify.com", locale: "ar" })),
     );
     expect(context.locale).toBe("ar");
+  });
+});
+
+describe("how old a signature may be", () => {
+  it("refuses one signed hours ago", () => {
+    const stale = signed({
+      shop: "alpha.myshopify.com",
+      timestamp: String(Math.floor((Date.now() - 4 * 60 * 60_000) / 1000)),
+    });
+
+    expect(() => proxyContext(requestFor(stale))).toThrow();
+    try {
+      proxyContext(requestFor(stale));
+    } catch (error) {
+      expect(error).toMatchObject({ status: 401 });
+    }
+  });
+
+  it("refuses one with no timestamp at all", () => {
+    const search = new URLSearchParams({ shop: "alpha.myshopify.com" });
+    search.set(
+      "signature",
+      createHmac("sha256", SECRET).update(signablePayload(search)).digest("hex"),
+    );
+
+    try {
+      proxyContext(requestFor(search));
+      throw new Error("should have refused");
+    } catch (error) {
+      expect(error).toMatchObject({ status: 401 });
+    }
+  });
+
+  it("allows a clock that is a little ahead of ours", () => {
+    // A buyer's device and ours will disagree, and a storefront request can
+    // sit in a queue. Refusing on a minute of skew would be refusing traffic.
+    const skewed = signed({
+      shop: "alpha.myshopify.com",
+      timestamp: String(Math.floor((Date.now() + 60_000) / 1000)),
+    });
+
+    expect(proxyContext(requestFor(skewed)).shop).toBe("alpha.myshopify.com");
   });
 });

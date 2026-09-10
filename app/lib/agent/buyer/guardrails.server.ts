@@ -40,10 +40,15 @@ export type Ability =
  */
 export async function loadGuardrails(): Promise<AgentGuardrails> {
   const shop = shopScope.require("buyer agent guardrails");
-  const existing = await db.agentGuardrails.findUnique({ where: { shop } });
-  if (existing) return existing;
 
-  return db.agentGuardrails.create({ data: { ...tenant(), offLimits: [] } });
+  // Upserted rather than read-then-created: two buyers opening the widget in
+  // the same second both find nothing and both insert, and the loser of that
+  // race gets a unique-constraint error rather than an answer.
+  return db.agentGuardrails.upsert({
+    where: { shop },
+    update: {},
+    create: { ...tenant(), offLimits: [] },
+  });
 }
 
 export interface GuardrailInput {
@@ -225,4 +230,46 @@ export function lintInstructions(
   }
 
   return warnings;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Off-limits subjects                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Does this message touch something the merchant said to stay off?
+ *
+ * Checked here, in our code, before either model call. Listing the subjects in
+ * the prompt and hoping was the first version: a merchant who writes "never
+ * discuss our supplier" has said something about their business they expect to
+ * hold, and "the model was asked nicely" is not how that expectation is met.
+ *
+ * Whole words, case-insensitively, in whatever script the subject is written
+ * in — a merchant typing "competitors" must not silence "competitive".
+ */
+export function offLimitsHit(
+  message: string,
+  subjects: readonly string[],
+): string | null {
+  const haystack = message.toLowerCase();
+
+  for (const subject of subjects) {
+    const needle = subject.trim().toLowerCase();
+    if (needle === "") continue;
+
+    // A multi-word subject is a phrase; a single word is a word.
+    if (needle.includes(" ")) {
+      if (haystack.includes(needle)) return subject;
+      continue;
+    }
+
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    if (
+      new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "u").test(haystack)
+    ) {
+      return subject;
+    }
+  }
+
+  return null;
 }

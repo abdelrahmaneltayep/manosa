@@ -1,8 +1,8 @@
 import { db } from "~/db.server";
 import type { AiDeps, AiFailure } from "~/lib/ai/run.server";
 import {
+  checkReply,
   routeBuyerTurn,
-  unbackedFigures,
   writeBuyerReply,
   MAX_MESSAGE_CHARS,
   type AgentTurnGrounding,
@@ -14,7 +14,10 @@ import {
   outcomeFor,
   recordOutcome,
 } from "~/lib/agent/buyer/conversation.server";
-import { loadGuardrails } from "~/lib/agent/buyer/guardrails.server";
+import { loadGuardrails, offLimitsHit } from "~/lib/agent/buyer/guardrails.server";
+import { getFixedT } from "~/i18n.server";
+import { normalizeLocale, DEFAULT_LOCALE } from "~/i18n/config";
+import { translate } from "~/i18n/translate";
 import {
   runTool,
   type PricedToolLine,
@@ -47,7 +50,7 @@ import { shopScope } from "~/lib/tenant/shop-context.server";
  * through with no cast and the widget has a sentence for each.
  */
 export type TurnFailure =
-  AiFailure | "not_published" | "guest" | "taken_over" | "empty" | "unbacked_figure";
+  AiFailure | "not_published" | "guest" | "taken_over" | "empty" | "invented_figure";
 
 export interface TurnCart {
   lines: PricedToolLine[];
@@ -73,6 +76,8 @@ export interface TurnResult {
 export interface TurnInput {
   message: string;
   customerId: string | null;
+  /** Threads a signed-out visitor's turns together. Derived, never sent. */
+  guestKey?: string | null;
   locale: string;
   admin: AdminGraphql;
   now?: Date;
@@ -116,27 +121,37 @@ export async function answerBuyerTurn(
       })
     : null;
 
+  // Every gate that does not need a conversation is checked before one exists.
+  // An unpublished shop, a visitor who is not a buyer and an empty POST used to
+  // mint a row each, which is a table anyone could fill from the outside.
+  if (!guardrails.published) return failed("", "not_published");
+
+  // A signed-out visitor, or one whose application has not been approved, is
+  // not a wholesale buyer — and this agent knows nothing else.
+  const approved = buyer?.status === "APPROVED";
+  if (!approved && !guardrails.guestMode) return failed("", "guest");
+
+  if (message === "") return failed("", "empty");
+
   const conversation = await openConversation({
     customerId: input.customerId,
+    guestKey: input.guestKey ?? null,
     company: buyer?.company ?? null,
     locale: input.locale,
     now,
   });
 
-  if (!guardrails.published) return failed(conversation.id, "not_published");
-
-  // A signed-out visitor, or one whose application has not been approved, is
-  // not a wholesale buyer — and this agent knows nothing else.
-  const approved = buyer?.status === "APPROVED";
-  if (!approved && !guardrails.guestMode) return failed(conversation.id, "guest");
+  // The buyer's words are kept whatever happens next, including when a person
+  // has taken the thread over: a merchant reading the log has to see what was
+  // said to them, and a message that vanished is a message they never answer.
+  await appendTurn(conversation.id, { role: "BUYER", text: message }, { now });
 
   // A merchant is in this conversation. The agent stops talking mid-thread
   // rather than talking over them.
-  if (conversation.takenOverAt) return failed(conversation.id, "taken_over");
-
-  if (message === "") return failed(conversation.id, "empty");
-
-  await appendTurn(conversation.id, { role: "BUYER", text: message }, { now });
+  if (conversation.takenOverAt) {
+    await recordOutcome(conversation.id, "ESCALATED");
+    return failed(conversation.id, "taken_over");
+  }
 
   const shopRow = await db.shop.findUnique({ where: { shop } });
   const currencyCode = shopRow?.currencyCode ?? "USD";
@@ -150,7 +165,39 @@ export async function answerBuyerTurn(
     offLimits: guardrails.offLimits,
     allowed: allowedTools(guardrails),
     signedIn: Boolean(input.customerId),
+    buyerSaid: message,
   };
+
+  // Checked here rather than listed in the prompt. A subject the merchant put
+  // off limits is declined in our own words, before either model call — so it
+  // costs nothing, cannot be talked around, and says the same thing every time.
+  const offLimits = offLimitsHit(message, guardrails.offLimits);
+  if (offLimits) {
+    const t = translate(await getFixedT(normalizeLocale(input.locale) ?? DEFAULT_LOCALE));
+    const scripted = t("agent.scripted.off_limits");
+
+    await appendTurn(
+      conversation.id,
+      {
+        role: "AGENT",
+        text: scripted,
+        refusal: `off_limits: ${offLimits}`,
+        toolCalls: { tool: "decline", offLimits },
+      },
+      { now },
+    );
+    await recordOutcome(conversation.id, "DECLINED");
+
+    return {
+      conversationId: conversation.id,
+      reply: scripted,
+      cart: null,
+      quote: null,
+      tool: "decline",
+      failure: null,
+      refusal: "off_limits",
+    };
+  }
 
   const history = await historyFor(conversation.id);
   const routed = await routeBuyerTurn(
@@ -158,7 +205,10 @@ export async function answerBuyerTurn(
     deps,
   );
 
-  if (!routed.ok) return failed(conversation.id, routed.reason);
+  if (!routed.ok) {
+    await recordFailure(conversation.id, routed.reason, now);
+    return failed(conversation.id, routed.reason);
+  }
 
   const context: ToolContext = {
     admin: input.admin,
@@ -179,6 +229,36 @@ export async function answerBuyerTurn(
 
   const result = await runTool(routed.value.call, context);
 
+  // A decline is ours to word. Asking the model to write the sentence in which
+  // it refuses is a second chance for it to say something else, for a second
+  // model call, when the app already knows exactly what the answer is.
+  if (result.tool === "decline") {
+    const t = translate(await getFixedT(normalizeLocale(input.locale) ?? DEFAULT_LOCALE));
+    const scripted = t("agent.scripted.decline");
+
+    await appendTurn(
+      conversation.id,
+      {
+        role: "AGENT",
+        text: scripted,
+        refusal: result.refusal ?? "declined",
+        toolCalls: toolRecord(result.tool, result),
+      },
+      { now },
+    );
+    await recordOutcome(conversation.id, "DECLINED");
+
+    return {
+      conversationId: conversation.id,
+      reply: scripted,
+      cart: null,
+      quote: null,
+      tool: result.tool,
+      failure: null,
+      refusal: result.refusal,
+    };
+  }
+
   const written = await writeBuyerReply(
     { message, result, grounding, actorId: input.customerId },
     deps,
@@ -188,35 +268,27 @@ export async function answerBuyerTurn(
     // A reply that could not be written is not a reply the buyer gets a
     // half-version of. The turn is recorded with the reason, so the merchant's
     // conversation log shows the gap rather than hiding it.
-    await appendTurn(
+    await recordFailure(
       conversation.id,
-      {
-        role: "AGENT",
-        text: "",
-        refusal: written.reason,
-        toolCalls: toolRecord(routed.value.call.tool, result),
-      },
-      { now },
+      written.reason,
+      now,
+      toolRecord(routed.value.call.tool, result),
     );
     return failed(conversation.id, written.reason, result.tool);
   }
 
-  // Belt and braces. `writeBuyerReply` already refuses an unbacked figure in
-  // its validator, so this can only fire if that check is ever weakened — and
-  // it is the one check that must not be weakened by accident.
-  const unbacked = unbackedFigures(written.value.reply, result.figures);
-  if (unbacked.length > 0) {
-    await appendTurn(
+  // Belt and braces. `writeBuyerReply` runs the same check in its validator, so
+  // this can only fire if that one is ever weakened — and it is the one check
+  // that must not be weakened by accident.
+  const recheck = checkReply(written.value.template, result.slots);
+  if (!recheck.ok) {
+    await recordFailure(
       conversation.id,
-      {
-        role: "AGENT",
-        text: "",
-        refusal: `unbacked_figure: ${unbacked.join(", ")}`,
-        toolCalls: toolRecord(routed.value.call.tool, result),
-      },
-      { now },
+      `invented_figure: ${recheck.error ?? ""}`,
+      now,
+      toolRecord(routed.value.call.tool, result),
     );
-    return failed(conversation.id, "unbacked_figure", result.tool);
+    return failed(conversation.id, "invented_figure", result.tool);
   }
 
   await appendTurn(
@@ -274,10 +346,32 @@ export function allowedTools(guardrails: {
 function toolRecord(tool: ToolName, result: ToolResult) {
   return {
     tool,
-    figures: result.figures,
+    slots: result.slots,
     facts: result.facts,
     unknownSkus: result.unknownSkus,
     refusal: result.refusal,
     created: result.created?.label ?? null,
   };
+}
+
+/**
+ * Record a turn nobody could answer.
+ *
+ * Written as an agent turn with no text and a reason, and the conversation is
+ * marked as having failed. Without the second half, a log full of turns that
+ * went nowhere reads "Answered" — invariant 4, on the one screen a merchant
+ * uses to decide whether to trust this thing at all.
+ */
+async function recordFailure(
+  conversationId: string,
+  reason: string,
+  now: Date,
+  toolCalls?: ReturnType<typeof toolRecord>,
+) {
+  await appendTurn(
+    conversationId,
+    { role: "AGENT", text: "", refusal: reason, toolCalls },
+    { now },
+  );
+  await recordOutcome(conversationId, "FAILED");
 }

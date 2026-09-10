@@ -39,6 +39,8 @@ export interface TurnRecord {
  */
 export async function openConversation(options: {
   customerId: string | null;
+  /** A guest has no customer id; this is what threads their turns together. */
+  guestKey?: string | null;
   company: string | null;
   locale: string;
   now?: Date;
@@ -47,9 +49,19 @@ export async function openConversation(options: {
   shopScope.require("buyer agent conversation");
 
   const since = new Date(now.getTime() - IDLE_MINUTES * 60_000);
-  const existing = options.customerId
+  const key = options.customerId ?? options.guestKey ?? null;
+
+  // A guest gets a thread too. Without one, every message from a signed-out
+  // visitor started a new conversation — which is both a useless log and a
+  // rate limit with nothing to count.
+  const existing = key
     ? await db.agentConversation.findFirst({
-        where: { customerId: options.customerId, lastMessageAt: { gte: since } },
+        where: {
+          ...(options.customerId
+            ? { customerId: options.customerId }
+            : { customerId: null, guestKey: options.guestKey }),
+          lastMessageAt: { gte: since },
+        },
         orderBy: { lastMessageAt: "desc" },
       })
     : null;
@@ -60,6 +72,7 @@ export async function openConversation(options: {
     data: {
       ...tenant(),
       customerId: options.customerId,
+      guestKey: options.customerId ? null : (options.guestKey ?? null),
       company: options.company,
       locale: options.locale,
       startedAt: now,
@@ -111,7 +124,10 @@ export async function appendTurn(
  * did, so a buyer who was declined once and then helped reads as helped.
  */
 export function outcomeFor(result: ToolResult): AgentOutcome {
-  if (result.refusal) return result.tool === "decline" ? "DECLINED" : "ANSWERED";
+  // A tool that refused did not do the thing. `decline` is a decline; anything
+  // else that refused — an ability switched off, a signed-out buyer — is the
+  // agent saying no, which is what DECLINED means on the merchant's log.
+  if (result.refusal) return "DECLINED";
   switch (result.tool) {
     case "build_cart":
       return "CART";
@@ -126,12 +142,21 @@ export function outcomeFor(result: ToolResult): AgentOutcome {
   }
 }
 
+/**
+ * Which outcome wins when a conversation has had several.
+ *
+ * The strongest thing that happened: a thread that built a cart and also
+ * declined something is a cart. `FAILED` is lowest, so one dead turn in an
+ * otherwise useful conversation does not label the whole thing — but a
+ * conversation that only ever failed says so, rather than "Answered".
+ */
 const RANK: Record<AgentOutcome, number> = {
-  DECLINED: 0,
-  ANSWERED: 1,
-  ESCALATED: 2,
-  QUOTE: 3,
-  CART: 4,
+  FAILED: 0,
+  DECLINED: 1,
+  ANSWERED: 2,
+  ESCALATED: 3,
+  QUOTE: 4,
+  CART: 5,
 };
 
 export async function recordOutcome(
@@ -163,15 +188,23 @@ export const TURN_LIMIT = 20;
 export const TURN_WINDOW_MS = 10 * 60_000;
 
 export async function overTurnLimit(
-  customerId: string,
+  who: { customerId?: string | null; guestKey?: string | null },
   options: { now?: Date; limit?: number } = {},
 ): Promise<boolean> {
   const now = options.now ?? new Date();
+
+  // A guest is counted by their key, which is the one thing a signed-out
+  // visitor has. Without this branch the only anonymous mode had no ceiling at
+  // all, at two model calls a turn.
+  const conversation = who.customerId
+    ? { customerId: who.customerId }
+    : { customerId: null, guestKey: who.guestKey ?? null };
+
   const turns = await db.agentMessage.count({
     where: {
       role: "BUYER",
       createdAt: { gte: new Date(now.getTime() - TURN_WINDOW_MS) },
-      conversation: { customerId },
+      conversation,
     },
   });
   return turns >= (options.limit ?? TURN_LIMIT);

@@ -1375,12 +1375,16 @@ model AgentConversation {
 
   /// Shopify's customer GID, from the signed proxy request. Null in guest mode.
   customerId String?
+  /// What threads a signed-out visitor's turns together, and what their rate
+  /// ceiling is counted against. Derived from the request, never sent by it.
+  guestKey   String?
   /// Denormalised for the log, so a deleted buyer's conversation still reads.
   company    String?
   /// The language the buyer was answered in.
   locale     String  @default("en")
 
-  outcome AgentOutcome @default(ANSWERED)
+  /// Starts at FAILED: a conversation is only "answered" once one turn was.
+  outcome AgentOutcome @default(FAILED)
 
   /// Set when a merchant takes the conversation over. The agent stops
   /// answering from this moment and says a person has joined.
@@ -1394,6 +1398,7 @@ model AgentConversation {
 
   @@index([shop, lastMessageAt])
   @@index([shop, customerId])
+  @@index([shop, guestKey])
 }
 
 /// One turn. The buyer's words, or the agent's, or a merchant who took over.
@@ -1424,6 +1429,10 @@ model AgentMessage {
 }
 
 enum AgentOutcome {
+  /// Nobody could answer: the model was unreachable, or it wrote something the
+  /// guard refused. Kept distinct from ANSWERED so a log full of dead turns
+  /// does not read as a log full of helped buyers.
+  FAILED
   /// The buyer asked and was answered.
   ANSWERED
   /// A cart was assembled for them to review.

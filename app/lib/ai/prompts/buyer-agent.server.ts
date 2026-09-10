@@ -48,6 +48,13 @@ export interface AgentTurnGrounding {
   allowed: string[];
   /** Whether the buyer is signed in. A guest can be told to sign in. */
   signedIn: boolean;
+  /**
+   * The buyer's own message.
+   *
+   * Only so the acknowledgement may repeat a code or a quantity they typed.
+   * Repeating what somebody said is not a claim about a price.
+   */
+  buyerSaid?: string;
 }
 
 export interface RoutedTurn {
@@ -169,12 +176,14 @@ export function readRoutedTurn(
     if (acknowledgement === "") {
       throw new TurnError('"acknowledgement" must be one short sentence.');
     }
-    // The acknowledgement is written before anything was looked up, so a figure
-    // in it is a guess by construction — there is nothing yet to check it
-    // against.
-    if (MONEY.test(acknowledgement)) {
+    // The acknowledgement is written before anything has been looked up, so a
+    // figure in it is a guess by construction. It may still repeat what the
+    // buyer typed — "checking SKU-450 at 100 units" invents nothing, and the
+    // two flows the spec leads with are exactly that shape.
+    const invented = inventedNumbers(acknowledgement, grounding.buyerSaid ?? "");
+    if (invented.length > 0) {
       throw new TurnError(
-        '"acknowledgement" contains an amount of money. You have not looked anything up yet — say what you are about to do instead.',
+        `"acknowledgement" states ${invented.join(", ")}, which the buyer did not say and you have not looked up. Say what you are about to do, not what the answer is.`,
       );
     }
 
@@ -233,9 +242,14 @@ Answer with a single JSON object and nothing else. No prose, no code fence.
   "reply": string   // what the buyer reads. Their language. At most three sentences.
 }
 
+**You may not write a number.** Not a price, not a percentage, not a quantity, not a product code, not a date. Every one of those is given to you as a slot, and you write the slot instead:
+
+  "Your price is {{f1}} each, so {{f2}} for {{q1}}."
+
 Rules you must follow, and the first one is absolute:
-- **Every amount of money in your reply must be copied exactly from the figures you are given.** Do not round them, do not convert them, do not add them up, do not estimate one that is missing, and never write an amount that is not in that list. If the figures list is empty, your reply contains no amounts at all. A reply that breaks this rule is thrown away and the buyer is told something went wrong, which is worse for them than a shorter answer.
-- Percentages are amounts too. Do not describe a discount as a percentage unless that percentage appears in the facts you are given.
+- Write \`{{name}}\` exactly as it appears in the slot list. Do not change it, do not write the value it stands for, and do not invent a slot that is not in the list. A reply containing any digit outside a slot is thrown away and the buyer is told something went wrong — which is worse for them than a shorter answer.
+- Do not write the name of a currency or the word "percent" (or their equivalents in any language). A slot already carries its own symbol.
+- Do not add up, convert, round or estimate. If the number you want is not a slot, it is not a number you have.
 - Use only the facts you are given. If something was not looked up, say you will find out — do not fill it in.
 - Never promise a delivery date, a stock level, or an approval. You do not decide any of those.
 - Never ask for a card number, a password, or anything a store would not ask in a chat.
@@ -249,6 +263,10 @@ export function replyUser(
 ): string {
   const list = (items: readonly string[]) =>
     items.length > 0 ? items.map((item) => `- ${item}`).join("\n") : "- (none)";
+
+  const slots = Object.entries(result.slots).map(
+    ([name, value]) => `{{${name}}} = ${value}`,
+  );
 
   return [
     `Buyer's language: ${grounding.locale}`,
@@ -265,118 +283,149 @@ export function replyUser(
     `Tool that ran: ${result.tool}`,
     ...(result.refusal ? [`It refused, because: ${result.refusal}`] : []),
     "",
-    "Amounts you may state — copy them exactly, and state no others:",
-    list(result.figures),
+    "Slots you may use. Write the name in braces; never the value:",
+    list(slots),
     "",
     "Facts:",
     list(result.facts),
-    ...(result.lines.length > 0
-      ? [
-          "",
-          "Lines:",
-          ...result.lines.map(
-            (line) =>
-              `- ${line.quantity} × ${line.title} (${line.sku}) at ${line.unitPrice} each, ${line.lineTotal}${
-                line.ruleSummary ? ` — ${line.ruleSummary}` : ""
-              }`,
-          ),
-        ]
-      : []),
     ...(result.unknownSkus.length > 0
       ? ["", "Codes this store does not have — say so:", list(result.unknownSkus)]
       : []),
-    ...(result.subtotal ? ["", `Subtotal: ${result.subtotal}`] : []),
     "",
     "The buyer's message:",
     message.slice(0, MAX_MESSAGE_CHARS),
   ].join("\n");
 }
 
-/**
- * Money, in the shapes a model writes it.
- *
- * A symbol or an ISO code on either side of a number, a bare decimal, or a
- * percentage — because "you get 15% off" is a price claim in every way that
- * matters. Bare integers are deliberately not money: a wholesale agent says
- * "100 units" and "boxes of 24" all day, and a check that flagged those would
- * be turned off within a week.
- */
-const DIGITS = "\\d[\\d,\\u00A0\\u202F\\u0020\\u066C]*(?:[.\\u066B]\\d+)?";
-const SYMBOL = "[$\\u00A3\\u20AC\\u00A5\\u20B9\\uFDFC]";
-
-const MONEY_SOURCE = [
-  `${SYMBOL}\\s*${DIGITS}`,
-  `${DIGITS}\\s*${SYMBOL}`,
-  `\\b[A-Z]{3}\\s*${DIGITS}`,
-  `${DIGITS}\\s*[A-Z]{3}\\b`,
-  // Before the bare decimal, so "12.5%" reads as a percentage rather than as
-  // the number 12.5 with a stray sign after it.
-  "\\d+(?:[.\\u066B]\\d+)?\\s*[%\\u066A]",
-  "\\d[\\d,\\u00A0\\u202F\\u0020\\u066C]*[.\\u066B]\\d{1,3}\\b",
-].join("|");
-
-const MONEY = new RegExp(`(?:${MONEY_SOURCE})`, "u");
+/* -------------------------------------------------------------------------- */
+/* The guard                                                                   */
+/* -------------------------------------------------------------------------- */
 
 /**
- * Every amount the reply states.
+ * The rule the whole feature rests on, and why it is shaped like this.
  *
- * Used to check a reply against what the tools computed. Normalised so that
- * "$1,200.00" and "$1,200.00 " compare equal, and so that a figure the model
- * repeated with different spacing is not called a fabrication.
+ * The first version of this scanned the model's reply for anything that looked
+ * like money and compared it with a list of figures the tools had computed.
+ * That cannot be made to work. `\d` is ASCII-only, so an Arabic reply reading
+ * "٩٫٠٠" was invisible to it; a currency can be swapped for another and the
+ * number left alone; "1 200,50" and "120 050" collapse to the same digits;
+ * "900 dollars" contains no symbol at all; and it refused the two examples the
+ * spec leads with, because "NET 30" and "SKU 450" look like money to a regex.
+ *
+ * So the model does not write numbers. It writes **slots** — \`{{f1}}\`, \`{{q1}}\`
+ * — and this module substitutes the values the tools computed, formatted in the
+ * buyer's own locale. The check is then a thing that can actually be right: a
+ * reply may contain no digit, in any script, outside a slot; no currency word;
+ * and no slot we did not supply.
  */
-export function statedFigures(reply: string): string[] {
-  const found = new Set<string>();
-  const pattern = new RegExp(MONEY.source, "gu");
 
-  for (const match of reply.matchAll(pattern)) {
-    found.add(normalizeFigure(match[0]));
-  }
-  return [...found];
+/** `{{f1}}`, with whatever spacing a model feels like using. */
+const SLOT = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/gu;
+
+/** Any decimal digit, in any script. `\p{Nd}` covers Arabic-Indic and the rest. */
+const DIGIT = /\p{Nd}/u;
+
+/**
+ * Words that make a bare number a price.
+ *
+ * A formatted figure carries its own symbol, so the model never needs one of
+ * these — and "nine hundred dollars" is a quote in every way that matters even
+ * though it holds no digit. English and Arabic, because those are the two
+ * languages this ships in; a third language means a third row here, and the
+ * test that reads this list will say so.
+ */
+const CURRENCY_WORDS =
+  /\b(?:dollars?|usd|pounds?|gbp|euros?|eur|yen|jpy|riyals?|sar|dirhams?|aed|dinars?|kwd|bhd|cents?|percent|per\s?cent)\b|[$£€¥₹﷼%]|٪|ريال|ريالات|درهم|دراهم|دينار|دولار|دولارات|جنيه|يورو|بالمئة|بالمائة|في\s?المئة/iu;
+
+/**
+ * Runs of digits in `text` that do not appear in `source`.
+ *
+ * Used on the acknowledgement, which has no slots because nothing has been
+ * looked up yet. Digits the buyer themselves wrote are theirs to hear back;
+ * anything else at that stage is invented.
+ */
+export function inventedNumbers(text: string, source: string): string[] {
+  const runs = [...text.matchAll(/\p{Nd}[\p{Nd}.,\u066B\u066C]*/gu)].map(
+    (match) => match[0],
+  );
+  const said = source.replace(/[\s\u00A0\u202F]/gu, "");
+  const flat = (value: string) => value.replace(/[\s\u00A0\u202F]/gu, "");
+
+  return [...new Set(runs.filter((run) => !said.includes(flat(run))))];
 }
 
-export const normalizeFigure = (value: string) =>
-  value.replace(/[\s\u00A0\u202F]/gu, "").toUpperCase();
+export interface ReplyCheck {
+  ok: boolean;
+  /** Why it was refused. Null when it was not. */
+  error: string | null;
+}
+
+/** Every slot name a reply used. */
+export function slotsUsed(reply: string): string[] {
+  return [...reply.matchAll(new RegExp(SLOT.source, "gu"))].map((match) => match[1]!);
+}
+
+/** The reply with every slot taken out, which is what the check reads. */
+export function withoutSlots(reply: string): string {
+  return reply.replace(new RegExp(SLOT.source, "gu"), " ");
+}
 
 /**
- * Does this reply state anything the tools did not compute?
+ * May this reply be shown to the buyer?
  *
- * The check the whole feature rests on. Returns the offending text, so the
- * refusal can be logged with what the model tried to say — a merchant asking
- * "why did it refuse?" gets an answer, and so does the next person tuning the
- * prompt.
+ * Returns the reason rather than a boolean, because the repair round is handed
+ * that reason and "you wrote a number" is the one correction a model reliably
+ * acts on.
  */
-export function unbackedFigures(reply: string, allowed: readonly string[]): string[] {
-  const permitted = new Set<string>();
-
-  for (const figure of allowed) {
-    permitted.add(normalizeFigure(figure));
-    // A formatted figure often contains its own bare number ("$1,200.00"), and
-    // the scanner finds both. Both are backed by the same computation.
-    for (const inner of figure.matchAll(new RegExp(MONEY.source, "gu"))) {
-      permitted.add(normalizeFigure(inner[0]));
-      permitted.add(bareNumber(inner[0]));
+export function checkReply(
+  reply: string,
+  slots: Readonly<Record<string, string>>,
+): ReplyCheck {
+  for (const name of slotsUsed(reply)) {
+    if (!(name in slots)) {
+      return {
+        ok: false,
+        error: `You used {{${name}}}, which is not one of the slots you were given. Use only the slots in the list, or none.`,
+      };
     }
-    permitted.add(bareNumber(figure));
   }
 
-  return statedFigures(reply).filter(
-    (figure) => !permitted.has(figure) && !permitted.has(bareNumber(figure)),
+  const bare = withoutSlots(reply);
+
+  if (DIGIT.test(bare)) {
+    return {
+      ok: false,
+      error:
+        "Your reply contains a number written out. Every number, price, quantity, code and date has to be a slot from the list — write {{f1}} rather than the figure it stands for.",
+    };
+  }
+
+  const currency = bare.match(CURRENCY_WORDS);
+  if (currency) {
+    return {
+      ok: false,
+      error: `Your reply says "${currency[0]}". Do not name a currency or a percentage — the slot you were given already carries its own symbol.`,
+    };
+  }
+
+  return { ok: true, error: null };
+}
+
+/** Put the tools' own figures into the sentence the model wrote. */
+export function fillSlots(
+  reply: string,
+  slots: Readonly<Record<string, string>>,
+): string {
+  return reply.replace(new RegExp(SLOT.source, "gu"), (_, name: string) =>
+    Object.prototype.hasOwnProperty.call(slots, name) ? slots[name]! : "",
   );
 }
 
-/**
- * The number inside a formatted figure.
- *
- * "$1,200.00", "1,200.00 USD" and "1,200.00" are the same amount written three
- * ways, and a model that drops the currency code — or writes it in lower case,
- * which the scanner does not read as a code — has not invented anything. The
- * comparison is on the number, so those three agree; every *other* number is
- * still caught.
- */
-const bareNumber = (value: string) => value.replace(/[^\d.\u066B]/gu, "");
-
 export interface AgentReply {
+  /** The sentence, with the tools' figures already in it. */
   reply: string;
+  /** As the model wrote it, slots and all — for the transcript. */
+  template: string;
 }
 
 export function writeBuyerReply(
@@ -404,18 +453,16 @@ export function writeBuyerReply(
           return { ok: false as const, error: '"reply" must be a non-empty string.' };
         }
 
-        const reply = value.reply.trim().slice(0, 2_000);
-        const unbacked = unbackedFigures(reply, options.result.figures);
-        if (unbacked.length > 0) {
-          // The repair round gets the exact offence, because "you invented a
-          // number" is the one correction a model can reliably act on.
-          return {
-            ok: false as const,
-            error: `Your reply stated ${unbacked.join(", ")}, which is not one of the amounts you were given. State only the amounts in that list, or none.`,
-          };
+        const template = value.reply.trim().slice(0, 2_000);
+        const checked = checkReply(template, options.result.slots);
+        if (!checked.ok) {
+          return { ok: false as const, error: checked.error ?? "Refused." };
         }
 
-        return { ok: true as const, value: { reply } };
+        return {
+          ok: true as const,
+          value: { reply: fillSlots(template, options.result.slots), template },
+        };
       },
     },
     deps,

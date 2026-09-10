@@ -214,9 +214,11 @@ describe("what the agent can look up", () => {
       expect(result.lines[0]?.lineTotal).toBe("$650.00");
       // Deciding shows its working, for buyers too.
       expect(result.lines[0]?.ruleSummary).toContain("Wholesale 35%");
-      // And the figures it may state are exactly the ones it computed.
-      expect(result.figures).toContain("$6.50");
-      expect(result.figures).toContain("$650.00");
+      // And the slots it may write are exactly what it computed. The model
+      // never types a figure; it types {{f1}} and this app substitutes.
+      expect(result.slots.f1).toBe("$6.50");
+      expect(result.slots.t1).toBe("$650.00");
+      expect(result.slots.q1).toBe("100");
     });
   });
 
@@ -267,7 +269,7 @@ describe("what the agent can look up", () => {
 
       expect(result.lines).toEqual([]);
       expect(result.unknownSkus).toEqual(["GHOST-1"]);
-      expect(result.figures).toEqual([]);
+      expect(result.slots).toEqual({});
     });
   });
 
@@ -300,6 +302,8 @@ describe("what the agent can look up", () => {
       expect(result.facts).toContain("units_to_add: 8");
       // The price at the break is the engine's answer, not arithmetic here.
       expect(result.facts).toContain("unit_price_at_break: $8.80");
+      expect(result.slots.better).toBe("$8.80");
+      expect(result.slots.addUnits).toBe("8");
     });
   });
 
@@ -338,7 +342,8 @@ describe("what the agent can look up", () => {
 
       expect(result.facts).toHaveLength(1);
       expect(result.facts[0]).toContain("#1001");
-      expect(result.figures).toEqual(["$1,200.00"]);
+      expect(result.slots.f1).toBe("$1,200.00");
+      expect(result.slots.s1).toBe("#1001");
     });
   });
 
@@ -368,7 +373,10 @@ describe("what the agent can look up", () => {
 
       expect(result.facts).toContain("net_terms_days: 30");
       expect(result.facts).toContain("outstanding: $1,000.00");
-      expect(result.figures).toContain("$1,000.00");
+      expect(result.slots.owed).toBe("$1,000.00");
+      // "net 30" was unusable while the guard read three capitals and a number
+      // as money. The days are a slot, so the sentence can be written.
+      expect(result.slots.days).toBe("30");
     });
   });
 
@@ -377,6 +385,8 @@ describe("what the agent can look up", () => {
 
     await inAlpha(async () => {
       await seedBuyer();
+      await createRule(wholesaleRule(35), { admin: fakeAdmin(), actor });
+
       const result = await runTool(
         {
           tool: "request_quote",
@@ -395,6 +405,13 @@ describe("what the agent can look up", () => {
       // Nothing was sent, so nothing was promised. The merchant decides.
       expect(quote.status).not.toBe("SENT");
       expect(quote.status).not.toBe("ACCEPTED");
+
+      // **The price on the line, not just that there is a line.** `draftQuote`
+      // prices what it is given, so handing it the already-discounted figure
+      // applied the 35% twice — the merchant would have seen a line at $4.23
+      // and a `listPrice` column claiming that was full price.
+      expect(quote.lines[0]?.listPrice).toBe(1000);
+      expect(quote.lines[0]?.unitPrice).toBe(650);
     });
   });
 });
@@ -563,7 +580,7 @@ describe("answering a buyer", () => {
         {
           messages: conversationStub([
             routed("price_for", [{ sku: "MUG-BL-L", quantity: 100 }]),
-            JSON.stringify({ reply: "Your price is $6.50 each — $650.00 for 100." }),
+            JSON.stringify({ reply: "Your price is {{f1}} each — {{t1}} for {{q1}}." }),
           ]),
         },
       );
@@ -709,7 +726,7 @@ describe("answering a buyer", () => {
         {
           messages: conversationStub([
             routed("price_for", [{ sku: "MUG-BL-L", quantity: 1 }]),
-            JSON.stringify({ reply: "It's $6.50 each." }),
+            JSON.stringify({ reply: "It's {{f1}} each." }),
           ]),
         },
       );
@@ -727,7 +744,7 @@ describe("answering a buyer", () => {
           messages: conversationStub([
             routed("build_cart", [{ sku: "MUG-BL-L", quantity: 100 }]),
             JSON.stringify({
-              reply: "Done — $650.00 for 100. Review the cart when ready.",
+              reply: "Done — {{total}} for {{q1}}. Review the cart when ready.",
             }),
           ]),
         },
@@ -757,7 +774,7 @@ describe("answering a buyer", () => {
         {
           messages: conversationStub([
             routed("build_cart", [{ sku: "MUG-BL-L", quantity: 100 }]),
-            JSON.stringify({ reply: "That's $650.00 for 100 — have a look." }),
+            JSON.stringify({ reply: "That's {{total}} for {{q1}} — have a look." }),
           ]),
         },
       );
@@ -846,7 +863,7 @@ describe("how much one buyer may ask", () => {
         now: NOW,
       });
 
-      expect(await overTurnLimit(BUYER_ID, { now: NOW })).toBe(false);
+      expect(await overTurnLimit({ customerId: BUYER_ID }, { now: NOW })).toBe(false);
 
       for (let index = 0; index < TURN_LIMIT; index += 1) {
         await db.agentMessage.create({
@@ -862,8 +879,10 @@ describe("how much one buyer may ask", () => {
 
       // Per buyer, so one buyer cannot spend the merchant's whole budget —
       // and cannot mute the agent for anybody else either.
-      expect(await overTurnLimit(BUYER_ID, { now: NOW })).toBe(true);
-      expect(await overTurnLimit("gid://shopify/Customer/99", { now: NOW })).toBe(false);
+      expect(await overTurnLimit({ customerId: BUYER_ID }, { now: NOW })).toBe(true);
+      expect(
+        await overTurnLimit({ customerId: "gid://shopify/Customer/99" }, { now: NOW }),
+      ).toBe(false);
     });
   });
 
@@ -889,7 +908,7 @@ describe("how much one buyer may ask", () => {
         });
       }
 
-      expect(await overTurnLimit(BUYER_ID, { now: NOW })).toBe(false);
+      expect(await overTurnLimit({ customerId: BUYER_ID }, { now: NOW })).toBe(false);
     });
   });
 
@@ -910,6 +929,328 @@ describe("how much one buyer may ask", () => {
         where: { kind: "agent.purge_conversations" },
       });
       expect(queued).toHaveLength(1);
+    });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* What the cold read found                                                    */
+/* -------------------------------------------------------------------------- */
+
+describe("what may be priced at all", () => {
+  it("will not sell a product that is not published", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const result = await runTool(
+        { tool: "build_cart", lines: [{ sku: "MUG-BL-L", quantity: 10 }], note: null },
+        context({
+          admin: fakeAdmin([
+            variant({ product: { id: "gid://p/1", title: "Blue Mug", status: "DRAFT" } }),
+          ]),
+        }),
+      );
+
+      // The quick-order block refuses a draft or archived product. The agent
+      // must not be the softer door into the same catalogue.
+      expect(result.lines).toEqual([]);
+      expect(result.unknownSkus).toEqual(["MUG-BL-L"]);
+    });
+  });
+
+  it("adds up two lines that name the same product", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const result = await runTool(
+        {
+          tool: "price_for",
+          lines: [
+            { sku: "MUG-BL-L", quantity: 50 },
+            { sku: "mug-bl-l", quantity: 50 },
+          ],
+          note: null,
+        },
+        context(),
+      );
+
+      // "50 of the blue mug, and another 50" is a hundred, not two lines the
+      // cart quietly merges afterwards.
+      expect(result.lines).toHaveLength(1);
+      expect(result.lines[0]?.quantity).toBe(100);
+    });
+  });
+
+  it("keeps the variant's own name on the line", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const result = await runTool(
+        { tool: "price_for", lines: [{ sku: "MUG-BL-L", quantity: 1 }], note: null },
+        context(),
+      );
+
+      // "Blue Mug" alone loses which one — and a buyer reading a cart card has
+      // to be able to tell the large from the small.
+      expect(result.lines[0]?.title).toBe("Blue Mug — Large");
+    });
+  });
+
+  it("offers a bigger quantity only when it is actually cheaper", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      // A volume rule aimed at somebody else. Its breaks are not breaks this
+      // buyer can reach, and flattening every tier in the shop offered them.
+      await createRule(
+        {
+          ...wholesaleRule(0),
+          name: "Distributor volume",
+          kind: "volume_tier",
+          audience: { mode: "tags", tags: ["distributor"] },
+          value: {
+            tiers: [
+              { minQuantity: 500, maxQuantity: null, kind: "percentage", percentage: 40 },
+            ],
+          },
+        } as PricingRule,
+        { admin: fakeAdmin(), actor },
+      );
+
+      const result = await runTool(
+        { tool: "next_tier", lines: [{ sku: "MUG-BL-L", quantity: 10 }], note: null },
+        context(),
+      );
+
+      expect(result.facts).toContain("no_better_price_above: 10");
+      expect(result.slots.better).toBeUndefined();
+    });
+  });
+});
+
+describe("subjects the merchant put off limits", () => {
+  const routed = (tool: string, lines: unknown[] = []) =>
+    JSON.stringify({
+      tool,
+      lines,
+      note: null,
+      acknowledgement: "Let me check that for you.",
+    });
+
+  it("declines in our own words, before any model call", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      await saveGuardrails(
+        { published: true, offLimits: ["our supplier", "lead times"] },
+        "staff-1",
+      );
+
+      const create = vi.fn(async () => reply(routed("price_for")));
+      const turn = await answerBuyerTurn(
+        {
+          message: "who is your supplier for these?",
+          customerId: BUYER_ID,
+          locale: "en",
+          admin: fakeAdmin(),
+          now: NOW,
+        },
+        { messages: stub(create) },
+      );
+
+      expect(turn.refusal).toBe("off_limits");
+      expect(turn.reply).toContain("not something I can help with");
+      // Enforced in code, so it costs nothing and cannot be talked around.
+      expect(create).not.toHaveBeenCalled();
+
+      const conversation = await db.agentConversation.findFirstOrThrow();
+      expect(conversation.outcome).toBe("DECLINED");
+    });
+  });
+
+  it("matches a whole word, not a fragment of one", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      await saveGuardrails({ published: true, offLimits: ["cost"] }, "staff-1");
+
+      // A merchant who bans "cost" has not banned "costume".
+      const turn = await answerBuyerTurn(
+        {
+          message: "do you stock the costume mugs?",
+          customerId: BUYER_ID,
+          locale: "en",
+          admin: fakeAdmin(),
+          now: NOW,
+        },
+        {
+          messages: conversationStub([
+            routed("price_for", [{ sku: "MUG-BL-L", quantity: 1 }]),
+            JSON.stringify({ reply: "It's {{f1}} each." }),
+          ]),
+        },
+      );
+
+      expect(turn.refusal).not.toBe("off_limits");
+    });
+  });
+});
+
+describe("the log a merchant reads", () => {
+  const routed = (tool: string) =>
+    JSON.stringify({ tool, lines: [], note: null, acknowledgement: "One moment." });
+
+  it("does not call a dead turn an answered one", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      await saveGuardrails({ published: true }, "staff-1");
+
+      await answerBuyerTurn(
+        {
+          message: "hello?",
+          customerId: BUYER_ID,
+          locale: "en",
+          admin: fakeAdmin(),
+          now: NOW,
+        },
+        { messages: conversationStub(["not json at all", "still not json"]) },
+      );
+
+      // Invariant 4, on the one screen a merchant uses to decide whether to
+      // trust this thing: a conversation where nothing worked said "Answered".
+      expect((await db.agentConversation.findFirstOrThrow()).outcome).toBe("FAILED");
+    });
+  });
+
+  it("keeps what a buyer said to a merchant who has taken over", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      await saveGuardrails({ published: true }, "staff-1");
+
+      const conversation = await openConversation({
+        customerId: BUYER_ID,
+        company: "Acme Ltd",
+        locale: "en",
+        now: NOW,
+      });
+      await db.agentConversation.update({
+        where: { id: conversation.id },
+        data: { takenOverAt: NOW, takenOverBy: "staff-1" },
+      });
+
+      const turn = await answerBuyerTurn(
+        {
+          message: "are we still on for Friday?",
+          customerId: BUYER_ID,
+          locale: "en",
+          admin: fakeAdmin(),
+          now: NOW,
+        },
+        { messages: conversationStub([routed("price_for")]) },
+      );
+
+      expect(turn.failure).toBe("taken_over");
+      // The message a person is meant to answer must not be the one that
+      // vanished on the way to them.
+      const messages = await db.agentMessage.findMany();
+      expect(messages.map((row) => row.text)).toContain("are we still on for Friday?");
+    });
+  });
+
+  it("files an escalation where the merchant will see it", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const result = await runTool(
+        { tool: "escalate", lines: [], note: "Can I collect it myself?" },
+        context(),
+      );
+
+      expect(result.facts).toContain("escalated");
+      // The checklist asks for an escalation "which files a message in the
+      // admin". An audit entry is that message, and Home's activity feed
+      // already reads them.
+      const entry = await db.auditLog.findFirstOrThrow({
+        where: { action: "agent.escalated" },
+      });
+      expect(entry.summary).toContain("Acme Ltd");
+      expect(entry.metadata).toMatchObject({ asked: "Can I collect it myself?" });
+    });
+  });
+
+  it("creates nothing at all for a shop that has not published", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+
+      await answerBuyerTurn(
+        {
+          message: "hello?",
+          customerId: BUYER_ID,
+          locale: "en",
+          admin: fakeAdmin(),
+          now: NOW,
+        },
+        { messages: conversationStub([routed("price_for")]) },
+      );
+
+      // A table anyone could fill from the outside is a table anyone can fill.
+      expect(await db.agentConversation.count()).toBe(0);
+      expect(await db.agentMessage.count()).toBe(0);
+    });
+  });
+});
+
+describe("a signed-out visitor", () => {
+  it("is counted, and threaded, like anybody else", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      const first = await openConversation({
+        customerId: null,
+        guestKey: "guest-a",
+        company: null,
+        locale: "en",
+        now: NOW,
+      });
+      const again = await openConversation({
+        customerId: null,
+        guestKey: "guest-a",
+        company: null,
+        locale: "en",
+        now: new Date(NOW.getTime() + 60_000),
+      });
+
+      // The same visitor, the same thread — without which a guest had no
+      // conversation to count turns against and so no ceiling at all.
+      expect(again.id).toBe(first.id);
+
+      for (let index = 0; index < TURN_LIMIT; index += 1) {
+        await db.agentMessage.create({
+          data: {
+            ...tenant(),
+            conversationId: first.id,
+            role: "BUYER",
+            text: `question ${index}`,
+            createdAt: NOW,
+          },
+        });
+      }
+
+      expect(await overTurnLimit({ guestKey: "guest-a" }, { now: NOW })).toBe(true);
+      expect(await overTurnLimit({ guestKey: "guest-b" }, { now: NOW })).toBe(false);
     });
   });
 });

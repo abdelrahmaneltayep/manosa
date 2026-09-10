@@ -85,11 +85,38 @@ export interface ProxyContext {
  * Throws a `Response` rather than an error, so a route can let it through
  * untouched: a bad signature is a 401 to whoever sent it, not a stack trace.
  */
-export function proxyContext(request: Request): ProxyContext {
+/**
+ * How old a signed proxy request may be.
+ *
+ * Shopify signs `timestamp` along with everything else, and until this was
+ * checked a signature never expired. That URL carries
+ * `logged_in_customer_id`: anyone who came by one — a shared link, a referrer
+ * header, a proxy log — could replay it forever. It used to buy a price list.
+ * Since the Buyer Agent it buys order history and a credit limit.
+ *
+ * Generous, because a buyer's clock and ours will disagree and a storefront
+ * request can sit in a queue.
+ */
+export const MAX_SIGNATURE_AGE_MS = 90 * 60_000;
+
+export function proxyContext(
+  request: Request,
+  options: { now?: Date } = {},
+): ProxyContext {
   const params = new URL(request.url).searchParams;
 
   if (!isValidProxySignature(params)) {
     throw new Response("Invalid signature", { status: 401 });
+  }
+
+  // Signed, so this is Shopify's timestamp rather than the caller's claim.
+  const seconds = Number(params.get("timestamp"));
+  if (!Number.isFinite(seconds)) {
+    throw new Response("Missing timestamp", { status: 401 });
+  }
+  const age = (options.now ?? new Date()).getTime() - seconds * 1000;
+  if (Math.abs(age) > MAX_SIGNATURE_AGE_MS) {
+    throw new Response("Signature expired", { status: 401 });
   }
 
   const shop = params.get("shop")?.trim().toLowerCase();
