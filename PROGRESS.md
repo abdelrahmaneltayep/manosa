@@ -21,7 +21,7 @@ Current task: 4.3 Registration screening, drafted emails, segments, CSV whispere
 - [x] 3.3 Quotes: pipeline, expiry, accept link, price locking — commit `c146e8a` — QA: `qa/3.3/REPORT.md`
 - [x] 3.4 Quick order storefront blocks, signed App Proxy — commit `224e4a0` — QA: `qa/3.4/REPORT.md`
 - [x] 4.1 AI infrastructure: client, streaming, timeouts, audit hooks — commit `b8136b5` — QA: `qa/4.1/REPORT.md`
-- [x] 4.2 Rule-from-a-sentence, margin guard — commit `PENDING` — QA: `qa/4.2/REPORT.md`
+- [x] 4.2 Rule-from-a-sentence, margin guard — commit `d45f02b` — QA: `qa/4.2/REPORT.md`
 
 ## Next up
 
