@@ -18,10 +18,23 @@ import { resolve } from "node:path";
  * a capture rather than as a silent difference.
  */
 
-const LOCALES = resolve(
-  process.cwd(),
-  "extensions/mannon-storefront/locales/en.default.json",
-);
+const LOCALE_FILES: Record<string, string> = {
+  en: "en.default.json",
+  ar: "ar.json",
+};
+
+/**
+ * Which locale `| t` renders in.
+ *
+ * A module-level setting rather than a parameter threaded through every render
+ * call, because the Liquid it stands in for has no concept of one either — a
+ * theme is rendered in one language at a time.
+ */
+let locale = "en";
+
+export function useLocale(next: string): void {
+  locale = LOCALE_FILES[next] ? next : "en";
+}
 
 type Scope = Record<string, unknown>;
 
@@ -38,7 +51,12 @@ function lookup(path: string, scope: Scope): unknown {
 }
 
 function translations(): Record<string, unknown> {
-  return JSON.parse(readFileSync(LOCALES, "utf8")) as Record<string, unknown>;
+  const file = resolve(
+    process.cwd(),
+    "extensions/mannon-storefront/locales",
+    LOCALE_FILES[locale] ?? LOCALE_FILES.en!,
+  );
+  return JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
 }
 
 /** `'mannon.a.b' | t`, including the pluralised and interpolated forms. */
@@ -52,11 +70,14 @@ function translate(key: string, args: Record<string, string>): string {
     // `{ one, other }`, chosen by the count the caller passed.
     const forms = found as Record<string, string>;
     const count = Number(args.count ?? "0");
-    text = (count === 1 ? forms.one : forms.other) ?? forms.other ?? key;
+    // English has two categories and Arabic six; `other` is the one every
+    // language has, so it is the fallback rather than a missing-key message.
+    const category = count === 1 ? "one" : count === 2 ? "two" : "other";
+    text = forms[category] ?? forms.other ?? key;
   } else {
     // Exactly what a real theme shows for a key that is not there, so a
     // missing one is visible in the capture rather than blank.
-    return `translation missing: en.${key}`;
+    return `translation missing: ${locale}.${key}`;
   }
 
   for (const [name, value] of Object.entries(args)) {

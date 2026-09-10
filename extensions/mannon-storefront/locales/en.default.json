@@ -49,6 +49,28 @@
       "add_all": "Add everything to my cart",
       "your_price": "Prices shown are your wholesale prices.",
       "add_row": "Add"
+    },
+    "agent": {
+      "launch": "Ask Mannon",
+      "title": "✦ Ask Mannon",
+      "close": "Close",
+      "label": "Your question",
+      "placeholder": "What's my price for SKU-450 at 100?",
+      "send": "Send",
+      "greeting": "Hello — I can look up your prices, build an order, or check where your last one got to.",
+      "examples": "Try: “what's my price for SKU-450 at 100?”, “reorder my usual”, or “what are my payment terms?”",
+      "thinking": "Thinking…",
+      "failed": "I'm having trouble — try again in a moment.",
+      "fallback": "You can also use the quick order form, or browse the catalogue:",
+      "rate_limited": "That's a lot of questions at once. Give me a minute and try again.",
+      "not_for_you": "This is for approved wholesale accounts. If you've applied, we'll be in touch.",
+      "taken_over": "Someone from the team has joined this conversation — they'll reply here.",
+      "review_cart": "Review cart",
+      "adding": "Adding…",
+      "cart_failed": "I couldn't add those to your cart. Try again, or add them from the product pages.",
+      "quote_filed": "Sent to Mannon — you'll get an email. Your reference is %number%.",
+      "greeting_named": "Hello %name% — I can look up your prices, build an order, or check where your last one got to.",
+      "fallback_link": "Browse the catalogue"
     }
   }
 }

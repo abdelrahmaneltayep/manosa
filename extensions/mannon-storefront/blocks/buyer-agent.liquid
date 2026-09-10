@@ -1,0 +1,418 @@
+{% comment %}
+  Mannon — ✦ the Buyer Agent.
+
+  A wholesale concierge in the corner of the merchant's storefront. Everything
+  it says is decided in the app: the tools it may use, the prices it may state,
+  and the check that throws away a reply quoting a price the pricing engine did
+  not compute. This block is a window onto that and holds no logic of its own.
+
+  Three rules it does keep:
+
+  - **Nothing before it is opened.** No fetch, no greeting, no cost, until the
+    buyer presses the button. The checklist's "loads lazily; zero impact until
+    opened".
+  - **Signed-in buyers only.** A signed-out visitor never sees the launcher, so
+    there is no button that opens onto "you can't use this".
+  - **No JavaScript, no widget.** The launcher is hidden until the script runs.
+    A broken button in the corner of a storefront is worse than no button.
+
+  Checkout is never here. The agent assembles; the buyer reviews in Shopify's
+  own cart and pays on Shopify's own checkout. See docs/adr/0023.
+{% endcomment %}
+
+{%- assign block_id = 'mannon-agent-' | append: block.id -%}
+{%- assign fallback_url = block.settings.fallback_url | default: routes.all_products_collection_url -%}
+
+{%- if customer -%}
+  <div
+    class="mannon-agent"
+    id="{{ block_id }}"
+    data-mannon-agent
+    {{ block.shopify_attributes }}
+  >
+    {%- comment -%}
+      `hidden` rather than display:none, so a buyer using a screen reader is not
+      offered a control that cannot work either.
+    {%- endcomment -%}
+    <button type="button" class="mannon-agent__launcher" data-mannon-launch hidden>
+      <span aria-hidden="true">✦</span>
+      {{ 'mannon.agent.launch' | t }}
+    </button>
+
+    <div
+      class="mannon-agent__panel"
+      data-mannon-panel
+      role="dialog"
+      aria-modal="false"
+      aria-label="{{ 'mannon.agent.title' | t }}"
+      hidden
+    >
+      <div class="mannon-agent__bar">
+        <strong class="mannon-agent__title">{{ 'mannon.agent.title' | t }}</strong>
+        <button
+          type="button"
+          class="mannon-agent__close"
+          data-mannon-close
+          aria-label="{{ 'mannon.agent.close' | t }}"
+        >
+          ×
+        </button>
+      </div>
+
+      <div
+        class="mannon-agent__log"
+        data-mannon-log
+        role="log"
+        aria-live="polite"
+        aria-atomic="false"
+      ></div>
+
+      <form class="mannon-agent__form" data-mannon-form>
+        <label class="mannon-agent__label" for="{{ block_id }}-message">
+          {{ 'mannon.agent.label' | t }}
+        </label>
+        <div class="mannon-agent__row">
+          <input
+            type="text"
+            id="{{ block_id }}-message"
+            name="message"
+            autocomplete="off"
+            maxlength="1000"
+            placeholder="{{ 'mannon.agent.placeholder' | t }}"
+          >
+          <button type="submit" data-mannon-send>{{ 'mannon.agent.send' | t }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <style>
+    #{{ block_id }} .mannon-agent__launcher {
+      position: fixed;
+      inset-block-end: 1rem;
+      inset-inline-end: 1rem;
+      z-index: 2147483000;
+      padding: 0.75rem 1rem;
+      border-radius: 999px;
+      border: 1px solid currentColor;
+      background: canvas;
+      color: canvastext;
+      font: inherit;
+      cursor: pointer;
+    }
+    /* A theme can set `display` on anything. Without this, `display:flex`
+       below would win over the `hidden` attribute and the panel would be on
+       screen before the buyer opened it. */
+    #{{ block_id }} [hidden] {
+      display: none !important;
+    }
+    #{{ block_id }} .mannon-agent__panel {
+      position: fixed;
+      inset-block-end: 1rem;
+      inset-inline-end: 1rem;
+      z-index: 2147483000;
+      width: min(24rem, calc(100vw - 2rem));
+      max-height: min(32rem, calc(100vh - 2rem));
+      display: flex;
+      flex-direction: column;
+      background: canvas;
+      color: canvastext;
+      border: 1px solid currentColor;
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      box-sizing: border-box;
+    }
+    #{{ block_id }} .mannon-agent__bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    #{{ block_id }} .mannon-agent__close {
+      background: none;
+      border: 0;
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+      color: inherit;
+    }
+    #{{ block_id }} .mannon-agent__log {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      margin: 0.5rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    #{{ block_id }} .mannon-agent__turn {
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      border: 1px solid currentColor;
+      max-width: 90%;
+    }
+    #{{ block_id }} .mannon-agent__turn--buyer {
+      align-self: flex-end;
+    }
+    #{{ block_id }} .mannon-agent__row {
+      display: flex;
+      gap: 0.5rem;
+    }
+    #{{ block_id }} .mannon-agent__row input {
+      flex: 1 1 auto;
+      min-width: 0;
+      font: inherit;
+      padding: 0.5rem;
+    }
+    #{{ block_id }} .mannon-agent__lines {
+      margin: 0.5rem 0 0;
+      padding-inline-start: 1.25rem;
+    }
+    /* A buyer on a phone gets the whole width and no horizontal scroll. */
+    @media (max-width: 30rem) {
+      #{{ block_id }} .mannon-agent__panel {
+        inset-inline: 0.5rem;
+        width: auto;
+      }
+    }
+  </style>
+
+  <script>
+    (function () {
+      var root = document.getElementById('{{ block_id }}');
+      if (!root) return;
+
+      var routes = window.Shopify && window.Shopify.routes && window.Shopify.routes.root;
+      if (!routes) return;
+
+      var launcher = root.querySelector('[data-mannon-launch]');
+      var panel = root.querySelector('[data-mannon-panel]');
+      var log = root.querySelector('[data-mannon-log]');
+      var form = root.querySelector('[data-mannon-form]');
+      var input = form && form.querySelector('input[name="message"]');
+      var send = root.querySelector('[data-mannon-send]');
+      var close = root.querySelector('[data-mannon-close]');
+      if (!launcher || !panel || !log || !form || !input || !send || !close) return;
+
+      var strings = {
+        greeting: {{ 'mannon.agent.greeting' | t | json }},
+        thinking: {{ 'mannon.agent.thinking' | t | json }},
+        failed: {{ 'mannon.agent.failed' | t | json }},
+        fallback: {{ 'mannon.agent.fallback' | t | json }},
+        rateLimited: {{ 'mannon.agent.rate_limited' | t | json }},
+        notForYou: {{ 'mannon.agent.not_for_you' | t | json }},
+        takenOver: {{ 'mannon.agent.taken_over' | t | json }},
+        reviewCart: {{ 'mannon.agent.review_cart' | t | json }},
+        addingToCart: {{ 'mannon.agent.adding' | t | json }},
+        cartFailed: {{ 'mannon.agent.cart_failed' | t | json }},
+        quoteFiled: {{ 'mannon.agent.quote_filed' | t | json }},
+        examples: {{ 'mannon.agent.examples' | t | json }},
+        greetingNamed: {{ 'mannon.agent.greeting_named' | t | json }},
+        fallbackLink: {{ 'mannon.agent.fallback_link' | t | json }}
+      };
+
+      var fallbackUrl = {{ fallback_url | json }};
+      var firstName = {{ customer.first_name | json }};
+
+      // Nothing is fetched until the buyer opens it. The launcher appearing is
+      // the whole cost of this block on a page nobody uses it on.
+      launcher.hidden = false;
+
+      var busy = false;
+      var greeted = false;
+
+      /** A bubble whose last line is somewhere to go. Never a dead end. */
+      function bubbleWithLink(textValue, href, label) {
+        var div = bubble('agent', textValue);
+        var link = document.createElement('a');
+        link.href = href;
+        link.textContent = label;
+        div.appendChild(document.createTextNode(' '));
+        div.appendChild(link);
+        return div;
+      }
+
+      function bubble(who, textValue) {
+        var div = document.createElement('div');
+        div.className = 'mannon-agent__turn mannon-agent__turn--' + who;
+        // textContent throughout. Everything in here is either the merchant's
+        // data or a model's words, and neither is markup.
+        div.textContent = textValue;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+        return div;
+      }
+
+      function openPanel() {
+        panel.hidden = false;
+        launcher.hidden = true;
+        input.focus();
+        if (!greeted) {
+          greeted = true;
+          bubble(
+            'agent',
+            firstName
+              ? strings.greetingNamed.replace('%name%', firstName)
+              : strings.greeting,
+          );
+          bubble('agent', strings.examples);
+        }
+      }
+
+      function closePanel() {
+        panel.hidden = true;
+        launcher.hidden = false;
+        launcher.focus();
+      }
+
+      launcher.addEventListener('click', openPanel);
+      close.addEventListener('click', closePanel);
+      root.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !panel.hidden) closePanel();
+      });
+
+      /** The cart card: what it assembled, and one button that hands it over. */
+      function cartCard(cart) {
+        var wrap = document.createElement('div');
+        wrap.className = 'mannon-agent__turn mannon-agent__turn--agent';
+
+        var list = document.createElement('ul');
+        list.className = 'mannon-agent__lines';
+        cart.lines.forEach(function (line) {
+          var item = document.createElement('li');
+          item.textContent =
+            line.quantity + ' × ' + line.title + ' — ' + line.lineTotal;
+          list.appendChild(item);
+        });
+        wrap.appendChild(list);
+
+        var total = document.createElement('p');
+        total.textContent = cart.subtotal;
+        wrap.appendChild(total);
+
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = strings.reviewCart;
+        button.addEventListener('click', function () {
+          button.disabled = true;
+          button.textContent = strings.addingToCart;
+          // Shopify's own cart, and then Shopify's own checkout. The agent
+          // never takes a payment and never sees one.
+          fetch(routes + 'cart/add.js', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: cart.lines.map(function (line) {
+                return {
+                  id: Number(line.variantId.split('/').pop()),
+                  quantity: line.quantity
+                };
+              })
+            })
+          })
+            .then(function (response) {
+              if (!response.ok) throw new Error('cart');
+              window.location.href = routes + 'cart';
+            })
+            .catch(function () {
+              button.disabled = false;
+              button.textContent = strings.reviewCart;
+              bubble('agent', strings.cartFailed);
+            });
+        });
+        wrap.appendChild(button);
+
+        log.appendChild(wrap);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function failureText(failure) {
+        if (failure === 'rate_limited') return strings.rateLimited;
+        if (failure === 'guest') return strings.notForYou;
+        if (failure === 'taken_over') return strings.takenOver;
+        return strings.failed;
+      }
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (busy) return;
+
+        var message = input.value.trim();
+        if (!message) return;
+
+        bubble('buyer', message);
+        input.value = '';
+        busy = true;
+        send.disabled = true;
+
+        // The checklist asks for a typing indicator. There is no stream behind
+        // it — an answer is one database read — so this says "thinking", which
+        // is true, rather than animating a reply that does not exist yet.
+        var pending = bubble('agent', strings.thinking);
+
+        var body = new URLSearchParams();
+        body.set('message', message);
+
+        fetch(routes + 'apps/mannon/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body.toString()
+        })
+          .then(function (response) {
+            // 402 is the plan; 429 is this buyer's own ceiling. Both answer
+            // with JSON, so neither is an exception.
+            return response.json().catch(function () {
+              return { ok: false, failure: 'error' };
+            });
+          })
+          .then(function (data) {
+            pending.remove();
+
+            if (!data || data.ok !== true) {
+              var failure = (data && data.failure) || 'error';
+              if (failure === 'not_available' || failure === 'not_published') {
+                // Nothing to say and nothing to fix from here: the widget goes
+                // away rather than leaving a dead panel on the storefront.
+                closePanel();
+                launcher.hidden = true;
+                return;
+              }
+              bubble('agent', failureText(failure));
+              bubbleWithLink(strings.fallback, fallbackUrl, strings.fallbackLink);
+              return;
+            }
+
+            if (data.reply) bubble('agent', data.reply);
+            if (data.cart) cartCard(data.cart);
+            if (data.quote) {
+              bubble('agent', strings.quoteFiled.replace('%number%', data.quote));
+            }
+          })
+          .catch(function () {
+            pending.remove();
+            bubble('agent', strings.failed);
+            bubbleWithLink(strings.fallback, fallbackUrl, strings.fallbackLink);
+          })
+          .then(function () {
+            busy = false;
+            send.disabled = false;
+            input.focus();
+          });
+      });
+    })();
+  </script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Buyer Agent chat",
+  "target": "body",
+  "settings": [
+    {
+      "type": "url",
+      "id": "fallback_url",
+      "label": "Fallback link",
+      "info": "Where a buyer is sent when the agent cannot answer. Defaults to your all-products collection."
+    }
+  ]
+}
+{% endschema %}

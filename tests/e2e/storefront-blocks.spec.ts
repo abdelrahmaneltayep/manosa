@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { renderBlock } from "../support/liquid-stand-in";
+import { renderBlock, useLocale } from "../support/liquid-stand-in";
 
 /**
  * The storefront blocks, driven in a real browser.
@@ -509,5 +509,228 @@ test.describe("the variants table without JavaScript", () => {
     await expect(field).toHaveAttribute("step", "12");
     // And a minimum of one case, not one unit — the field cannot post a zero.
     await expect(field).toHaveAttribute("min", "12");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* ✦ The Buyer Agent                                                           */
+/* -------------------------------------------------------------------------- */
+
+const agentBlock = (settings: Record<string, unknown> = {}) =>
+  renderBlock("buyer-agent.liquid", {
+    block: { id: "ag1", shopify_attributes: "", settings: { ...settings } },
+    customer: { id: 77, first_name: "Sam" },
+    routes: { all_products_collection_url: "/collections/all" },
+    request: { design_mode: false },
+  });
+
+const ANSWERED = {
+  ok: true,
+  conversationId: "c1",
+  reply: "Your price is $6.50 each — $650.00 for 100.",
+  cart: null,
+  quote: null,
+  refusal: null,
+};
+
+const CART = {
+  ok: true,
+  conversationId: "c1",
+  reply: "That's $650.00 for 100 — have a look.",
+  cart: {
+    lines: [
+      {
+        sku: "MUG-BL-L",
+        title: "Blue Mug — Large",
+        variantId: "gid://shopify/ProductVariant/1",
+        quantity: 100,
+        unitPrice: "$6.50",
+        lineTotal: "$650.00",
+        unitPriceAmount: 650,
+        ruleSummary: "Wholesale 35%",
+      },
+    ],
+    subtotal: "$650.00",
+  },
+  quote: null,
+  refusal: null,
+};
+
+async function ask(page: Page, question: string) {
+  await page.click("[data-mannon-launch]");
+  await page.fill('input[name="message"]', question);
+  await page.click("[data-mannon-send]");
+}
+
+test.describe("the Buyer Agent widget", () => {
+  test("costs nothing until a buyer opens it", async ({ page }) => {
+    const calls = await load(page, agentBlock(), proxyStub(ANSWERED), "40-agent-closed");
+
+    // The launcher, and not one request. "Loads lazily; zero impact until
+    // opened" is a performance budget, not a preference.
+    await expect(page.locator("[data-mannon-launch]")).toBeVisible();
+    await expect(page.locator("[data-mannon-panel]")).toBeHidden();
+    expect(calls).toHaveLength(0);
+  });
+
+  test("greets the buyer by name, with what it can do", async ({ page }) => {
+    await load(page, agentBlock(), proxyStub(ANSWERED), "41-agent-open");
+    await page.click("[data-mannon-launch]");
+
+    await expect(page.locator("[data-mannon-panel]")).toBeVisible();
+    // The name comes from Liquid, so it costs nothing — no request has been
+    // made at this point and the greeting is already personal.
+    await expect(page.locator("[data-mannon-log]")).toContainText("Hello Sam");
+    await expect(page.locator("[data-mannon-log]")).toContainText("SKU-450");
+    await shot(page, "41-agent-open");
+  });
+
+  test("answers, and says only what the app told it to", async ({ page }) => {
+    const calls = await load(page, agentBlock(), proxyStub(ANSWERED), "42-agent-answer");
+    await ask(page, "what's my price for MUG-BL-L at 100?");
+
+    await expect(page.locator("[data-mannon-log]")).toContainText("$6.50");
+    // The question is echoed back, so the log reads as a conversation.
+    await expect(page.locator(".mannon-agent__turn--buyer")).toContainText("MUG-BL-L");
+
+    const asked = calls.find((call) => call.url.includes("apps/mannon/agent"));
+    expect(asked?.method).toBe("POST");
+    expect(asked?.body).toContain("message=");
+    await shot(page, "42-agent-answer");
+  });
+
+  test("shows the cart it built, and hands it to Shopify", async ({ page }) => {
+    const calls = await load(page, agentBlock(), proxyStub(CART), "43-agent-cart");
+    await ask(page, "reorder 100 blue mugs");
+
+    await expect(page.locator("[data-mannon-log]")).toContainText("Blue Mug — Large");
+    await expect(page.locator("[data-mannon-log]")).toContainText("$650.00");
+    await shot(page, "43-agent-cart");
+
+    await page.click("text=Review cart");
+    // Shopify's own cart, with Shopify's own variant id. The agent never takes
+    // a payment and there is no checkout call anywhere in this block.
+    const added = calls.find((call) => call.url.includes("cart/add.js"));
+    expect(added?.body).toContain('"id":1');
+    expect(added?.body).toContain('"quantity":100');
+    expect(calls.some((call) => call.url.includes("checkout"))).toBe(false);
+  });
+
+  test("confirms a quote request with its reference", async ({ page }) => {
+    await load(
+      page,
+      agentBlock(),
+      proxyStub({ ...ANSWERED, reply: "I've passed that on.", quote: "Q-1001" }),
+      "44-agent-quote",
+    );
+    await ask(page, "can you do better on 500?");
+
+    await expect(page.locator("[data-mannon-log]")).toContainText("Sent to Mannon");
+    await expect(page.locator("[data-mannon-log]")).toContainText("Q-1001");
+    await shot(page, "44-agent-quote");
+  });
+
+  test("offers the way round when it cannot answer", async ({ page }) => {
+    await load(
+      page,
+      agentBlock(),
+      proxyStub({ ok: false, failure: "timeout" }),
+      "45-agent-error",
+    );
+    await ask(page, "what's my price?");
+
+    await expect(page.locator("[data-mannon-log]")).toContainText("having trouble");
+    // Never a dead end: the checklist's "error + link", and it is a real link.
+    await expect(page.locator("[data-mannon-log]")).toContainText("quick order form");
+    await expect(page.locator("[data-mannon-log] a")).toHaveAttribute(
+      "href",
+      "/collections/all",
+    );
+    await shot(page, "45-agent-error");
+  });
+
+  test("says the ceiling is the buyer's own, not a fault", async ({ page }) => {
+    await load(
+      page,
+      agentBlock(),
+      proxyStub({ ok: false, failure: "rate_limited" }, 429),
+      "46-agent-rate-limited",
+    );
+    await ask(page, "hello?");
+
+    await expect(page.locator("[data-mannon-log]")).toContainText("Give me a minute");
+    await shot(page, "46-agent-rate-limited");
+  });
+
+  test("goes away rather than leaving a dead panel", async ({ page }) => {
+    await load(
+      page,
+      agentBlock(),
+      proxyStub({ ok: false, failure: "not_available" }, 402),
+      "47-agent-unavailable",
+    );
+    await ask(page, "hello?");
+
+    // The plan does not include it, or the merchant has not published it.
+    // Nothing here can fix that, so the widget removes itself.
+    await expect(page.locator("[data-mannon-panel]")).toBeHidden();
+    await expect(page.locator("[data-mannon-launch]")).toBeHidden();
+  });
+
+  test("closes on Escape, and comes back", async ({ page }) => {
+    await load(page, agentBlock(), proxyStub(ANSWERED), "48-agent-escape");
+    await page.click("[data-mannon-launch]");
+    await page.keyboard.press("Escape");
+
+    await expect(page.locator("[data-mannon-panel]")).toBeHidden();
+    await expect(page.locator("[data-mannon-launch]")).toBeVisible();
+  });
+
+  test("does not appear for a signed-out visitor", () => {
+    const html = renderBlock("buyer-agent.liquid", {
+      block: { id: "ag1", shopify_attributes: "", settings: {} },
+      customer: null,
+      routes: { all_products_collection_url: "/collections/all" },
+      request: { design_mode: false },
+    });
+
+    // No launcher at all, rather than a button that opens onto "not for you".
+    expect(html).not.toContain("data-mannon-launch");
+  });
+
+  test("speaks Arabic, right to left", async ({ page }) => {
+    useLocale("ar");
+    try {
+      const html = agentBlock();
+      // The whole widget, not a half-translated one: the checklist asks for a
+      // full RTL UI, and the agent answers in the buyer's own language because
+      // the app passes the locale through to the model.
+      expect(html).not.toContain("translation missing");
+
+      await load(
+        page,
+        `<div dir="rtl" lang="ar">${html}</div>`,
+        proxyStub({ ...ANSWERED, reply: "سعرك ٦٫٥٠ $ للوحدة." }),
+        "50-agent-arabic",
+      );
+      await ask(page, "ما سعري لـ MUG-BL-L عند 100؟");
+
+      await expect(page.locator("[data-mannon-log]")).toContainText("سعرك");
+      await shot(page, "50-agent-arabic");
+    } finally {
+      useLocale("en");
+    }
+  });
+
+  test("no horizontal scroll on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 780 });
+    await load(page, agentBlock(), proxyStub(CART), "49-agent-phone");
+    await ask(page, "reorder 100 blue mugs");
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    );
+    expect(overflow).toBe(false);
+    await shot(page, "49-agent-phone");
   });
 });
