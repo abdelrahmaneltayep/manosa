@@ -1,0 +1,23 @@
+# Mannon's order limits at the cart and at checkout.
+#
+# The Function decides nothing itself: it reads the published limits and asks
+# @mannon/order-limits, exactly as the discount Function asks the pricing
+# engine. A limit that reads one way in the admin and blocks differently at
+# checkout is worse than no limit at all.
+
+api_version = "2025-07"
+
+[[extensions]]
+name = "Mannon order limits"
+handle = "mannon-limits"
+type = "function"
+description = "Blocks a wholesale cart that does not meet the merchant's order minimums, maximums or case packs."
+
+  [[extensions.targeting]]
+  target = "purchase.validation.run"
+  input_query = "src/run.graphql"
+  export = "run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"

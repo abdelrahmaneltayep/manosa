@@ -157,11 +157,11 @@ describe("delivery records", () => {
   it("acknowledges a topic nothing handles rather than making Shopify retry for 48h", async () => {
     const outcome = await dispatchWebhook({
       shop: ALPHA,
-      topic: "orders/create",
+      topic: "fulfillments/create",
       webhookId: "wh_unknown",
       payload: {},
     });
-    expect(outcome).toEqual({ status: "unhandled-topic", topic: "orders/create" });
+    expect(outcome).toEqual({ status: "unhandled-topic", topic: "fulfillments/create" });
   });
 });
 

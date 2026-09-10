@@ -13,6 +13,7 @@ import type {
   RuleFormView,
   RuleRowView,
 } from "~/components/pricing/types";
+import { formatCurrency } from "~/lib/money";
 import { kindFromDb, statusFromDb, toEngineRule } from "~/lib/pricing/rule-mapper.server";
 
 /** A rule with no uses is only "unused" once it has had time to be used. */
@@ -257,8 +258,8 @@ export function previewFor(
     const result = resolvePrice({ rules: [{ ...rule, status: "active" }], context });
 
     return {
-      was: formatMoney(price),
-      now: formatMoney(result.unitPrice),
+      was: formatCurrency(price),
+      now: formatCurrency(result.unitPrice),
       changed: result.unitPrice.amount !== price.amount,
       quantity: SAMPLE_PREVIEW.quantity,
       unavailable: false,
@@ -302,15 +303,15 @@ export function explainFor(
   });
 
   return {
-    unitPrice: formatMoney(result.unitPrice),
-    basePrice: formatMoney(result.basePrice),
+    unitPrice: formatCurrency(result.unitPrice),
+    basePrice: formatCurrency(result.basePrice),
     clampedAtZero: result.clampedAtZero,
     trace: result.trace.map((entry) => ({
       ruleId: entry.ruleId,
       ruleName: entry.ruleName,
       applied: entry.applied,
       reason: entry.reason ?? null,
-      priceAfter: entry.priceAfter ? formatMoney(entry.priceAfter) : null,
+      priceAfter: entry.priceAfter ? formatCurrency(entry.priceAfter) : null,
     })),
   };
 }

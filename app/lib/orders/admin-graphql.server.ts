@@ -1,0 +1,163 @@
+import { runMutation, type AdminGraphql } from "~/lib/pricing/admin-graphql.server";
+
+/**
+ * The Admin API calls the orders features make.
+ *
+ * Shopify owns the order; this app mirrors it so the wholesale list can sort,
+ * filter and total without a round trip per row, and writes back exactly one
+ * thing — a tag saying the order was wholesale, so a merchant can find the same
+ * orders in Shopify's own admin.
+ */
+
+/** Shopify's page cap for an orders query. */
+export const ORDER_PAGE_SIZE = 100;
+
+const ORDER_FIELDS = `
+    id
+    name
+    email
+    createdAt
+    processedAt
+    cancelledAt
+    updatedAt
+    displayFinancialStatus
+    displayFulfillmentStatus
+    sourceName
+    tags
+    currentSubtotalLineItemsQuantity
+    customer {
+      id
+      defaultAddress {
+        company
+      }
+    }
+    customAttributes {
+      key
+      value
+    }
+    currentTotalPriceSet {
+      shopMoney {
+        amount
+        currencyCode
+      }
+    }
+    currentSubtotalPriceSet {
+      shopMoney {
+        amount
+        currencyCode
+      }
+    }
+    totalRefundedSet {
+      shopMoney {
+        amount
+        currencyCode
+      }
+    }`;
+
+export const ORDERS_PAGE = `#graphql
+  query MannonOrdersPage($first: Int!, $after: String) {
+    orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true) {
+      nodes {${ORDER_FIELDS}
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }`;
+
+const ORDER_TAGS_ADD = `#graphql
+  mutation MannonOrderTagsAdd($id: ID!, $tags: [String!]!) {
+    tagsAdd(id: $id, tags: $tags) {
+      userErrors {
+        field
+        message
+      }
+    }
+  }`;
+
+export interface ShopMoney {
+  shopMoney: { amount: string; currencyCode: string } | null;
+}
+
+/** What an order looks like coming back from the Admin API. */
+export interface OrderNode {
+  id: string;
+  name: string | null;
+  email: string | null;
+  createdAt: string | null;
+  processedAt: string | null;
+  cancelledAt: string | null;
+  updatedAt: string | null;
+  displayFinancialStatus: string | null;
+  displayFulfillmentStatus: string | null;
+  sourceName: string | null;
+  tags: string[] | null;
+  currentSubtotalLineItemsQuantity: number | null;
+  customer: { id: string; defaultAddress: { company: string | null } | null } | null;
+  customAttributes: { key: string; value: string | null }[] | null;
+  currentTotalPriceSet: ShopMoney | null;
+  currentSubtotalPriceSet: ShopMoney | null;
+  totalRefundedSet: ShopMoney | null;
+}
+
+export interface OrderPage {
+  nodes: OrderNode[];
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
+export async function fetchOrderPage(
+  admin: AdminGraphql,
+  after: string | null,
+  first: number = ORDER_PAGE_SIZE,
+): Promise<OrderPage> {
+  const response = await admin.graphql(ORDERS_PAGE, { variables: { first, after } });
+  const body = (await response.json()) as {
+    data?: {
+      orders?: {
+        nodes: OrderNode[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    };
+    errors?: { message: string }[];
+  };
+
+  if (body.errors?.length) {
+    throw new Error(
+      `orders query failed: ${body.errors.map((e) => e.message).join("; ")}`,
+    );
+  }
+
+  const page = body.data?.orders;
+  return {
+    nodes: page?.nodes ?? [],
+    hasNextPage: page?.pageInfo.hasNextPage ?? false,
+    endCursor: page?.pageInfo.endCursor ?? null,
+  };
+}
+
+/**
+ * Tag an order as wholesale.
+ *
+ * Additive, like the customer tags: an order is very often already tagged by a
+ * shipping or accounting app, and replacing the list would delete their work.
+ */
+export async function tagOrder(
+  admin: AdminGraphql,
+  orderId: string,
+  tags: string[],
+): Promise<void> {
+  if (tags.length === 0) return;
+
+  await runMutation<void>(
+    admin,
+    "tagsAdd(order)",
+    ORDER_TAGS_ADD,
+    { id: orderId, tags },
+    (data) => ({
+      result: undefined,
+      userErrors: (data.tagsAdd as { userErrors: [] }).userErrors,
+    }),
+  );
+}

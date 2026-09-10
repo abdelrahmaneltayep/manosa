@@ -90,6 +90,8 @@ const CATALOG_ROOTS = [
   "approval",
   "customers",
   "forms",
+  "orders",
+  "limits",
   "pricing",
   "plans",
   "csv",

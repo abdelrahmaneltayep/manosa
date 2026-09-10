@@ -46,6 +46,9 @@ model Shop {
   id            String    @id @default(cuid())
   /// The myshopify.com domain. Tenant key for every other table.
   shop          String    @unique
+  /// Shopify's own GID for the shop, e.g. "gid://shopify/Shop/1234". Needed to
+  /// own a shop metafield; read once and cached because it never changes.
+  shopGid       String?
   name          String?
   email         String?
   countryCode   String?
@@ -101,6 +104,20 @@ model Shop {
   /// form can be framed by their theme without allowing every origin to frame
   /// it. Refreshed when a form is published.
   primaryDomain          String?
+
+  // --- Orders and limits (phase 3.1) --------------------------------------
+  /// Tag put on an order placed by a wholesale buyer, so the merchant can find
+  /// them in Shopify's own admin as well as here.
+  wholesaleOrderTag    String    @default("wholesale")
+  /// Orders placed in person bypass online order limits. On by default: a
+  /// minimum written for a website is not a rule about a till.
+  posBypassesLimits    Boolean   @default(true)
+  /// Hash of the last published limits, so an unchanged set is not re-pushed.
+  limitsHash           String?
+  limitsPublishedAt    DateTime?
+  /// Progress of the one-off order backfill.
+  ordersBackfilledAt   DateTime?
+  ordersBackfillCursor String?
 
   /// Progress of the one-off customer backfill. Null means never finished.
   customersBackfilledAt   DateTime?
@@ -406,10 +423,6 @@ model CustomerGroup {
   // --- Bundle: each of these is owned by a later phase, shown here now. ----
   /// Net payment terms in days. Enforced in phase 3.2.
   netTermsDays         Int?
-  /// Minimum order value in minor units. Enforced in phase 3.1.
-  orderMinimum         Int?
-  /// Order must be a multiple of this. Enforced in phase 3.1.
-  orderIncrement       Int?
   /// Free shipping above this subtotal, in minor units. Phase 3.
   freeShippingOver     Int?
   /// Collections this group may see. Empty means everything. Phase 3.4.
@@ -425,6 +438,7 @@ model CustomerGroup {
   createdBy String?
 
   members Customer[]
+  limits  OrderLimit[]
 
   @@unique([shop, handle])
   @@index([shop, sortOrder])
@@ -787,4 +801,135 @@ model EmailMessage {
   @@index([shop, createdAt])
   @@index([shop, submissionId])
   @@index([shop, status])
+}
+
+// ---------------------------------------------------------------------------
+// Orders (phase 3.1)
+// ---------------------------------------------------------------------------
+
+/// How an order reached us.
+///
+/// Attribution matters because the whole product is a claim about where
+/// wholesale revenue comes from. A merchant who cannot tell an order the agent
+/// produced from one the buyer typed in themselves has no way to judge either.
+enum OrderSource {
+  /// The normal storefront.
+  STOREFRONT
+  /// Mannon's quick-order block (phase 3.4).
+  QUICK_ORDER
+  /// The storefront Buyer Agent (phase 5).
+  BUYER_AGENT
+  /// A draft order, including an accepted quote (phase 3.3).
+  DRAFT
+  /// Shopify POS.
+  POS
+  /// Somewhere we do not recognise. Never guessed at.
+  OTHER
+}
+
+/// A mirror of a Shopify order, for the wholesale list.
+///
+/// Same reasoning as the customer mirror (`docs/adr/0010`): the list has to
+/// filter, sort and paginate, and `orders(query:)` cannot serve that. Shopify
+/// owns the order; nothing here is authoritative, and nothing here is a price
+/// this app computed.
+model Order {
+  id      String @id @default(cuid())
+  shop    String
+  /// Shopify's GID.
+  orderId String
+  /// The order number as the merchant says it out loud: "#1001".
+  name    String
+
+  /// Shopify's customer GID, when the order has one.
+  customerId String?
+  email      String?
+  company    String?
+
+  /// Shopify's own statuses, lowercased: "paid", "pending", "refunded",
+  /// "partially_refunded", "voided".
+  financialStatus   String?
+  fulfillmentStatus String?
+
+  /// Totals in minor units of `currencyCode`. Shopify's numbers, not ours.
+  totalPrice     Int    @default(0)
+  subtotalPrice  Int    @default(0)
+  refundedAmount Int    @default(0)
+  currencyCode   String @default("USD")
+  totalQuantity  Int    @default(0)
+
+  source     OrderSource @default(STOREFRONT)
+  /// The raw `sourceName` Shopify reported, kept because our mapping of it is
+  /// a guess and the original is not.
+  sourceName String?
+
+  tags        String[]
+  /// True when the buyer was a wholesale customer at the time of the order.
+  isWholesale Boolean  @default(false)
+
+  /// Net terms due date. Filled in by phase 3.2; the list already renders the
+  /// states that depend on it.
+  netTermsDueAt DateTime?
+  /// Days of terms the buyer had, for the "Net 30" chip.
+  netTermsDays  Int?
+  paidAt        DateTime?
+
+  processedAt DateTime
+  cancelledAt DateTime?
+
+  /// Shopify's `updatedAt` when we last wrote this row, and the one Shopify
+  /// reported most recently. When they differ the list shows a resync badge
+  /// rather than quietly showing a stale total.
+  shopifyUpdatedAt DateTime?
+  syncedAt         DateTime  @default(now())
+  /// Set when an order was edited in Shopify after we mirrored it.
+  needsResync      Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([shop, orderId])
+  @@index([shop, processedAt])
+  @@index([shop, isWholesale, processedAt])
+  @@index([shop, netTermsDueAt])
+  @@index([shop, customerId])
+}
+
+// ---------------------------------------------------------------------------
+// Order limits (phase 3.1)
+// ---------------------------------------------------------------------------
+
+/// What a buyer's cart has to satisfy before they can check out.
+///
+/// One row per group, plus at most one row with no group, which applies to
+/// every wholesale buyer the group rows do not cover. Limits are enforced by a
+/// cart validation Function, so the numbers here are published to a shop
+/// metafield exactly as the pricing ruleset is.
+model OrderLimit {
+  id      String         @id @default(cuid())
+  shop    String
+  /// Null means "every wholesale buyer without a more specific limit".
+  groupId String?
+  group   CustomerGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  enabled Boolean @default(true)
+
+  /// Minor units of the shop's currency. Null means no limit.
+  minSubtotal Int?
+  maxSubtotal Int?
+
+  minQuantity       Int?
+  maxQuantity       Int?
+  /// Case packs: the cart's total quantity must be a multiple of this.
+  quantityIncrement Int?
+
+  /// ISO 3166-1 alpha-2 codes this limit applies in. Empty means everywhere.
+  /// Countries rather than markets — see DECISIONS.md, 2026-09-10.
+  countries String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@unique([shop, groupId])
+  @@index([shop, enabled])
 }

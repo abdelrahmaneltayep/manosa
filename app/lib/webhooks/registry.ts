@@ -2,6 +2,9 @@ import { handleAppSubscriptionsUpdate } from "~/lib/webhooks/handlers/app-subscr
 import { handleCollectionsUpdate } from "~/lib/webhooks/handlers/collections-update.server";
 import { handleCustomersDelete } from "~/lib/webhooks/handlers/customers-delete.server";
 import { handleCustomersUpsert } from "~/lib/webhooks/handlers/customers-upsert.server";
+import { handleOrdersCancelled } from "~/lib/webhooks/handlers/orders-cancelled.server";
+import { handleOrdersEdited } from "~/lib/webhooks/handlers/orders-edited.server";
+import { handleOrdersUpsert } from "~/lib/webhooks/handlers/orders-upsert.server";
 import { handleProductsUpdate } from "~/lib/webhooks/handlers/products-update.server";
 import { handleAppUninstalled } from "~/lib/webhooks/handlers/app-uninstalled.server";
 
@@ -72,6 +75,36 @@ export const WEBHOOK_SUBSCRIPTIONS: readonly WebhookSubscription[] = [
     uri: "/webhooks/customers/delete",
     description: "Flag a deleted buyer so the list says so, rather than losing the row.",
     handler: handleCustomersDelete,
+  },
+  {
+    topic: "orders/create",
+    uri: "/webhooks/orders/create",
+    description:
+      "Mirror a new order so the wholesale list has it, and tag it in Shopify " +
+      "when a wholesale buyer placed it.",
+    handler: handleOrdersUpsert,
+  },
+  {
+    topic: "orders/updated",
+    uri: "/webhooks/orders/updated",
+    description:
+      "Keep totals, payment status and refunds current — this is how a refund " +
+      "or an edit made in Shopify's admin reaches the list.",
+    handler: handleOrdersUpsert,
+  },
+  {
+    topic: "orders/edited",
+    uri: "/webhooks/orders/edited",
+    description:
+      "An edit carries only the line-item deltas, so flag the order as stale " +
+      "rather than rewriting its total from a partial payload.",
+    handler: handleOrdersEdited,
+  },
+  {
+    topic: "orders/cancelled",
+    uri: "/webhooks/orders/cancelled",
+    description: "Record a cancellation against the order rather than losing the row.",
+    handler: handleOrdersCancelled,
   },
   {
     topic: "products/update",

@@ -59,3 +59,42 @@ export function frameAncestorsFor(shop: string, primaryDomain: string | null): s
   if (primaryDomain && primaryDomain !== shop) origins.push(`https://${primaryDomain}`);
   return `frame-ancestors ${origins.join(" ")}`;
 }
+
+/**
+ * Shopify's own GID for this shop.
+ *
+ * A shop metafield needs an owner id, and the only one Shopify accepts is
+ * `gid://shopify/Shop/<numeric>` — not the myshopify domain, and certainly not
+ * our own row id. It never changes, so it is read once and cached.
+ */
+const SHOP_ID = `#graphql
+  query MannonShopId {
+    shop {
+      id
+    }
+  }`;
+
+export async function shopGid(admin: AdminGraphql): Promise<string> {
+  const shop = shopScope.require("shopGid");
+  const record = await db.shop.findUnique({ where: { shop } });
+  if (record?.shopGid) return record.shopGid;
+
+  const response = await admin.graphql(SHOP_ID);
+  const body = (await response.json()) as {
+    data?: { shop?: { id?: string | null } | null };
+    errors?: { message: string }[];
+  };
+
+  const gid = body.data?.shop?.id?.trim();
+  if (!gid) {
+    // No sensible fallback: writing a metafield to a made-up owner would
+    // succeed at nothing while looking like it worked.
+    throw new Error(
+      `Could not read the shop id for ${shop}` +
+        (body.errors?.length ? `: ${body.errors.map((e) => e.message).join("; ")}` : ""),
+    );
+  }
+
+  await db.shop.update({ where: { shop }, data: { shopGid: gid } });
+  return gid;
+}

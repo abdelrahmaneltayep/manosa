@@ -1,0 +1,41 @@
+# Everything the limits need, and nothing else.
+#
+# A Function's input query is fixed at deploy time and serves every merchant, so
+# the limits themselves cannot be a parameter — they arrive as a shop metafield,
+# written by the app whenever a limit changes.
+query RunInput {
+  cart {
+    cost {
+      subtotalAmount {
+        amount
+        currencyCode
+      }
+    }
+    lines {
+      quantity
+    }
+    buyerIdentity {
+      isAuthenticated
+      customer {
+        # Which tier this buyer is in, and what they are tagged. Published by
+        # the app on every customer create and update.
+        metafield(namespace: "$app:mannon", key: "buyer") {
+          jsonValue
+        }
+      }
+    }
+  }
+
+  localization {
+    country {
+      isoCode
+    }
+  }
+
+  shop {
+    # The published limits and the merchant's own wording for them.
+    metafield(namespace: "$app:mannon", key: "limits") {
+      jsonValue
+    }
+  }
+}

@@ -1,5 +1,6 @@
-import { formatMoney, money } from "@mannon/pricing-engine";
+import { money } from "@mannon/pricing-engine";
 import type { Translate } from "~/i18n/translate";
+import { formatCurrency } from "~/lib/money";
 import type { Customer, CustomerGroup } from "@prisma/client";
 
 import type {
@@ -28,7 +29,7 @@ export function displayName(
 
 export function toCustomerRowView(
   row: Customer & { group?: CustomerGroup | null },
-  options: { now: Date; t: Translate },
+  options: { now: Date; t: Translate; locale?: string },
 ): CustomerRowView {
   const { now, t } = options;
   const group = row.group ?? null;
@@ -46,7 +47,10 @@ export function toCustomerRowView(
     // Shopify's lifetime total for this buyer, formatted with the engine's
     // money formatter. Not a price this app computed — every price on every
     // surface comes from the pricing engine, and this is not one.
-    lifetimeSpend: formatMoney(money(row.lifetimeSpend, row.currencyCode)),
+    lifetimeSpend: formatCurrency(
+      money(row.lifetimeSpend, row.currencyCode),
+      options.locale,
+    ),
     orderCount: row.orderCount,
     lastOrderAt: row.lastOrderAt ? row.lastOrderAt.toISOString() : null,
     daysSinceLastOrder: days,
@@ -89,7 +93,12 @@ export function toGroupRowView(
  */
 export function bundleSections(
   group: CustomerGroup,
-  options: { t: Translate; pricingRuleCount: number },
+  options: {
+    t: Translate;
+    pricingRuleCount: number;
+    /** The tier's own order limit, when it has one. */
+    orderLimit?: { minSubtotal: number | null; quantityIncrement: number | null } | null;
+  },
 ): GroupBundleSection[] {
   const { t } = options;
 
@@ -108,12 +117,12 @@ export function bundleSections(
     },
     {
       key: "limits",
-      href: null,
+      href: "/app/orders/limits",
       summary:
-        group.orderMinimum == null
+        options.orderLimit == null
           ? t("customers.group.summary.noLimits")
           : t("customers.group.summary.limits"),
-      comingIn: "3.1",
+      comingIn: null,
     },
     {
       key: "terms",
@@ -152,7 +161,7 @@ export function describeCondition(condition: TagCondition, t: Translate): string
   switch (condition.field) {
     case "lifetime_spend":
       return t(`customers.tagging.describe.lifetime_spend.${condition.op}`, {
-        amount: formatMoney(condition.amount),
+        amount: formatCurrency(condition.amount),
       });
     case "order_count":
       return t(`customers.tagging.describe.order_count.${condition.op}`, {

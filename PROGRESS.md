@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T09:00:00Z
+Updated: 2026-09-10T10:25:00Z
 Current milestone: 3 — Orders
-Current task: 3.1 Wholesale order list, order limits, quantity increments [in progress]
+Current task: 3.2 Net terms: eligibility, pay-later, ledger with aging, reminders [in progress]
 
 ## Done
 
@@ -16,10 +16,10 @@ Current task: 3.1 Wholesale order list, order limits, quantity increments [in pr
 - [x] 2.1 Customer sync, groups, tagging engine, buyers list — commit `e4313ca` — QA: `qa/2.1/REPORT.md`
 - [x] 2.2 Registration form builder, theme block, VIES, spam protection — commit `1206e68` — QA: `qa/2.2/REPORT.md`
 - [x] 2.3 Approval pipeline: queue, decisions, emails, evaluator — commit `3e0c403` — QA: `qa/2.3/REPORT.md`
+- [x] 3.1 Wholesale order list, order limits, quantity increments — commit `7f2b5f4` — QA: `qa/3.1/REPORT.md`
 
 ## Next up
 
-- 3.1 Wholesale order list (order webhooks, placed-via attribution), order limits, quantity increments
 - 3.2 Net terms: eligibility, pay-later via draft orders, ledger with aging, reminders
 - 3.3 Quotes and draft orders: request pipeline, expiry, accept link, price locking
 - 3.4 Quick order storefront blocks, inside the ≤10-point Lighthouse budget
@@ -69,6 +69,12 @@ Current task: 3.1 Wholesale order list, order limits, quantity increments [in pr
 - **Market scoping in the rule builder** → needs the Shopify Markets query,
   which needs a store. The engine and storage support it; only the control is
   withheld, so the admin cannot show a rule applying that checkout ignores.
+  Order limits sidestep this: the validation Function is handed a country code
+  directly, so limits are scoped by country (`docs/adr/0014`).
+- **Editable limit messages** → 6.2, Settings → Limit display. `DEFAULT_MESSAGES`
+  ships English only and already carries the gap number.
+- **Orders older than 60 days** → `read_orders` reaches no further without
+  `read_all_orders`, a review-time grant. The list states its window on the page.
 - **Plans page: discount-code field, ✦ Plan Advisor, export-on-downgrade** →
   0.3 deferred the first two (redemption tracking; AI infrastructure); the third
   now has something to export and can land with 6.2.
@@ -105,9 +111,19 @@ Neither is blocking; both would change product decisions if answered.
 - **The capture harness checks for raw i18n keys** on every capture. If a new
   catalog root appears, add it to `CATALOG_ROOTS` in
   `tests/support/state-capture.tsx`.
-- **The three recurring bug shapes**, all now guarded: English plural keys
+- **The four recurring bug shapes**, all now guarded: English plural keys
   written without `_one` (caught three times), boolean props on `s-*` elements
-  (twice), and a pluralised key called without `count`.
+  (twice), a pluralised key called without `count`, and — new in 3.1 — a
+  machine-readable code that ends in a plural suffix (`increment_below_two`),
+  which i18next reads as Arabic `_two`.
+- **`NOT: { a, b, c }` in Prisma is a trap when any column is nullable.** SQL
+  three-valued logic makes the whole `NOT` unknown, and the row matches neither
+  branch. 3.1 lost every order without net terms from page 2 this way; the fix
+  is to spell the complement out as an `OR`.
+- **The webhook registry test is a real gate.** Adding a topic to
+  `WEBHOOK_SUBSCRIPTIONS` without adding it to `shopify.app.toml` fails the
+  build, and the test also asserts a topic nothing handles — pick one Mannon
+  genuinely does not subscribe to.
 - **Prisma promises are lazy.** They must be settled inside the ALS scope —
   `settleInScope` in `app/lib/tenant/shop-context.server.ts` exists because of a
   bug where the tenant was lost between building a query and awaiting it.

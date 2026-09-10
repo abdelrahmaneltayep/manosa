@@ -1,0 +1,4 @@
+{
+  "name": "Mannon order limits",
+  "description": "Blocks a wholesale cart that does not meet the merchant's order minimums, maximums or case packs."
+}

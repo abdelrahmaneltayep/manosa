@@ -21,6 +21,7 @@ state walkthrough, tenant boundary, invariants, bugs found and fixed, open items
 | 2.1  | Customer sync, groups, tagging engine, buyers list            | Pass · open items             | [`qa/2.1/REPORT.md`](qa/2.1/REPORT.md) |
 | 2.2  | Registration form builder, theme block, VIES, spam protection | Pass · open items             | [`qa/2.2/REPORT.md`](qa/2.2/REPORT.md) |
 | 2.3  | Approval pipeline: queue, approve/reject, emails, evaluator   | Pass · open items             | [`qa/2.3/REPORT.md`](qa/2.3/REPORT.md) |
+| 3.1  | Wholesale order list, order limits, quantity increments       | Pass · open items             | [`qa/3.1/REPORT.md`](qa/3.1/REPORT.md) |
 
 ## What a capture proves, and what it does not
 

@@ -113,6 +113,23 @@ export function formatMoney(value: Money): string {
   return `${negative ? "-" : ""}${whole}.${fraction}`;
 }
 
+/**
+ * Money with its currency named, for somewhere `Intl` is not available.
+ *
+ * `formatMoney` deliberately returns bare digits: it is what goes on the wire
+ * to Shopify and into a CSV, where a symbol would be wrong. But a *buyer*
+ * reading "add 38.00 to reach your 200.00 minimum" is being told a number with
+ * no unit.
+ *
+ * Shopify Functions run on a JavaScript runtime without full ICU, so this is
+ * the honest formatting available there: the ISO code, which is never wrong in
+ * any locale. Anywhere with `Intl` — the admin, the server — should use
+ * `formatCurrency` in `app/lib/money.ts` instead, which produces "$1,200.50".
+ */
+export function formatMoneyWithCode(value: Money): string {
+  return `${value.currencyCode} ${formatMoney(value)}`;
+}
+
 function assertSameCurrency(a: Money, b: Money, operation: string): void {
   if (a.currencyCode !== b.currencyCode) {
     throw new MoneyError(

@@ -43,7 +43,7 @@ describe("webhook registry", () => {
   });
 
   it("returns nothing for a topic it does not handle", () => {
-    expect(subscriptionForTopic("orders/create")).toBeUndefined();
+    expect(subscriptionForTopic("fulfillments/create")).toBeUndefined();
   });
 
   it("has no duplicate topics or URIs", () => {

@@ -34,6 +34,13 @@ export async function ensureShopRecord() {
       runAt: new Date(),
       replacePending: true,
     });
+    // And the same for orders, so the Orders page and the dashboard's revenue
+    // figures are not empty on a store that already sells wholesale.
+    await enqueueJob({
+      kind: "orders.backfill",
+      runAt: new Date(),
+      replacePending: true,
+    });
     return created;
   }
 
@@ -55,6 +62,18 @@ export async function ensureShopRecord() {
     });
     await enqueueJob({
       kind: "customers.backfill",
+      runAt: new Date(),
+      replacePending: true,
+    });
+  }
+
+  if (restored.ordersBackfilledAt) {
+    await db.shop.update({
+      where: { shop },
+      data: { ordersBackfilledAt: null, ordersBackfillCursor: null },
+    });
+    await enqueueJob({
+      kind: "orders.backfill",
       runAt: new Date(),
       replacePending: true,
     });

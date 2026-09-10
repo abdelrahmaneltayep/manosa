@@ -84,8 +84,6 @@ export interface GroupInput {
   color?: string | null;
   description?: string | null;
   netTermsDays?: number | null;
-  orderMinimum?: number | null;
-  orderIncrement?: number | null;
   freeShippingOver?: number | null;
   visibleCollectionIds?: string[];
   template?: string | null;
@@ -131,8 +129,6 @@ function groupData(
     color: input.color ?? null,
     description: input.description ?? null,
     netTermsDays: input.netTermsDays ?? null,
-    orderMinimum: input.orderMinimum ?? null,
-    orderIncrement: input.orderIncrement ?? null,
     freeShippingOver: input.freeShippingOver ?? null,
     visibleCollectionIds: input.visibleCollectionIds ?? [],
     template: input.template ?? null,

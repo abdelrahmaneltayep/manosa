@@ -8,6 +8,65 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — `orders/edited` flags the row rather than rewriting it
+
+The order-edited webhook carries a diff of line items with no totals in it.
+Flagging the row and showing a resync badge keeps a total we know is honest but
+stale; the `orders/updated` that follows the edit carries the whole order and
+clears the flag. Rejected: recomputing the total from the additions and
+removals, which would make this app's arithmetic the source of a number Shopify
+owns.
+
+## 2026-09-10 — Whether an order is wholesale is decided once, on arrival
+
+Read from the buyer as they were at the time, then never re-decided. Approving
+someone for wholesale today must not silently move last month's orders into the
+wholesale revenue figure. Rejected: recomputing on every update, which is what
+the obvious implementation does.
+
+## 2026-09-10 — Order limits are scoped by country, not by market
+
+The validation Function is handed `localization.country.isoCode` directly.
+Scoping by market would need a `markets` query, a stored mapping and a way to
+keep it current, for a distinction merchants usually express as a country
+anyway. Rejected: markets — additive later if anyone asks. `docs/adr/0014`.
+
+## 2026-09-10 — A second pure package rather than growing the pricing engine
+
+`packages/order-limits` is its own module. Limits are not prices: they answer a
+yes/no with a gap, they never touch a rule, and the pricing engine staying
+small is what keeps "every price comes from one module" checkable. It imports
+`@mannon/pricing-engine` for `Money` and nothing else. Rejected: a `limits`
+directory inside the engine.
+
+## 2026-09-10 — The orders list stops at 60 days, and says so on the page
+
+`read_orders` reaches 60 days; `read_all_orders` is a review-time grant this app
+does not have. The list carries a line stating the window rather than presenting
+a partial history as the whole of it. Rejected: requesting `read_all_orders` now
+(a review conversation for a feature nobody has asked for), and saying nothing.
+
+## 2026-09-10 — Historical orders are mirrored but not tagged
+
+The backfill writes no tags into Shopify. Putting a wholesale tag onto hundreds
+of a merchant's existing orders on install is a lot of noise in their admin for
+something they never asked for. New orders are tagged once, on arrival, and
+never re-tagged — a merchant who removed the tag meant to.
+
+## 2026-09-10 — The shop's Shopify GID is read and cached, not assembled
+
+Found while writing `publishLimits`: the shop metafield's `ownerId` was being
+built from our own Prisma row id, which Shopify would never resolve. The GID is
+read once from `shop { id }` and cached on the Shop row. Rejected: querying it
+on every publish.
+
+## 2026-09-10 — `increment_below_two` renamed to `increment_too_small`
+
+The i18n catalog test caught it: a key ending in `_two` is read by i18next as an
+Arabic plural suffix, so the catalogs failed to validate. Renamed at the source
+in `packages/order-limits` rather than worked around in the catalogs. A reminder
+that machine-readable codes end up as translation keys.
+
 ## 2026-09-10 — Specs checked into the repo
 
 The four spec documents were only ever attachments in a chat. `CLAUDE.md` now
