@@ -93,39 +93,59 @@ export async function loadKpis(
   const start = new Date(now.getTime() - period * DAY);
   const previousStart = new Date(now.getTime() - period * 2 * DAY);
 
-  const wholesale = {
-    isWholesale: true,
-    cancelledAt: null,
-    currencyCode,
-  };
+  // `processedAt` is when Shopify says the order happened. `createdAt` is when
+  // Mannon mirrored it — which for the sixty days the install backfill imports
+  // is the install itself, so windowing on it would have reported two months of
+  // revenue as "the last 7 days".
+  const wholesale = { isWholesale: true, cancelledAt: null };
+  const inCurrency = { ...wholesale, currencyCode };
 
-  const [current, previous, pendingApprovals, activeRules, outstanding] =
-    await Promise.all([
-      db.order.aggregate({
-        where: { ...wholesale, createdAt: { gte: start } },
-        _count: true,
-        _sum: { totalPrice: true },
-      }),
-      db.order.aggregate({
-        where: { ...wholesale, createdAt: { gte: previousStart, lt: start } },
-        _count: true,
-        _sum: { totalPrice: true },
-      }),
-      db.formSubmission.count({ where: { status: "PENDING" } }),
-      db.pricingRule.count({ where: { status: "ACTIVE", archivedAt: null } }),
-      db.order.findMany({
-        where: {
-          paidAt: null,
-          cancelledAt: null,
-          currencyCode,
-          netTermsDueAt: { not: null },
-        },
-        select: { totalPrice: true, amountPaid: true },
-      }),
-    ]);
+  const [
+    current,
+    previous,
+    currentCount,
+    previousCount,
+    pendingApprovals,
+    activeRules,
+    outstanding,
+  ] = await Promise.all([
+    // The count is of every wholesale order; the sum is only of the ones
+    // priced in the shop's own currency. Restricting the count too made a
+    // shop with euro orders read "12 wholesale orders" when it had 20, while
+    // the briefing directly below said 20.
+    db.order.aggregate({
+      where: { ...inCurrency, processedAt: { gte: start } },
+      _sum: { totalPrice: true },
+    }),
+    db.order.aggregate({
+      where: { ...inCurrency, processedAt: { gte: previousStart, lt: start } },
+      _sum: { totalPrice: true },
+    }),
+    db.order.count({ where: { ...wholesale, processedAt: { gte: start } } }),
+    db.order.count({
+      where: { ...wholesale, processedAt: { gte: previousStart, lt: start } },
+    }),
+    db.formSubmission.count({ where: { status: "PENDING" } }),
+    db.pricingRule.count({ where: { status: "ACTIVE", archivedAt: null } }),
+    // The same four conditions the terms ledger uses, so the card and the
+    // page it links to answer the same question.
+    db.order.findMany({
+      where: {
+        isWholesale: true,
+        paidAt: null,
+        cancelledAt: null,
+        currencyCode,
+        netTermsDueAt: { not: null },
+      },
+      select: { totalPrice: true, amountPaid: true, refundedAmount: true },
+    }),
+  ]);
 
+  // Refunds come off, as they do everywhere else in the app. Without this the
+  // card said $1,000.00 and the ledger it links to said $600.00.
   const owed = outstanding.reduce(
-    (sum, order) => sum + Math.max(0, order.totalPrice - order.amountPaid),
+    (sum, order) =>
+      sum + Math.max(0, order.totalPrice - order.refundedAmount - order.amountPaid),
     0,
   );
 
@@ -155,11 +175,7 @@ export async function loadKpis(
       },
       {
         key: "wholesale_orders",
-        value: {
-          kind: "count",
-          value: current._count,
-          previous: previous._count,
-        },
+        value: { kind: "count", value: currentCount, previous: previousCount },
         partial,
         href: "/app/orders",
       },

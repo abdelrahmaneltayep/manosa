@@ -5,7 +5,12 @@ import { db } from "~/db.server";
 import type { SetupPlan } from "~/lib/ai/prompts/setup-plan.server";
 import { MissingApprovalError } from "~/lib/audit/record.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
-import { applySetupPlan, ruleFromPlan, setupGrounding } from "~/lib/setup/wizard.server";
+import {
+  applySetupPlan,
+  PartialSetupError,
+  ruleFromPlan,
+  setupGrounding,
+} from "~/lib/setup/wizard.server";
 import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
 import { resetDatabase } from "../support/db";
 
@@ -103,7 +108,14 @@ async function installShop(shop: string, planKey = "agentic") {
 }
 
 const apply = (value: SetupPlan, admin = fakeAdmin()) =>
-  applySetupPlan(value, { admin, approvedById: STAFF, t, ai: AI, now: NOW });
+  applySetupPlan(value, {
+    admin,
+    approvedById: STAFF,
+    t,
+    ai: AI,
+    now: NOW,
+    currencyCode: "USD",
+  });
 
 beforeEach(async () => {
   await resetDatabase();
@@ -216,19 +228,27 @@ describe("applying a plan", () => {
     const admin = fakeAdmin();
 
     await inAlpha(async () => {
-      await expect(
-        applySetupPlan(plan(), {
-          admin,
-          // The empty string is what a route with no session would hand over.
-          approvedById: "",
-          t,
-          ai: AI,
-          now: NOW,
-        }),
-      ).rejects.toBeInstanceOf(MissingApprovalError);
+      const failure = await applySetupPlan(plan(), {
+        admin,
+        // The empty string is what a route with no session would hand over.
+        approvedById: "",
+        t,
+        ai: AI,
+        now: NOW,
+        currencyCode: "USD",
+      }).catch((error: unknown) => error);
 
-      // The group is created before the rule, so this is a partial apply — but
-      // no pricing rule exists, which is the half that matters.
+      // The group is created before the rule, so this stops half way — and the
+      // caller is handed both the reason and what already exists, because a
+      // screen saying "nothing was created" to a shop that changed is the
+      // failure mode this wraps.
+      expect(failure).toBeInstanceOf(PartialSetupError);
+      const partial = failure as PartialSetupError;
+      expect(partial.reason).toBeInstanceOf(MissingApprovalError);
+      expect(partial.applied.groups).toHaveLength(1);
+      expect(partial.applied.ruleId).toBeNull();
+
+      // No pricing rule exists, which is the half that matters.
       expect(await db.pricingRule.count()).toBe(0);
     });
   });
@@ -236,7 +256,7 @@ describe("applying a plan", () => {
 
 describe("the rule a plan becomes", () => {
   it("prices a percentage off, for the planned tag only", () => {
-    const rule = ruleFromPlan(plan(), NOW);
+    const rule = ruleFromPlan(plan(), NOW, "USD");
     expect(rule?.kind).toBe("percentage");
     expect(rule?.audience).toEqual({ mode: "tags", tags: ["cafes"] });
     expect(rule?.status).toBe("active");
@@ -249,12 +269,15 @@ describe("the rule a plan becomes", () => {
           name: "Five off",
           kind: "amount_off",
           percentage: null,
-          amount: money(500, "USD"),
+          // A decimal string, because the plan travels through a form field
+          // and is read again before it is applied.
+          amount: "5.00",
           tiers: [],
           audienceTag: "cafes",
         },
       }),
       NOW,
+      "USD",
     );
 
     expect(rule?.kind).toBe("amount_off");
@@ -279,6 +302,7 @@ describe("the rule a plan becomes", () => {
         },
       }),
       NOW,
+      "USD",
     );
 
     expect(rule?.kind).toBe("volume_tier");
@@ -291,7 +315,7 @@ describe("the rule a plan becomes", () => {
   });
 
   it("is nothing at all when the plan proposed no rule", () => {
-    expect(ruleFromPlan(plan({ rule: null }), NOW)).toBeNull();
+    expect(ruleFromPlan(plan({ rule: null }), NOW, "USD")).toBeNull();
   });
 });
 

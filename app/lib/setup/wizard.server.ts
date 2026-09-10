@@ -1,4 +1,4 @@
-import type { PricingRule, VolumeTier } from "@mannon/pricing-engine";
+import { parseMoney, type PricingRule, type VolumeTier } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
 import type { Translate } from "~/i18n/translate";
@@ -96,7 +96,11 @@ export async function setupGrounding(): Promise<SetupGrounding> {
 }
 
 /** The plan as a pricing rule the engine will accept. */
-export function ruleFromPlan(plan: SetupPlan, now: Date): PricingRule | null {
+export function ruleFromPlan(
+  plan: SetupPlan,
+  now: Date,
+  currencyCode: string,
+): PricingRule | null {
   if (!plan.rule) return null;
   const planned = plan.rule;
 
@@ -124,9 +128,12 @@ export function ruleFromPlan(plan: SetupPlan, now: Date): PricingRule | null {
   if (planned.kind === "amount_off") {
     // No per-currency overrides: the wizard priced in the shop's own currency,
     // and the engine skips the rule elsewhere rather than converting.
-    return planned.amount
-      ? { ...base, kind: "amount_off", value: { base: planned.amount, overrides: {} } }
-      : null;
+    if (!planned.amount) return null;
+    return {
+      ...base,
+      kind: "amount_off",
+      value: { base: parseMoney(planned.amount, currencyCode), overrides: {} },
+    };
   }
 
   const tiers: VolumeTier[] = planned.tiers.map((tier) => ({
@@ -145,8 +152,29 @@ export interface AppliedSetup {
   formId: string | null;
 }
 
+/**
+ * Something was created, and then something else failed.
+ *
+ * Applying is not one transaction — a rule has to be published to Shopify's
+ * Function, which is not a thing a database transaction can roll back — so a
+ * run can stop half way. When it does, the merchant has to be told what
+ * exists, or they are looking at a shop that changed under them while the
+ * screen said "nothing was created".
+ */
+export class PartialSetupError extends Error {
+  constructor(
+    readonly applied: AppliedSetup,
+    readonly reason: unknown,
+  ) {
+    super("The setup was applied in part.");
+    this.name = "PartialSetupError";
+  }
+}
+
 export interface ApplyOptions {
   admin: AdminGraphql;
+  /** The shop's currency. The plan's amounts are decimals in it. */
+  currencyCode: string;
   /** The merchant who pressed the button. Nothing applies without one. */
   approvedById: string;
   t: Translate;
@@ -170,7 +198,28 @@ export async function applySetupPlan(
   const now = options.now ?? new Date();
   const actor = { type: "STAFF" as const, id: options.approvedById };
 
-  const groups: string[] = [];
+  const applied: AppliedSetup = { groups: [], ruleId: null, formId: null };
+
+  try {
+    return await applyEach(plan, options, actor, now, applied);
+  } catch (error) {
+    // Anything already created stays created; the caller is handed the list so
+    // the screen can say so and the merchant can pick up where it stopped.
+    if (applied.groups.length > 0 || applied.ruleId || applied.formId) {
+      throw new PartialSetupError(applied, error);
+    }
+    throw error;
+  }
+}
+
+async function applyEach(
+  plan: SetupPlan,
+  options: ApplyOptions,
+  actor: { type: "STAFF"; id: string },
+  now: Date,
+  applied: AppliedSetup,
+): Promise<AppliedSetup> {
+  const groups: string[] = applied.groups;
   for (const planned of plan.groups) {
     const created = await createGroup(
       {
@@ -183,7 +232,7 @@ export async function applySetupPlan(
     groups.push(created.id);
   }
 
-  const rule = ruleFromPlan(plan, now);
+  const rule = ruleFromPlan(plan, now, options.currencyCode);
   const ruleRow = rule
     ? await createRule(rule, {
         admin: options.admin,
@@ -197,6 +246,7 @@ export async function applySetupPlan(
         },
       })
     : null;
+  applied.ruleId = ruleRow?.id ?? null;
 
   const formRow = plan.form
     ? await createForm(
@@ -227,6 +277,7 @@ export async function applySetupPlan(
         actor,
       )
     : null;
+  applied.formId = formRow?.id ?? null;
 
   await recordAudit({
     actor,

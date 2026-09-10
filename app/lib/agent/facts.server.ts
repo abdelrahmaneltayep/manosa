@@ -162,11 +162,14 @@ export async function briefingFacts(now = new Date()): Promise<AgentFact[]> {
       orderBy: { lifetimeSpend: "desc" },
       take: 5,
     }),
+    // `processedAt`, not `createdAt`: the latter is when Mannon mirrored the
+    // order, and the sixty days the install backfill imports all carry the
+    // install's timestamp. Windowing on it reported two months as "this week".
     db.order.aggregate({
       where: {
         isWholesale: true,
         cancelledAt: null,
-        createdAt: { gte: new Date(now.getTime() - 7 * DAY) },
+        processedAt: { gte: new Date(now.getTime() - 7 * DAY) },
       },
       _count: true,
       _sum: { totalPrice: true },
@@ -175,7 +178,7 @@ export async function briefingFacts(now = new Date()): Promise<AgentFact[]> {
       where: {
         isWholesale: true,
         cancelledAt: null,
-        createdAt: {
+        processedAt: {
           gte: new Date(now.getTime() - 14 * DAY),
           lt: new Date(now.getTime() - 7 * DAY),
         },

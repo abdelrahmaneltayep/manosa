@@ -82,8 +82,8 @@ const briefing = (overrides: Partial<BriefingView> = {}): BriefingView => ({
 const kpis = (overrides: Partial<KpiView> = {}): KpiView => ({
   period: 30,
   periods: [7, 30, 90],
-  loading: false,
   empty: false,
+  coversDays: null,
   cards: [
     {
       key: "wholesale_revenue",
@@ -455,13 +455,23 @@ describe("the KPI cards", () => {
     capture("17-kpi-empty", html);
   });
 
-  it("holds the layout while the numbers load", () => {
-    const html = render(<HomePage view={view({ kpis: kpis({ loading: true }) })} />);
-
-    // Fixed-height tiles, so nothing below them moves when the figures land.
+  it("holds the tiles at a fixed height, so nothing below them moves", () => {
+    const html = render(<HomePage view={view()} />);
     expect(html).toContain('minBlockSize="120px"');
-    expect(html).not.toContain("$12,400.00");
-    capture("18-kpi-loading", html);
+  });
+
+  it("says how much history a period actually covers", () => {
+    const html = render(<HomePage view={view({ kpis: kpis({ coversDays: 8 }) })} />);
+
+    // A shop installed eight days ago asking for ninety gets a figure covering
+    // eight, and is told so.
+    expect(html).toContain("Covering the 8 days since you installed Mannon");
+    capture("18-kpi-short-history", html);
+  });
+
+  it("shows the previous period beside the figure", () => {
+    const html = render(<HomePage view={view()} />);
+    expect(html).toContain("was $9,300.00");
   });
 });
 

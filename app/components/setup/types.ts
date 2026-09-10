@@ -17,7 +17,14 @@ export interface WizardPlanView {
   summary: string;
   groups: WizardGroupView[];
   /** Null when this shop already has pricing rules. */
-  rule: { name: string; summary: string } | null;
+  rule: {
+    name: string;
+    summary: string;
+    /** The tag it prices for, named so the merchant can check it. */
+    audienceTag: string;
+    /** How many of their customers already carry that tag. */
+    reaches: number;
+  } | null;
   /** Null when this shop already has a registration form. */
   form: { name: string; fields: string[] } | null;
   notes: string | null;
@@ -42,7 +49,18 @@ export interface WizardView {
     | "empty"
     | "limit"
     | "duplicate"
+    | "invalid_rule"
     | null;
+  /**
+   * What a failed run managed to create before it stopped.
+   *
+   * Null when nothing was created. Applying is not one transaction — a rule is
+   * published to Shopify's Function, which no database transaction can roll
+   * back — so this is how the screen avoids saying "nothing happened" to a
+   * merchant whose shop just changed.
+   */
+  partial: { groups: number; rule: boolean; form: boolean } | null;
+
   /** Set once the merchant has applied it. */
   applied: {
     links: { label: string; href: string }[];

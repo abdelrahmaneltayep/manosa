@@ -94,10 +94,16 @@ export interface KpiView {
   period: number;
   periods: number[];
   cards: KpiCardView[];
-  /** Skeleton tiles, fixed height, so nothing on the page moves when they land. */
-  loading: boolean;
   /** No wholesale order has ever been mirrored. The zeros get a sentence. */
   empty: boolean;
+  /**
+   * Days of history the shop has, when that is less than the period selected.
+   *
+   * Null when the period is fully covered. A store installed eight days ago
+   * asking for ninety gets a figure covering eight, and saying so is the
+   * difference between a number and a claim.
+   */
+  coversDays: number | null;
 }
 
 export interface SetupItemView {

@@ -33,9 +33,32 @@ export interface ActivityRow {
 
 export interface ActivityPage {
   rows: ActivityRow[];
-  /** ISO timestamp to pass back as `before` for the next page. */
+  /**
+   * Where the next page starts: `<ISO timestamp>|<row id>`.
+   *
+   * The id is not decoration. `AuditLog.createdAt` defaults to
+   * `CURRENT_TIMESTAMP`, which in Postgres is *transaction* time — so every row
+   * written inside one `db.$transaction` carries an identical value, and a
+   * cursor of "older than this timestamp" skips its siblings. A bulk approval
+   * or the setup wizard's own apply produces exactly such a cluster.
+   */
   nextCursor: string | null;
 }
+
+interface Cursor {
+  at: Date;
+  id: string;
+}
+
+function readCursor(raw: string | null | undefined): Cursor | null {
+  if (!raw) return null;
+  const [when, ...rest] = raw.split("|");
+  const at = new Date(when ?? "");
+  if (Number.isNaN(at.getTime())) return null;
+  return { at, id: rest.join("|") };
+}
+
+const writeCursor = (at: Date, id: string) => `${at.toISOString()}|${id}`;
 
 /** How many rows Home shows before "View all". */
 export const HOME_ROWS = 8;
@@ -67,6 +90,9 @@ const WANTS_ORDERS: Record<ActivityFilter, boolean> = {
 };
 
 const AGENT_ACTORS: AuditActorType[] = ["MERCHANT_AGENT", "BUYER_AGENT"];
+
+/** Row ids carry their table (`audit:`/`order:`); the cursor wants the id. */
+const rawId = (id: string) => id.slice(id.indexOf(":") + 1);
 
 /** The page an audit row points at, by the family of thing it happened to. */
 function hrefForAudit(row: { action: string }): string | null {
@@ -104,12 +130,25 @@ export async function loadActivity(
   const filter = options.filter ?? "all";
   shopScope.require("activity feed");
 
-  const before = options.before ? new Date(options.before) : null;
-  const cursor = before && !Number.isNaN(before.getTime()) ? { lt: before } : undefined;
+  const cursor = readCursor(options.before);
 
   const prefixes = AUDIT_PREFIX[filter];
   const auditWhere = {
-    ...(cursor ? { createdAt: cursor } : {}),
+    // Strictly older, or the same instant with a smaller id. Both halves are
+    // needed: without the second, a page boundary inside a cluster of rows
+    // sharing a timestamp loses every one of them.
+    ...(cursor
+      ? {
+          AND: [
+            {
+              OR: [
+                { createdAt: { lt: cursor.at } },
+                { createdAt: cursor.at, id: { lt: cursor.id } },
+              ],
+            },
+          ],
+        }
+      : {}),
     ...(prefixes && prefixes.length > 0
       ? { OR: prefixes.map((prefix) => ({ action: { startsWith: prefix } })) }
       : {}),
@@ -120,7 +159,7 @@ export async function loadActivity(
       ? []
       : db.auditLog.findMany({
           where: auditWhere,
-          orderBy: { createdAt: "desc" },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           // One extra, so we can tell "the page is full" from "that is
           // everything" without a second count.
           take: limit + 1,
@@ -135,8 +174,21 @@ export async function loadActivity(
         }),
     WANTS_ORDERS[filter]
       ? db.order.findMany({
-          where: cursor ? { processedAt: cursor } : {},
-          orderBy: { processedAt: "desc" },
+          // Wholesale only. Retail orders are mirrored too, and a retail row
+          // here links to `/app/orders`, which filters them out — a row the
+          // merchant cannot then find.
+          where: {
+            isWholesale: true,
+            ...(cursor
+              ? {
+                  OR: [
+                    { processedAt: { lt: cursor.at } },
+                    { processedAt: cursor.at, id: { lt: cursor.id } },
+                  ],
+                }
+              : {}),
+          },
+          orderBy: [{ processedAt: "desc" }, { id: "desc" }],
           take: limit + 1,
           select: {
             id: true,
@@ -169,7 +221,9 @@ export async function loadActivity(
       action: "order.placed",
       // The one row the feed writes itself, because nothing wrote it at the
       // time: the order was placed in Shopify, not here.
-      summary: `${order.name} — ${order.company ?? order.email ?? ""}`.trim(),
+      // No dangling separator for an order with neither a company nor an email
+      // on it — "#1001 —" is a row that looks broken because it is.
+      summary: [order.name, order.company ?? order.email].filter(Boolean).join(" — "),
       actorType: "BUYER" as AuditActorType,
       actorLabel: order.company ?? order.email,
       href: "/app/orders",
@@ -177,18 +231,20 @@ export async function loadActivity(
       agent: order.source === "BUYER_AGENT",
     })),
   ]
-    .sort((a, b) => b.at.getTime() - a.at.getTime())
+    // Same order as each side was read in, so the cursor's tie-break means the
+    // same thing in the merge as it does in the query.
+    .sort((a, b) => b.at.getTime() - a.at.getTime() || (a.id < b.id ? 1 : -1))
     .slice(0, limit + 1);
 
   const full = rows.length > limit;
   const page = rows.slice(0, limit);
 
+  const last = page[page.length - 1];
   return {
     rows: page,
-    // The cursor is the last row shown, so the next page starts strictly older
-    // than it. Two rows with the same timestamp across the two tables is the
-    // one case this loses — accepted, and the reason ids are prefixed so the
-    // page can at least not render a duplicate key.
-    nextCursor: full && page.length > 0 ? page[page.length - 1]!.at.toISOString() : null,
+    // The last row shown, timestamp and id. Both sides are then asked for what
+    // sorts strictly after it, which is exactly the rows one ordered table
+    // would have given.
+    nextCursor: full && last ? writeCursor(last.at, rawId(last.id)) : null,
   };
 }

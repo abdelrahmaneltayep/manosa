@@ -22,7 +22,13 @@ export function WizardPage({ view }: { view: WizardView }) {
             <s-banner tone="info">
               <s-heading>{t("wizard.offHeading")}</s-heading>
               <s-paragraph>{t(`wizard.off.${view.locked ?? "no_key"}`)}</s-paragraph>
-              <s-link href="/app">{t("wizard.offManual")}</s-link>
+              <s-stack direction="inline" gap="small" alignItems="center">
+                {/* A locked feature says how to unlock it. */}
+                {view.locked === "plan" ? (
+                  <s-link href="/app/plans">{t("wizard.seePlans")}</s-link>
+                ) : null}
+                <s-link href="/app">{t("wizard.offManual")}</s-link>
+              </s-stack>
             </s-banner>
           )}
 
@@ -91,7 +97,23 @@ function Failure({ view }: { view: WizardView }) {
     <s-banner tone="warning">
       <s-heading>{t(`wizard.failure.${view.failure}.heading`)}</s-heading>
       <s-paragraph>{t(`wizard.failure.${view.failure}.body`)}</s-paragraph>
-      <s-link href="/app/pricing/new">{t("wizard.failureManual")}</s-link>
+      {/* Something was created before it stopped. Saying so is the difference
+          between a shop the merchant understands and one that changed behind
+          their back. */}
+      {view.partial ? (
+        <s-paragraph>
+          {t("wizard.partial", {
+            count: view.partial.groups,
+            context: view.partial.rule ? "withRule" : undefined,
+          })}
+        </s-paragraph>
+      ) : null}
+      <s-stack direction="inline" gap="small" alignItems="center">
+        {view.failure === "limit" ? (
+          <s-link href="/app/plans">{t("wizard.seePlans")}</s-link>
+        ) : null}
+        <s-link href="/app/pricing/new">{t("wizard.failureManual")}</s-link>
+      </s-stack>
     </s-banner>
   );
 }
@@ -131,6 +153,26 @@ function Preview({ view }: { view: WizardView }) {
             <s-text type="strong">{t("wizard.ruleHeading")}</s-text>
             <s-text>{plan.rule.name}</s-text>
             <s-text color="subdued">{plan.rule.summary}</s-text>
+            {/* How far it reaches, before it reaches. A tag means nothing on a
+                merchant's first morning, and the obvious tag for a model to
+                pick is the one every existing wholesale buyer already carries. */}
+            {plan.rule.reaches > 0 ? (
+              <s-banner tone="warning">
+                <s-paragraph>
+                  {t("wizard.reaches", {
+                    count: plan.rule.reaches,
+                    tag: plan.rule.audienceTag,
+                  })}
+                </s-paragraph>
+              </s-banner>
+            ) : (
+              <s-text color="subdued">
+                {t("wizard.reaches", {
+                  count: plan.rule.reaches,
+                  tag: plan.rule.audienceTag,
+                })}
+              </s-text>
+            )}
           </s-stack>
         ) : (
           <s-text color="subdued">{t("wizard.noRule")}</s-text>

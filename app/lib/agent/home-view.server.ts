@@ -285,7 +285,7 @@ export function activityView(
 /** The five cards, formatted. Nothing downstream does arithmetic. */
 export function kpiView(
   set: KpiSet,
-  options: { locale: string; loading?: boolean; empty: boolean },
+  options: { locale: string; empty: boolean },
 ): HomeView["kpis"] {
   const format = (value: KpiValue["value"]) =>
     typeof value === "number"
@@ -295,8 +295,9 @@ export function kpiView(
   return {
     period: set.period,
     periods: [...PERIODS],
-    loading: options.loading ?? false,
     empty: options.empty,
+    // Only when it is short: a fully covered period needs no caveat.
+    coversDays: set.historyDays < set.period ? set.historyDays : null,
     cards: set.kpis.map((kpi) => ({
       key: kpi.key,
       value: format(kpi.value.value),

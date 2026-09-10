@@ -42,6 +42,7 @@ const wizard = (overrides: Partial<WizardView> = {}): WizardView => ({
   payload: "",
   failure: null,
   applied: null,
+  partial: null,
   ...overrides,
 });
 
@@ -54,6 +55,8 @@ const plan = (overrides: Partial<NonNullable<WizardView["plan"]>> = {}) => ({
   rule: {
     name: "Café trade price",
     summary: "25% off everything, for buyers tagged cafes.",
+    audienceTag: "cafes",
+    reaches: 0,
   },
   form: { name: "Trade application", fields: ["Company", "Email", "VAT number"] },
   notes: "You didn't say what the key accounts get, so I priced only the cafés.",
@@ -172,8 +175,52 @@ describe("the setup wizard", () => {
 
   it("says nothing was created when a plan limit stops it", () => {
     const html = render(<WizardPage view={wizard({ failure: "limit" })} />);
+
     expect(html).toContain("Your plan is at its limit");
+    // A locked feature says how to unlock it.
+    expect(html).toContain("/app/plans");
     capture("07-wizard-limit", html);
+  });
+
+  it("says what it managed to create before it stopped", () => {
+    const html = render(
+      <WizardPage
+        view={wizard({
+          failure: "limit",
+          plan: plan(),
+          payload: "{}",
+          partial: { groups: 2, rule: false, form: false },
+        })}
+      />,
+    );
+
+    // The shop changed. Saying "nothing was created" would be the lie.
+    expect(html).toContain("2 customer groups were created before it stopped");
+    // And the preview is still there, so pressing the button again finishes.
+    expect(html).toContain("Set this up");
+    capture("12-wizard-partial", html);
+  });
+
+  it("says how many buyers a proposed rule would already reach", () => {
+    const html = render(
+      <WizardPage
+        view={wizard({
+          plan: plan({
+            rule: {
+              name: "Trade price",
+              summary: "25% off everything, for buyers tagged wholesale.",
+              audienceTag: "wholesale",
+              reaches: 42,
+            },
+          }),
+        })}
+      />,
+    );
+
+    // The obvious tag for a model to pick is the one every approved buyer
+    // already carries. One click would then discount the whole book.
+    expect(html).toContain("42 customers already carry");
+    capture("13-wizard-reach", html);
   });
 
   it("renders in Arabic", () => {

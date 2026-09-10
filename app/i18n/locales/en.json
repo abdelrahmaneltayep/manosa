@@ -1908,7 +1908,10 @@
         "pending_approvals": "Review them",
         "active_rules": "Open pricing",
         "terms_outstanding": "Open the ledger"
-      }
+      },
+      "previous": "was {{value}}",
+      "covers_one": "Covering the {{count}} day since you installed Mannon.",
+      "covers_other": "Covering the {{count}} days since you installed Mannon."
     },
     "setup": {
       "heading": "Get set up",
@@ -2149,8 +2152,22 @@
       "duplicate": {
         "heading": "One of those groups already exists",
         "body": "A customer group with that handle is already in your shop. Open your groups and use it, or start again with different names."
+      },
+      "invalid_rule": {
+        "heading": "That rule wouldn't hold up",
+        "body": "The pricing engine refused it, so it was not created. Try describing the discount differently, or build the rule by hand."
       }
-    }
+    },
+    "seePlans": "See plans",
+    "reaches_zero": "Nobody carries the tag “{{tag}}” yet — buyers get it when you approve them.",
+    "reaches_one": "{{count}} customer already carries “{{tag}}” and would get this price.",
+    "reaches_other": "{{count}} customers already carry “{{tag}}” and would get this price.",
+    "partial_zero": "Nothing was created before it stopped.",
+    "partial_one": "{{count}} customer group was created before it stopped. Press the button again to finish the rest.",
+    "partial_other": "{{count}} customer groups were created before it stopped. Press the button again to finish the rest.",
+    "partial_withRule_zero": "The pricing rule was created before it stopped. Press the button again to finish the rest.",
+    "partial_withRule_one": "{{count}} customer group and the pricing rule were created before it stopped. Press the button again to finish the rest.",
+    "partial_withRule_other": "{{count}} customer groups and the pricing rule were created before it stopped. Press the button again to finish the rest."
   },
   "activity": {
     "heading": "Activity",

@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "~/db.server";
 import { loadActivity } from "~/lib/activity/feed.server";
 import { deltaPercent, loadKpis, MIN_HISTORY_DAYS } from "~/lib/analytics/kpis.server";
+import { ledgerPage } from "~/lib/terms/ledger-query.server";
 import {
   confirmEmbed,
   dismissSetup,
@@ -59,8 +60,10 @@ const order = (overrides: Record<string, unknown> = {}) =>
       totalPrice: 100_000,
       currencyCode: "USD",
       isWholesale: true,
+      // `processedAt` only. `createdAt` is left to its default on purpose:
+      // that is what the production writer does, and a fixture that sets it by
+      // hand is a fixture that cannot catch a query reading the wrong column.
       processedAt: ago(1),
-      createdAt: ago(1),
       ...overrides,
     },
   });
@@ -82,10 +85,10 @@ describe("the KPI cards", () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
-      await order({ totalPrice: 120_000, createdAt: ago(3) });
-      await order({ totalPrice: 80_000, createdAt: ago(10) });
+      await order({ totalPrice: 120_000, processedAt: ago(3) });
+      await order({ totalPrice: 80_000, processedAt: ago(10) });
       // Older than both windows.
-      await order({ totalPrice: 500_000, createdAt: ago(90) });
+      await order({ totalPrice: 500_000, processedAt: ago(90) });
 
       const set = await loadKpis(7, { now: NOW });
       const revenue = set.kpis.find((kpi) => kpi.key === "wholesale_revenue")!;
@@ -93,6 +96,23 @@ describe("the KPI cards", () => {
       expect(revenue.value.value).toEqual({ amount: 120_000, currencyCode: "USD" });
       expect(revenue.value.previous).toEqual({ amount: 80_000, currencyCode: "USD" });
       expect(deltaPercent(120_000, 80_000)).toBe(50);
+    });
+  });
+
+  it("windows on when the order happened, not on when we mirrored it", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // The install backfill imports sixty days of orders in one go, so every
+      // row's `createdAt` is the install. Windowing on it reported two months
+      // of revenue as "the last 7 days".
+      await order({ totalPrice: 100_000, processedAt: ago(45) });
+
+      const set = await loadKpis(7, { now: NOW });
+      expect(
+        set.kpis.find((kpi) => kpi.key === "wholesale_revenue")!.value.value,
+      ).toEqual({ amount: 0, currencyCode: "USD" });
+      expect(set.kpis.find((kpi) => kpi.key === "wholesale_orders")!.value.value).toBe(0);
     });
   });
 
@@ -107,6 +127,10 @@ describe("the KPI cards", () => {
       const revenue = set.kpis.find((kpi) => kpi.key === "wholesale_revenue")!;
       // The shop prices in USD. The euro order is not converted, and not summed.
       expect(revenue.value.value).toEqual({ amount: 100_000, currencyCode: "USD" });
+
+      // The *count* is of every wholesale order, though: restricting it too
+      // read "1 wholesale order" beside a briefing that said 2.
+      expect(set.kpis.find((kpi) => kpi.key === "wholesale_orders")!.value.value).toBe(2);
     });
   });
 
@@ -149,6 +173,27 @@ describe("the KPI cards", () => {
       expect(
         set.kpis.find((kpi) => kpi.key === "terms_outstanding")!.value.value,
       ).toEqual({ amount: 60_000, currencyCode: "USD" });
+    });
+  });
+
+  it("takes refunds off what is outstanding, as the ledger does", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order({
+        totalPrice: 100_000,
+        refundedAmount: 40_000,
+        netTermsDueAt: ago(-10),
+      });
+
+      // The card links to /app/orders/terms, so the two have to agree. They
+      // did not: the card said $1,000.00 and the ledger said $600.00.
+      const set = await loadKpis(30, { now: NOW });
+      const ledger = await ledgerPage({ now: NOW, currencyCode: "USD" });
+
+      expect(
+        set.kpis.find((kpi) => kpi.key === "terms_outstanding")!.value.value,
+      ).toEqual(ledger.summary.outstanding);
     });
   });
 
@@ -372,6 +417,52 @@ describe("the activity feed", () => {
 
       const page = await loadActivity({ limit: 8 });
       expect(page.rows.filter((row) => row.agent)).toHaveLength(2);
+    });
+  });
+
+  it("pages through rows that share a timestamp", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // Postgres `CURRENT_TIMESTAMP` is transaction time, so every audit row
+      // written inside one transaction carries an identical value — which a
+      // cursor of "strictly older than this instant" skips wholesale.
+      const at = new Date(NOW.getTime() - 60_000);
+      for (let index = 0; index < 4; index += 1) {
+        await auditRow({ createdAt: at, summary: `row ${index}` });
+      }
+
+      const first = await loadActivity({ limit: 2 });
+      expect(first.rows).toHaveLength(2);
+
+      const second = await loadActivity({ limit: 2, before: first.nextCursor });
+      expect(second.rows).toHaveLength(2);
+
+      const ids = new Set([...first.rows, ...second.rows].map((row) => row.id));
+      expect(ids.size).toBe(4);
+      expect(second.nextCursor).toBeNull();
+    });
+  });
+
+  it("leaves retail orders out, because the page it links to does", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order({ isWholesale: false, name: "#RETAIL" });
+      await order({ name: "#1001" });
+
+      const page = await loadActivity();
+      expect(page.rows.map((row) => row.summary)).toEqual(["#1001"]);
+    });
+  });
+
+  it("does not print a separator with nothing after it", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order({ name: "#1001", company: null, email: null });
+      const page = await loadActivity();
+      expect(page.rows[0]?.summary).toBe("#1001");
     });
   });
 

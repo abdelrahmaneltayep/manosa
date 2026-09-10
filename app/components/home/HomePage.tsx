@@ -364,6 +364,13 @@ function Kpis({ view }: { view: KpiView }) {
 
         {view.empty ? <s-paragraph>{t("home.kpi.emptyBody")}</s-paragraph> : null}
 
+        {/* The period selector offers ninety days to a shop that has eight. */}
+        {view.coversDays === null ? null : (
+          <s-text color="subdued">
+            {t("home.kpi.covers", { count: view.coversDays })}
+          </s-text>
+        )}
+
         <s-grid gridTemplateColumns="repeat(auto-fit, minmax(180px, 1fr))" gap="base">
           {view.cards.map((card) => (
             <s-box
@@ -377,9 +384,7 @@ function Kpis({ view }: { view: KpiView }) {
             >
               <s-stack direction="block" gap="small-500">
                 <s-text color="subdued">{t(`home.kpi.card.${card.key}`)}</s-text>
-                {view.loading ? (
-                  <s-text color="subdued">···</s-text>
-                ) : card.partial ? (
+                {card.partial ? (
                   <s-stack direction="block" gap="small-500">
                     <s-heading>—</s-heading>
                     <s-text color="subdued">{t("home.kpi.needsAWeek")}</s-text>
@@ -387,6 +392,14 @@ function Kpis({ view }: { view: KpiView }) {
                 ) : (
                   <s-stack direction="block" gap="small-500">
                     <s-heading>{card.value}</s-heading>
+                    {/* The previous period, so a merchant can make the
+                        comparison themselves — including when the delta is
+                        hidden because the base was zero. */}
+                    {card.previous === null ? null : (
+                      <s-text color="subdued">
+                        {t("home.kpi.previous", { value: card.previous })}
+                      </s-text>
+                    )}
                     {/* Hidden when the base period was zero: "▲ ∞%" is not a
                         number, and "▲ 400%" off one order is a worse one. */}
                     {card.deltaPercent === null ? null : (

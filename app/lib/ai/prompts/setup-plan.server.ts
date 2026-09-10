@@ -1,4 +1,4 @@
-import { parseMoney, type Money } from "@mannon/pricing-engine";
+import { formatMoney, parseMoney } from "@mannon/pricing-engine";
 
 import { askForJson } from "~/lib/ai/json.server";
 import type { AiDeps, AiResult } from "~/lib/ai/run.server";
@@ -80,8 +80,15 @@ export interface PlannedRule {
   kind: WizardRuleKind;
   /** For `percentage`. 0-100, the discount off. */
   percentage: number | null;
-  /** For `amount_off`. */
-  amount: Money | null;
+  /**
+   * For `amount_off`, as a plain decimal string.
+   *
+   * A string rather than a `Money`, because a plan travels back to the server
+   * through a hidden field and is read again before it is applied — so what
+   * this reader emits has to be something it would accept. Validated with
+   * `parseMoney` here and parsed again in `ruleFromPlan`.
+   */
+  amount: string | null;
   /** For `volume_tier`. Ascending, non-overlapping. */
   tiers: PlannedTier[];
   /** The tag this rule prices for. Always one of the planned groups' tags. */
@@ -206,42 +213,65 @@ function requireText(value: unknown, what: string, max = 120): string {
  * again — but its tag is still a tag this shop uses, so a rule may price for
  * it. The tag in that case is the shop's, not the model's guess at it.
  */
+/**
+ * The groups to create, and every tag a rule or form may be aimed at.
+ *
+ * Those are two different lists, and keeping them apart is what makes this
+ * reader **idempotent** — which it has to be, because the plan it emits travels
+ * back through a hidden form field and is read again before it is applied.
+ *
+ * A group the shop already has is not proposed a second time, so it drops out
+ * of `groups`. Its tag is still a tag this shop uses, so it stays in `tags`,
+ * seeded from the grounding rather than from the answer. Without that, the
+ * second read of a perfectly good plan rejects the rule it just accepted.
+ */
 function readGroups(
   value: unknown,
   grounding: SetupGrounding,
 ): { groups: PlannedGroup[]; tags: Set<string> } {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new PlanError('"groups" must hold at least one group.');
-  }
+  if (!Array.isArray(value)) throw new PlanError('"groups" must be a list.');
 
   const existing = new Map(
     grounding.groups.map((group) => [group.name.toLowerCase(), group.tag]),
   );
-  const tags = new Set<string>();
+  const tags = new Set<string>(grounding.groups.map((group) => group.tag));
+  const existingTags = new Set(tags);
   const groups: PlannedGroup[] = [];
 
   for (const entry of value.slice(0, 3)) {
-    if (!isRecord(entry))
+    if (!isRecord(entry)) {
       throw new PlanError('Each entry in "groups" must be an object.');
+    }
     const name = requireText(entry.name, "groups[].name", 60);
     const tag = normalizeTag(requireText(entry.tag, "groups[].tag", 40));
     if (tag === "") throw new PlanError('"groups[].tag" must contain a letter or digit.');
 
     // Filtered here rather than trusted to the prompt: a second run of the
     // wizard must not offer to create what the first one created.
-    const already = existing.get(name.toLowerCase());
-    if (already !== undefined) {
-      tags.add(already);
-      continue;
-    }
-    if (tags.has(tag)) continue;
+    if (existing.has(name.toLowerCase())) continue;
 
+    // A *new* group carrying a tag an existing group already uses would price
+    // for that group's members too — and `CustomerGroup` is unique on its
+    // handle, not its tag, so nothing downstream would notice. Refused rather
+    // than merged: the repair round can rename it.
+    if (existingTags.has(tag)) {
+      throw new PlanError(
+        `"${name}" would be tagged "${tag}", which another group in this shop already uses. Choose a different tag.`,
+      );
+    }
+
+    if (tags.has(tag)) continue;
     tags.add(tag);
     groups.push({
       name,
       tag,
       description: requireText(entry.description, "groups[].description", 200),
     });
+  }
+
+  // Nothing to create and nowhere to aim: the answer said nothing usable.
+  if (groups.length === 0 && tags.size === 0) {
+    throw new PlanError('"groups" must hold at least one group.');
   }
 
   return { groups, tags };
@@ -338,19 +368,33 @@ function readRule(
   };
 }
 
-function readAmount(value: unknown, currencyCode: string): Money {
+function readAmount(value: unknown, currencyCode: string): string {
   if (typeof value !== "string" || value.trim() === "") {
     throw new PlanError(
       '"rule.amount" must be a decimal amount in a string, e.g. "5.00".',
     );
   }
+
+  let parsed;
   try {
-    return parseMoney(value, currencyCode);
+    parsed = parseMoney(value, currencyCode);
   } catch {
     throw new PlanError(
       `"rule.amount" was "${value}", which is not a plain decimal amount. No currency symbol, no thousands separator.`,
     );
   }
+
+  // `parseMoney` accepts a leading minus. A negative discount is money added to
+  // a wholesale price, and `validateRule` would raise it as a 500 halfway
+  // through applying — so it is refused here, where refusing costs nothing.
+  if (parsed.amount <= 0) {
+    throw new PlanError(
+      `"rule.amount" was "${value}"; a discount has to be more than nothing.`,
+    );
+  }
+
+  // Normalised on the way out, so the string this reader emits is one it takes.
+  return formatMoney(parsed);
 }
 
 function readForm(

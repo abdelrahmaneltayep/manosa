@@ -292,3 +292,148 @@ describe("tags", () => {
     expect(normalizeTag("a".repeat(80))).toHaveLength(40);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+
+describe("the plan survives its own round trip", () => {
+  /**
+   * The property the wizard rests on, and the one whose absence let three
+   * ordinary plans fail at the last step.
+   *
+   * The preview travels back to the server in a hidden form field. The route
+   * re-reads it before applying — deliberately, because the field is editable.
+   * So whatever this reader emits has to be something it accepts: `read(x)` ok
+   * implies `read(JSON.parse(JSON.stringify(read(x).value)))` ok, and equal.
+   */
+  const roundTrip = (value: unknown, g = grounding()) => {
+    const first = readSetupPlan(value, g);
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error(first.error);
+
+    const wire: unknown = JSON.parse(JSON.stringify(first.value));
+    const second = readSetupPlan(wire, g);
+    if (!second.ok) throw new Error(`second read failed: ${second.error}`);
+    expect(second.value).toEqual(first.value);
+    return second.value;
+  };
+
+  it("survives a percentage rule", () => {
+    roundTrip(answer());
+  });
+
+  it("survives an amount-off rule", () => {
+    const plan = roundTrip(
+      answer({
+        rule: {
+          name: "Five off",
+          kind: "amount_off",
+          percentage: null,
+          amount: "5.00",
+          tiers: [],
+          audienceTag: "cafes",
+        },
+      }),
+    );
+    // A decimal string on the way out, because that is what it takes in.
+    expect(plan.rule?.amount).toBe("5.00");
+  });
+
+  it("survives a volume rule", () => {
+    roundTrip(
+      answer({
+        rule: {
+          name: "Volume",
+          kind: "volume_tier",
+          percentage: null,
+          amount: null,
+          tiers: [
+            { minQuantity: 1, maxQuantity: 49, percentage: 10 },
+            { minQuantity: 50, maxQuantity: null, percentage: 20 },
+          ],
+          audienceTag: "cafes",
+        },
+      }),
+    );
+  });
+
+  it("survives a plan aimed at a group the shop already has", () => {
+    // The case the draft-side fix created and the apply-side re-read undid:
+    // the group is filtered out of the plan, so its tag has to come from the
+    // grounding rather than from the answer.
+    const existing = grounding({ groups: [{ name: "Cafés", tag: "wholesale-cafe" }] });
+    const plan = roundTrip(
+      answer({
+        rule: {
+          name: "Café trade price",
+          kind: "percentage",
+          percentage: 25,
+          amount: null,
+          tiers: [],
+          audienceTag: "wholesale-cafe",
+        },
+        form: { name: "Trade", fields: ["email"], autoTag: "wholesale-cafe" },
+      }),
+      existing,
+    );
+
+    expect(plan.groups).toEqual([]);
+    expect(plan.rule?.audienceTag).toBe("wholesale-cafe");
+  });
+
+  it("survives being applied twice", () => {
+    // What a double-click does: the first apply creates the group, the second
+    // re-grounds against a shop that now has it. "Already done" is not an
+    // unreadable answer.
+    const before = grounding();
+    const first = readSetupPlan(answer(), before);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const after = grounding({ groups: [{ name: "Cafés", tag: "cafes" }] });
+    const second = readSetupPlan(JSON.parse(JSON.stringify(first.value)), after);
+
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.value.groups).toEqual([]);
+      expect(second.value.rule?.audienceTag).toBe("cafes");
+    }
+  });
+});
+
+describe("what a rule may not reach", () => {
+  it("refuses a new group tagged like one that already exists", () => {
+    // Two groups sharing a tag means the starter rule for one prices for the
+    // other. `CustomerGroup` is unique on its handle, not its tag, so nothing
+    // downstream would have caught it.
+    const result = read(
+      answer({
+        groups: [{ name: "Coffee shops", tag: "cafes", description: "d" }],
+      }),
+      grounding({ groups: [{ name: "Cafés", tag: "cafes" }] }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("cafes");
+  });
+
+  it("refuses a negative discount", () => {
+    // `parseMoney` accepts a leading minus and `validateRule` would then raise
+    // it — as a 500, halfway through applying, on a shop that already has the
+    // groups.
+    for (const amount of ["-5.00", "0.00"]) {
+      const result = read(
+        answer({
+          rule: {
+            name: "Odd",
+            kind: "amount_off",
+            percentage: null,
+            amount,
+            tiers: [],
+            audienceTag: "cafes",
+          },
+        }),
+      );
+      expect(result.ok).toBe(false);
+    }
+  });
+});

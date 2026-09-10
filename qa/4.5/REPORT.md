@@ -3,10 +3,11 @@
 Hat: senior QA engineer who did not write this code and does not trust it.
 Date: 2026-09-10 · Branch: `claude/mannon-b2b-wholesale-oc5b18`
 
-> **Status: gate run, clean.** An independent cold read by the Autopilot
-> `qa-engineer` subagent has not been run on this task; 4.4's was, returned FAIL
-> on seventeen findings, and every one is fixed — so the value of that second
-> pass is established, and its absence here is a stated gap, not an oversight.
+> **Status: clean pass, after a FAIL and a full fix round.** The independent
+> cold read was run after this report was first written; it returned **FAIL** on
+> three P0s, four P1s and eight P2s. All are fixed or answered — the findings,
+> the evidence and what was done about each are in `qa/4.5/COLD-READ.md`, and
+> §6 below summarises them. This is the second run.
 
 ## 1. Test plan
 
@@ -25,7 +26,7 @@ starter rule and a registration form to look at, then applies them.
 | --------- | ------------------------------------------------------ | ------------------------ |
 | KPI cards | ideal — five figures, period selector                  | `4.4/15-kpi-cards`       |
 | KPI cards | empty — zeros with "waiting for your first order"      | `4.4/17-kpi-empty`       |
-| KPI cards | loading — fixed-height tiles, no reflow                | `4.4/18-kpi-loading`     |
+| KPI cards | short history — says which days it covers              | `4.4/18-kpi-short-history` |
 | KPI cards | partial — "—" and "Needs a week of data"               | `4.4/16-kpi-partial`     |
 | KPI cards | edge — delta hidden when the base period is zero       | asserted, no capture     |
 | Checklist | in progress, six steps, each deep-linked               | `4.4/19-setup-checklist` |
@@ -42,7 +43,8 @@ starter rule and a registration form to look at, then applies them.
 | Wizard    | off (no key)                                           | `04-wizard-off`          |
 | Wizard    | plan-gated                                             | `05-wizard-plan-locked`  |
 | Wizard    | model unreachable → the manual path                    | `06-wizard-timeout`      |
-| Wizard    | plan limit reached → nothing created, said plainly     | `07-wizard-limit`        |
+| Wizard    | plan limit reached → what exists, and a way to retry   | `07-wizard-limit`, `12-wizard-partial` |
+| Wizard    | audience reach — how many buyers the tag already hits  | `13-wizard-reach`        |
 | Wizard    | Arabic                                                 | `08-wizard-arabic`       |
 
 **Three abuse cases I invented:**
@@ -62,15 +64,16 @@ starter rule and a registration form to look at, then applies them.
 
 New:
 
-- `tests/unit/setup-plan.test.ts` — 16
-- `tests/unit/setup-pages-states.test.tsx` — 13 (+11 captures)
-- `tests/unit/home-page-states.test.tsx` — 10 added (+8 captures)
-- `tests/integration/home-sections.test.ts` — 19
+- `tests/unit/setup-plan.test.ts` — 23, including the round-trip property
+- `tests/unit/setup-envelope.test.ts` — 7 (the signed payload)
+- `tests/unit/setup-pages-states.test.tsx` — 15 (+13 captures)
+- `tests/unit/home-page-states.test.tsx` — 12 added (+8 captures)
+- `tests/integration/home-sections.test.ts` — 23
 - `tests/integration/setup-wizard.test.ts` — 13
 - `tests/integration/storefront.test.ts` — 1 added (the embed stamp)
 
-**Whole suite: 1,657 unit + integration across 90 files, green.**
-`npx playwright test`: 311 e2e, green. `npm run lint`, `npm run typecheck`,
+**Whole suite: 1,715 unit + integration across 92 files, green.**
+`npx playwright test`: 313 e2e, green. `npm run lint`, `npm run typecheck`,
 `npm run build`, `npm run format:check` clean. No key and no prompt in the
 client bundle — grepped after a real build.
 
@@ -85,15 +88,25 @@ Properties worth naming:
 - **The embed says which kind of evidence it has.** Attested by the merchant
   reads "your word"; the same shop after a real proxy request does not.
 - **Applying is refused with no approver.** `applySetupPlan` with an empty
-  approver throws `MissingApprovalError` and no pricing rule exists afterwards.
+  approver fails with `MissingApprovalError` inside a `PartialSetupError` that
+  names what already exists, and no pricing rule exists afterwards.
+- **A plan survives its own round trip.** `read(x)` ok implies
+  `read(JSON.parse(JSON.stringify(read(x).value)))` ok and equal — asserted for
+  all three rule kinds, for a plan aimed at an existing group, and for a second
+  apply. This is the property whose absence made the feature not work.
+- **A tampered or unsigned payload is refused.** Including one whose provenance
+  was rewritten, which is the path to an audit entry that names a model of the
+  attacker's choosing.
 - **A wizard-built rule is published.** The apply path calls `metafieldsSet`,
   because a rule that is not published does not exist at checkout.
 
 ## 3. States, walked
 
-`npm run qa:capture` renders each state and screenshots it. Eleven captures in
-this directory (wizard and log), eight more added to `qa/4.4/` where the Home
-page's own captures live.
+`npm run qa:capture` renders each state and screenshots it. **Thirteen captures
+in this directory** (`01`–`08` wizard, `09`–`11` log, `12` partial apply, `13`
+audience reach) and **eight in `qa/4.4/`** (`15`–`22`), where the Home page's
+own captures already lived — Home is one page, and splitting its states across
+two directories to match task numbers would be worse than the numbering.
 
 **What this proves:** which content and which states render, and that no raw
 catalog key reached the page. **What it does not prove:** what a merchant sees.
@@ -111,8 +124,9 @@ claim below is structural — fixed-height tiles in the markup — not measured.
 - **The wizard is gated server-side.** A shop without the plan or the key gets
   402 from the action, so posting to `/app/setup` directly cannot reach the
   model.
-- **A tampered payload is refused.** No provenance, or a plan that no longer
-  validates against this shop, is `invalid_output` and creates nothing.
+- **A tampered payload is refused.** The envelope is HMAC-signed with the app
+  secret: an edited plan, forged provenance, a payload signed with another
+  secret and an unsigned one all decode to nothing and create nothing.
 
 ## 5. Invariants
 
@@ -138,6 +152,42 @@ claim below is structural — fixed-height tiles in the markup — not measured.
    form field, and its own assumptions — above the button, not folded away.
 
 ## 6. Bugs found, and fixed
+
+**From the independent cold read** (full report and evidence in
+`qa/4.5/COLD-READ.md`):
+
+1. **The wizard could not apply three ordinary plans.** `readSetupPlan` was not
+   idempotent, and the route re-reads the payload before applying — so every
+   `amount_off` plan, every plan aimed at a group the shop already had, and
+   every second attempt ended at "I couldn't read that answer. Nothing was
+   created." The headline feature did not apply. Fixed, and the property the
+   author never wrote — read(x) ok ⇒ read(round-trip(x)) ok — is now a test.
+2. **Two KPI figures were computed over the wrong column.** `Order.createdAt` is
+   when Mannon mirrored the row, and the install backfill imports sixty days at
+   once, so "last 7 days" reported up to sixty. `processedAt` now, here and in
+   4.4's briefing fact, which had it the same way.
+3. **The activity paginator dropped rows.** A timestamp cursor with `lt`, against
+   a column whose default is Postgres transaction time — so every audit row
+   written in one transaction shares a value and a page boundary inside that
+   cluster lost the rest. Composite cursor now.
+4. **"Outstanding on terms" disagreed with the page it links to** — it ignored
+   refunds, which every other module subtracts. The test now asserts the card
+   equals the ledger's own total rather than a number of its own.
+5. **The feed showed retail orders** and linked them to a page that filters them
+   out.
+6. **A part-applied run said "nothing was created"** and destroyed the preview,
+   and `RuleValidationError` was uncaught — a 500 on a half-applied shop,
+   reachable because the reader accepted a negative amount.
+7. **The order count was restricted by currency**, silently undercounting beside
+   a briefing that counts the same thing unrestricted.
+8. **The audit's provenance came from a merchant-editable field.** It is signed
+   now, and verified before apply.
+9. Plus: a new group could take an existing group's tag; the preview never said
+   how many buyers the audience tag already reached; locked states had no
+   `/app/plans` link; `previous` was computed and never rendered; the loading
+   state was unreachable; an order with no company rendered a dangling dash.
+
+**Found by the author's own gate:**
 
 1. **A rule aimed at a tag the model invented.** The wizard filtered out groups
    the shop already had, then validated the rule's `audienceTag` against only
