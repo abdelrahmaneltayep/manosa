@@ -1,0 +1,348 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Mannon storefront block</title>
+<style>
+ body{font:15px/1.5 system-ui,-apple-system,sans-serif;margin:0;padding:1.5rem;background:#f6f6f7;color:#1c1d2b}
+ table{border-collapse:collapse;width:100%;margin:.75rem 0}
+ th,td{padding:.45rem .5rem;border-bottom:1px solid #e3e3e3;text-align:start;vertical-align:top}
+ textarea{padding:.5rem;border:1px solid #c9c9c9;border-radius:6px}
+ button{font:inherit;padding:.45rem .9rem;border-radius:8px;border:1px solid #c9c9c9;background:#fff;cursor:pointer}
+ .mannon-quick-order__add,.mannon-variants__add{background:#4f46e5;color:#fff;border-color:#4f46e5;font-weight:700}
+ .mannon-quick-order__row--problem{color:#a11f1f}
+ .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+</style></head><body>
+<div style="background:#fff4e4;border:1px solid #e0b252;border-radius:8px;
+  padding:.75rem 1rem;margin-bottom:1.25rem;font:12px/1.5 system-ui;color:#5e4200">
+  <strong>QA capture — the block's own script, in a real browser.</strong> The Liquid around it is
+  rendered by a stand-in rather than by Shopify, so the layout is approximate; the JavaScript,
+  the states it renders and the requests it makes are the real ones.
+</div>
+<script>window.Shopify = { routes: { root: "/" } };</script>
+<script>
+    window.fetch = function (url, options) {
+      var settings = options || {};
+      window.__mannonRecord(
+        String(url),
+        settings.method || 'GET',
+        typeof settings.body === 'string' ? settings.body : ''
+      );
+      return Promise.resolve({
+        ok: 200 >= 200 && 200 < 300,
+        status: 200,
+        json: function () { return Promise.resolve({"ok":true,"quantity":1,"variants":[{"variantId":"gid://shopify/ProductVariant/101","unitPrice":"$6.50","wasPrice":"$10.00","ruleSummary":"Wholesale 35%"},{"variantId":"gid://shopify/ProductVariant/102","unitPrice":"$5.20","wasPrice":"$8.00","ruleSummary":"Wholesale 35%"},{"variantId":"gid://shopify/ProductVariant/103","unitPrice":"$7.80","wasPrice":"$12.00","ruleSummary":"Wholesale 35%"}]}); }
+      });
+    };</script>
+
+
+
+
+
+  <div class="mannon-variants" id="mannon-vt-vt1" >
+    
+      <h2 class="mannon-variants__heading">Order by the case</h2>
+    
+
+    
+    
+    <div class="mannon-variants__scroll" style="overflow-x:auto;max-width:100%;">
+    <table class="mannon-variants__table">
+        <thead>
+          <tr>
+            <th scope="col">Option</th>
+            <th scope="col">SKU</th>
+            <th scope="col">Price</th>
+            <th scope="col">Stock</th>
+            <th scope="col">Quantity</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            
+            <tr data-mannon-variant="101" data-mannon-list="1000">
+              <th scope="row">Large</th>
+              <td>MUG-BL-L</td>
+              <td data-mannon-price>
+                
+                $10.00
+              </td>
+              <td>
+                
+                  
+                    In stock
+                  
+                
+              </td>
+              <td>
+                <form method="post" action="/cart/add" class="mannon-variants__row-form">
+                  <input type="hidden" name="form_type" value="product">
+                  <input type="hidden" name="utf8" value="✓">
+                  <input type="hidden" name="id" value="101">
+                  
+                  <input type="hidden" name="attributes[_mannon_source]" value="quick_order">
+
+                  <label class="visually-hidden" for="mannon-vt-vt1-101">
+                    Quantity of Large
+                  </label>
+                  <input
+                    id="mannon-vt-vt1-101"
+                    type="number"
+                    inputmode="numeric"
+                    min="12"
+                    step="12"
+                    value=""
+                    name="quantity"
+                    data-mannon-qty
+                    style="width:6rem;"
+                    
+                  >
+                  <button type="submit" >
+                    Add
+                  </button>
+                </form>
+              </td>
+            </tr>
+          
+            
+            <tr data-mannon-variant="102" data-mannon-list="800">
+              <th scope="row">Small</th>
+              <td>MUG-BL-S</td>
+              <td data-mannon-price>
+                
+                $8.00
+              </td>
+              <td>
+                
+                  
+                    Only 12 left
+                  
+                
+              </td>
+              <td>
+                <form method="post" action="/cart/add" class="mannon-variants__row-form">
+                  <input type="hidden" name="form_type" value="product">
+                  <input type="hidden" name="utf8" value="✓">
+                  <input type="hidden" name="id" value="102">
+                  
+                  <input type="hidden" name="attributes[_mannon_source]" value="quick_order">
+
+                  <label class="visually-hidden" for="mannon-vt-vt1-102">
+                    Quantity of Small
+                  </label>
+                  <input
+                    id="mannon-vt-vt1-102"
+                    type="number"
+                    inputmode="numeric"
+                    min="12"
+                    step="12"
+                    value=""
+                    name="quantity"
+                    data-mannon-qty
+                    style="width:6rem;"
+                    
+                  >
+                  <button type="submit" >
+                    Add
+                  </button>
+                </form>
+              </td>
+            </tr>
+          
+            
+            <tr data-mannon-variant="103" data-mannon-list="1200">
+              <th scope="row">Travel</th>
+              <td>MUG-BL-T</td>
+              <td data-mannon-price>
+                
+                $12.00
+              </td>
+              <td>
+                
+                  Out of stock
+                
+              </td>
+              <td>
+                <form method="post" action="/cart/add" class="mannon-variants__row-form">
+                  <input type="hidden" name="form_type" value="product">
+                  <input type="hidden" name="utf8" value="✓">
+                  <input type="hidden" name="id" value="103">
+                  
+                  <input type="hidden" name="attributes[_mannon_source]" value="quick_order">
+
+                  <label class="visually-hidden" for="mannon-vt-vt1-103">
+                    Quantity of Travel
+                  </label>
+                  <input
+                    id="mannon-vt-vt1-103"
+                    type="number"
+                    inputmode="numeric"
+                    min="12"
+                    step="12"
+                    value=""
+                    name="quantity"
+                    data-mannon-qty
+                    style="width:6rem;"
+                    disabled
+                  >
+                  <button type="submit" disabled>
+                    Add
+                  </button>
+                </form>
+              </td>
+            </tr>
+          
+        </tbody>
+    </table>
+    </div>
+
+    
+    <button type="button" class="mannon-variants__add" data-mannon-add-all hidden>
+      Add everything to my cart
+    </button>
+
+    <p data-mannon-note class="mannon-variants__note" hidden></p>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.getElementById('mannon-vt-vt1');
+      if (!root) return;
+
+      var routes = window.Shopify && window.Shopify.routes && window.Shopify.routes.root;
+      if (!routes) return;
+
+      var rows = root.querySelectorAll('[data-mannon-variant]');
+      if (!rows.length) return;
+
+      var note = root.querySelector('[data-mannon-note]');
+      var yourPrice = "Prices shown are your wholesale prices.";
+
+      var payload = [];
+      rows.forEach(function (row) {
+        payload.push({
+          variantId: 'gid://shopify/ProductVariant/' + row.getAttribute('data-mannon-variant'),
+          productId: 'gid://shopify/Product/55',
+          priceMinor: Number(row.getAttribute('data-mannon-list')) || 0
+        });
+      });
+
+      function apply() {
+        var url =
+          routes +
+          'apps/mannon/variants?variants=' +
+          encodeURIComponent(JSON.stringify(payload));
+
+        fetch(url)
+          .then(function (response) {
+            // 402 means the merchant's plan does not include this. The theme's
+            // own prices stay on the page; nothing is said to the buyer, who
+            // has no stake in their supplier's billing.
+            if (!response.ok) return null;
+            return response.json();
+          })
+          .then(function (data) {
+            if (!data || !data.ok || !data.variants.length) return;
+            var changed = 0;
+
+            data.variants.forEach(function (priced) {
+              var id = priced.variantId.split('/').pop();
+              var row = root.querySelector('[data-mannon-variant="' + id + '"]');
+              if (!row) return;
+              var cell = row.querySelector('[data-mannon-price]');
+              if (!cell) return;
+
+              cell.replaceChildren();
+              if (priced.wasPrice) {
+                var was = document.createElement('s');
+                was.textContent = priced.wasPrice;
+                was.style.opacity = '0.6';
+                was.style.marginInlineEnd = '0.4em';
+                cell.appendChild(was);
+                changed += 1;
+              }
+              var now = document.createElement('span');
+              now.textContent = priced.unitPrice;
+              cell.appendChild(now);
+
+              if (priced.ruleSummary) {
+                // Deciding shows its working, on the storefront too.
+                var why = document.createElement('small');
+                why.style.display = 'block';
+                why.style.opacity = '0.7';
+                why.textContent = priced.ruleSummary;
+                cell.appendChild(why);
+              }
+            });
+
+            if (changed && note) {
+              note.textContent = yourPrice;
+              note.hidden = false;
+            }
+          })
+          .catch(function () {
+            // The theme's prices are already on the page and are not wrong —
+            // they are just not this buyer's. Silence beats an error next to a
+            // price.
+          });
+      }
+
+      var addAll = root.querySelector('[data-mannon-add-all]');
+      if (addAll) {
+        addAll.hidden = false;
+        addAll.addEventListener('click', function () {
+          var items = [];
+          rows.forEach(function (row) {
+            var field = row.querySelector('[data-mannon-qty]');
+            var quantity = field ? parseInt(field.value, 10) : 0;
+            if (!quantity || quantity < 1) return;
+            items.push({
+              id: Number(row.getAttribute('data-mannon-variant')),
+              quantity: quantity
+            });
+          });
+          if (!items.length) return;
+
+          addAll.disabled = true;
+          fetch(routes + 'cart/add.js', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: items,
+              attributes: { _mannon_source: 'quick_order' }
+            })
+          })
+            .then(function (response) {
+              if (!response.ok) throw new Error('cart');
+              window.location.href = routes + 'cart';
+            })
+            .catch(function () {
+              // Each row still has its own working button, so the buyer is not
+              // stuck — the shortcut failed, not the table.
+              addAll.disabled = false;
+            });
+        });
+      }
+
+      // Nothing is fetched until the table is close to being looked at, so the
+      // block costs a product page nothing on load. Browsers without the
+      // observer simply fetch straight away.
+      if ('IntersectionObserver' in window) {
+        var seen = false;
+        var observer = new IntersectionObserver(
+          function (entries) {
+            if (seen || !entries.some(function (entry) { return entry.isIntersecting; })) return;
+            seen = true;
+            observer.disconnect();
+            apply();
+          },
+          { rootMargin: '200px' }
+        );
+        observer.observe(root);
+      } else {
+        apply();
+      }
+    })();
+  </script>
+
+
+
+
+</body></html>

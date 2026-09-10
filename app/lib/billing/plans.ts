@@ -26,6 +26,7 @@ export const FEATURE_KEYS = [
   "csv_import",
   "auto_tagging",
   "order_limits",
+  "quick_order",
   "net_terms",
   "shipping_rules",
   "draft_orders",
@@ -67,6 +68,10 @@ const PRO_FEATURES = [
   "csv_import",
   "auto_tagging",
   "order_limits",
+  // Quick order sits here rather than higher: it is a wholesale convenience
+  // like CSV import, not a premium capability like terms or an agent. The spec
+  // does not place it — see DECISIONS.md, 2026-09-10.
+  "quick_order",
 ] as const satisfies readonly FeatureKey[];
 
 const GROWTH_FEATURES = [

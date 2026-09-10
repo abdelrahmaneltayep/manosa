@@ -1,0 +1,342 @@
+{% comment %}
+  Mannon — quick order by SKU.
+
+  A wholesale buyer pastes a column out of a spreadsheet and gets a cart. The
+  SKU lookup and the pricing both happen in the app: the lookup needs the Admin
+  API, and the price has to come from the pricing engine, which is what the
+  checkout Function runs. A price composed in Liquid would be a second
+  implementation of the thing this app exists to get right.
+
+  Without JavaScript there is no SKU lookup to be had, so the block says so and
+  points at the catalogue — the checklist's "graceful without JS (link to
+  standard product page)". Nothing is hidden behind a script that pretends to
+  work.
+
+  The script is inline and tiny on purpose: no library, no build step, nothing
+  fetched before the buyer asks for it. See docs/adr/0017.
+{% endcomment %}
+
+{%- assign catalog_url = block.settings.catalog_url | default: routes.all_products_collection_url -%}
+{%- assign block_id = 'mannon-qo-' | append: block.id -%}
+
+<div class="mannon-quick-order" id="{{ block_id }}" {{ block.shopify_attributes }}>
+  {%- if block.settings.heading != blank -%}
+    <h2 class="mannon-quick-order__heading">{{ block.settings.heading }}</h2>
+  {%- endif -%}
+
+  {%- if block.settings.intro != blank -%}
+    <p class="mannon-quick-order__intro">{{ block.settings.intro }}</p>
+  {%- endif -%}
+
+  <noscript>
+    <p class="mannon-quick-order__fallback">
+      {{ 'mannon.quick_order.needs_js' | t }}
+      <a href="{{ catalog_url }}">{{ 'mannon.quick_order.browse_catalog' | t }}</a>
+    </p>
+  </noscript>
+
+  {%- comment -%}
+    Hidden until the script runs, so a buyer without JavaScript never sees a
+    form that cannot submit. `hidden` rather than display:none so it is hidden
+    from assistive technology too.
+  {%- endcomment -%}
+  <form class="mannon-quick-order__form" data-mannon-form hidden>
+    <label class="mannon-quick-order__label" for="{{ block_id }}-list">
+      {{ 'mannon.quick_order.list_label' | t }}
+    </label>
+    <textarea
+      id="{{ block_id }}-list"
+      name="list"
+      rows="{{ block.settings.rows }}"
+      spellcheck="false"
+      placeholder="{{ 'mannon.quick_order.placeholder' | t }}"
+      style="width:100%;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
+    ></textarea>
+    <p class="mannon-quick-order__help">{{ 'mannon.quick_order.list_help' | t }}</p>
+
+    <button type="submit" class="mannon-quick-order__check">
+      {{ 'mannon.quick_order.check' | t }}
+    </button>
+  </form>
+
+  <div data-mannon-status role="status" aria-live="polite"></div>
+  <div data-mannon-results></div>
+</div>
+
+<script>
+  (function () {
+    var root = document.getElementById('{{ block_id }}');
+    if (!root) return;
+
+    // Shopify's routes object carries the locale prefix. Without it the URLs
+    // would be wrong on every non-default-language storefront, so the block
+    // stays in its no-JS state rather than guessing at "/".
+    var routes = window.Shopify && window.Shopify.routes && window.Shopify.routes.root;
+    if (!routes) return;
+
+    var form = root.querySelector('[data-mannon-form]');
+    var status = root.querySelector('[data-mannon-status]');
+    var results = root.querySelector('[data-mannon-results]');
+    if (!form || !status || !results) return;
+
+    // Only now is the form usable, so only now is it shown.
+    form.hidden = false;
+
+    var strings = {
+      checking: {{ 'mannon.quick_order.checking' | t | json }},
+      failed: {{ 'mannon.quick_order.failed' | t | json }},
+      unavailable: {{ 'mannon.quick_order.unavailable' | t | json }},
+      empty: {{ 'mannon.quick_order.empty' | t | json }},
+      notFound: {{ 'mannon.quick_order.not_found' | t | json }},
+      unresolved: {{ 'mannon.quick_order.unavailable_line' | t | json }},
+      duplicate: {{ 'mannon.quick_order.duplicate' | t | json }},
+      badQuantity: {{ 'mannon.quick_order.bad_quantity' | t | json }},
+      total: {{ 'mannon.quick_order.total' | t | json }},
+      addAll: {{ 'mannon.quick_order.add_all' | t | json }},
+      adding: {{ 'mannon.quick_order.adding' | t | json }},
+      outOfStock: {{ 'mannon.quick_order.out_of_stock' | t | json }},
+      backorder: {{ 'mannon.quick_order.backorder' | t | json }},
+      low: {{ 'mannon.quick_order.low_stock' | t | json }},
+      columns: [
+        {{ 'mannon.quick_order.col_sku' | t | json }},
+        {{ 'mannon.quick_order.col_item' | t | json }},
+        {{ 'mannon.quick_order.col_quantity' | t | json }},
+        {{ 'mannon.quick_order.col_price' | t | json }},
+        {{ 'mannon.quick_order.col_total' | t | json }},
+        {{ 'mannon.quick_order.col_stock' | t | json }}
+      ]
+    };
+
+    function text(node, value) {
+      node.textContent = value;
+    }
+
+    function row(cells) {
+      var tr = document.createElement('tr');
+      cells.forEach(function (cell, index) {
+        // The SKU names the row, so it is the row's heading rather than a
+        // sixth anonymous cell.
+        var td = document.createElement(index === 0 ? 'th' : 'td');
+        if (index === 0) td.scope = 'row';
+        // textContent throughout: a product title is the merchant's data, and
+        // building this with innerHTML would make it executable.
+        if (typeof cell === 'string') td.textContent = cell;
+        else td.appendChild(cell);
+        tr.appendChild(td);
+      });
+      return tr;
+    }
+
+    function stockNote(line) {
+      if (line.stock === 'out_of_stock') return strings.outOfStock;
+      if (line.stock === 'backorder') return strings.backorder;
+      if (line.stock === 'low' && line.stockCount !== null) {
+        return strings.low.replace('%count%', String(line.stockCount));
+      }
+      return '';
+    }
+
+    function render(data) {
+      results.replaceChildren();
+      if (!data.lines.length && !data.unresolved.length && !data.issues.length) {
+        text(status, strings.empty);
+        return;
+      }
+
+      // Six columns of order data will not fit a phone. The table scrolls
+      // inside its own box rather than pushing the whole page sideways, which
+      // is the difference between a wide table and a broken storefront.
+      var scroller = document.createElement('div');
+      scroller.className = 'mannon-quick-order__scroll';
+      scroller.style.overflowX = 'auto';
+      scroller.style.maxWidth = '100%';
+
+      var table = document.createElement('table');
+      table.className = 'mannon-quick-order__table';
+
+      // Six unlabelled columns of numbers are a puzzle, and to a screen reader
+      // they are nothing at all. Real header cells, with a scope.
+      var head = document.createElement('thead');
+      var headRow = document.createElement('tr');
+      strings.columns.forEach(function (label) {
+        var th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = label;
+        headRow.appendChild(th);
+      });
+      head.appendChild(headRow);
+      table.appendChild(head);
+
+      var body = document.createElement('tbody');
+
+      data.lines.forEach(function (line) {
+        var note = stockNote(line);
+        var price = document.createElement('span');
+        price.textContent = line.unitPrice;
+        if (line.wasPrice) {
+          var was = document.createElement('s');
+          was.textContent = line.wasPrice;
+          was.style.opacity = '0.6';
+          was.style.marginInlineEnd = '0.4em';
+          price.prepend(was);
+        }
+        body.appendChild(
+          row([line.sku, line.title, String(line.quantity), price, line.lineTotal, note])
+        );
+      });
+
+      data.unresolved.forEach(function (line) {
+        var template = line.reason === 'not_found' ? strings.notFound : strings.unresolved;
+        var tr = row([line.sku, template, String(line.quantity), '', '', '']);
+        tr.className = 'mannon-quick-order__row--problem';
+        body.appendChild(tr);
+      });
+
+      table.appendChild(body);
+      scroller.appendChild(table);
+      results.appendChild(scroller);
+
+      if (data.issues.length) {
+        var list = document.createElement('ul');
+        data.issues.forEach(function (issue) {
+          var item = document.createElement('li');
+          var template = issue.code === 'duplicate' ? strings.duplicate : strings.badQuantity;
+          item.textContent = template
+            .replace('%line%', String(issue.lineNumber))
+            .replace('%sku%', issue.sku || '');
+          list.appendChild(item);
+        });
+        results.appendChild(list);
+      }
+
+      if (data.lines.length) {
+        var total = document.createElement('p');
+        total.className = 'mannon-quick-order__total';
+        total.textContent = strings.total.replace('%amount%', data.subtotal);
+        results.appendChild(total);
+
+        var add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'mannon-quick-order__add';
+        add.textContent = strings.addAll;
+        add.addEventListener('click', function () {
+          addAll(data.lines, add);
+        });
+        results.appendChild(add);
+      }
+
+      text(status, '');
+    }
+
+    function addAll(lines, button) {
+      button.disabled = true;
+      text(status, strings.adding);
+
+      fetch(routes + 'cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: lines.map(function (line) {
+            return {
+              id: Number(line.variantId.split('/').pop()),
+              quantity: line.quantity
+            };
+          }),
+          // How the order was placed, read back by the orders list. Shopify
+          // reports every app extension's cart as the storefront, so this
+          // attribute is the only way to tell a quick order from a normal one.
+          attributes: { _mannon_source: 'quick_order' }
+        })
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error('cart');
+          window.location.href = routes + 'cart';
+        })
+        .catch(function () {
+          button.disabled = false;
+          text(status, strings.failed);
+        });
+    }
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var field = form.querySelector('[name="list"]');
+      var list = field ? field.value : '';
+      if (!list.trim()) {
+        text(status, strings.empty);
+        return;
+      }
+
+      text(status, strings.checking);
+      results.replaceChildren();
+
+      var body = new FormData();
+      body.append('list', list);
+      body.append('defaultQuantity', '{{ block.settings.default_quantity }}');
+
+      fetch(routes + 'apps/mannon/quick-order', {
+        method: 'POST',
+        body: body
+      })
+        .then(function (response) {
+          if (response.status === 402) {
+            text(status, strings.unavailable);
+            return null;
+          }
+          if (!response.ok) throw new Error('lookup');
+          return response.json();
+        })
+        .then(function (data) {
+          if (data) render(data);
+        })
+        .catch(function () {
+          text(status, strings.failed);
+        });
+    });
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Quick order by SKU",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Quick order"
+    },
+    {
+      "type": "text",
+      "id": "intro",
+      "label": "Intro",
+      "default": "Paste your order below — one SKU per line, with the quantity after a comma."
+    },
+    {
+      "type": "range",
+      "id": "rows",
+      "label": "Box height",
+      "min": 4,
+      "max": 30,
+      "step": 2,
+      "unit": "rows",
+      "default": 10
+    },
+    {
+      "type": "number",
+      "id": "default_quantity",
+      "label": "Quantity for a line with no number",
+      "default": 1,
+      "info": "A buyer who lists SKUs without quantities gets this many of each."
+    },
+    {
+      "type": "url",
+      "id": "catalog_url",
+      "label": "Catalogue link",
+      "info": "Shown to buyers without JavaScript. Defaults to your all-products collection."
+    }
+  ],
+  "presets": [{ "name": "Quick order by SKU" }]
+}
+{% endschema %}

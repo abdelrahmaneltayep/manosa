@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T11:55:00Z
-Current milestone: 3 — Orders
-Current task: 3.4 Quick order storefront blocks, inside the ≤10-point Lighthouse budget [in progress]
+Updated: 2026-09-10T12:45:00Z
+Current milestone: 4 — Claude
+Current task: 4.1 AI infrastructure: client, streaming, timeouts, audit hooks [in progress]
 
 ## Done
 
@@ -19,10 +19,10 @@ Current task: 3.4 Quick order storefront blocks, inside the ≤10-point Lighthou
 - [x] 3.1 Wholesale order list, order limits, quantity increments — commit `1722590` — QA: `qa/3.1/REPORT.md`
 - [x] 3.2 Net terms: eligibility, pay later, ledger with aging, reminders — commit `3575495` — QA: `qa/3.2/REPORT.md`
 - [x] 3.3 Quotes: pipeline, expiry, accept link, price locking — commit `c146e8a` — QA: `qa/3.3/REPORT.md`
+- [x] 3.4 Quick order storefront blocks, signed App Proxy — commit `PENDING` — QA: `qa/3.4/REPORT.md`
 
 ## Next up
 
-- 3.4 Quick order storefront blocks, inside the ≤10-point Lighthouse budget
 - 4.1 AI infrastructure: client, streaming, timeouts, audit hooks
 - 4.2 Rule-from-a-sentence, margin guard
 - 4.3 Registration screening, drafted emails, segments, CSV whisperer
@@ -40,6 +40,15 @@ Current task: 3.4 Quick order storefront blocks, inside the ≤10-point Lighthou
   props-only component whose states are rendered and captured to `qa/<task>/`.
   Not blocking any task — 0.1 through 2.3 all shipped — but nothing in the admin
   has a visual pass.
+- **No Lighthouse run on the storefront blocks** (3.4) — needs a real
+  storefront. Everything that would spend the ≤10-point budget is enforced by
+  `tests/unit/storefront-blocks.test.ts` (no external script, no library, under
+  16KB, nothing fetched before the table is near the viewport), but the number
+  itself is unverified.
+- **The App Proxy has never received a request from Shopify.** The signature
+  scheme is implemented from the documented algorithm and tested both ways. The
+  `[app_proxy]` url in `shopify.app.toml` still points at localhost and needs
+  the real app URL at deploy time.
 - **`shopify app deploy` and the dev-store run** — same unblocker. The discount
   Function has never run at a real checkout, the theme block has never rendered
   in a real theme, and the Admin API mutations are asserted by request shape
@@ -122,11 +131,19 @@ Neither is blocking; both would change product decisions if answered.
 - **The capture harness checks for raw i18n keys** on every capture. If a new
   catalog root appears, add it to `CATALOG_ROOTS` in
   `tests/support/state-capture.tsx`.
+- **Hardcoding a currency's ×100 is the recurring money bug.** It has now been
+  written three times (3.2 shipped it, 3.3 avoided it, 3.4 caught it again in
+  the SKU path). Always `parseMoney` for a decimal string, and prefer a source
+  that is already in minor units — Liquid's `variant.price` is.
 - **The four recurring bug shapes**, all now guarded: English plural keys
   written without `_one` (caught three times), boolean props on `s-*` elements
   (twice), a pluralised key called without `count`, and — new in 3.1 — a
   machine-readable code that ends in a plural suffix (`increment_below_two`),
   which i18next reads as Arabic `_two`.
+- **Theme blocks are driven in a browser** by `tests/e2e/storefront-blocks.spec.ts`
+  through `tests/support/liquid-stand-in.ts`. Adding a Liquid construct a block
+  uses may need adding to the stand-in — it renders unknown tags as nothing, so
+  a gap shows up as missing markup in a capture.
 - **`npm test` needs Postgres running**, and it stops between sessions:
   `service postgresql start`, then `pg_isready`. The failure looks like "No test
   files found", not like a database error.

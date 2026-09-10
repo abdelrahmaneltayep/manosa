@@ -24,6 +24,7 @@ state walkthrough, tenant boundary, invariants, bugs found and fixed, open items
 | 3.1  | Wholesale order list, order limits, quantity increments       | Pass · open items             | [`qa/3.1/REPORT.md`](qa/3.1/REPORT.md) |
 | 3.2  | Net terms: eligibility, pay later, ledger, reminders          | Pass · open items             | [`qa/3.2/REPORT.md`](qa/3.2/REPORT.md) |
 | 3.3  | Quotes: pipeline, expiry, accept link, price locking          | Pass · open items             | [`qa/3.3/REPORT.md`](qa/3.3/REPORT.md) |
+| 3.4  | Quick order storefront blocks and the signed App Proxy        | Pass · open items             | [`qa/3.4/REPORT.md`](qa/3.4/REPORT.md) |
 
 ## What a capture proves, and what it does not
 

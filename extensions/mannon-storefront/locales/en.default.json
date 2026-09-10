@@ -3,6 +3,52 @@
     "registration": {
       "needs_url": "Add your form's link in this block's settings. You will find it in the Publish tab of the form in the Mannon app.",
       "open_in_new_tab": "Open the application form in a new tab"
+    },
+    "quick_order": {
+      "needs_js": "Ordering by SKU needs JavaScript, which is switched off in this browser.",
+      "browse_catalog": "Browse the catalogue instead",
+      "list_label": "Your order",
+      "list_help": "One per line: the SKU, then the quantity. A comma, a tab or a space between them all work.",
+      "placeholder": "MUG-BL-L, 100\nMUG-BL-S, 50\nGRINDER-01, 12",
+      "check": "Check prices",
+      "checking": "Looking up your order…",
+      "failed": "That did not go through. Try again in a moment.",
+      "unavailable": "Quick ordering is not switched on for this store.",
+      "empty": "Paste your order above and we will price it.",
+      "not_found": "No product with this SKU",
+      "unavailable_line": "Not available to order",
+      "duplicate": "Line %line%: %sku% appears more than once, so the quantities were added together.",
+      "bad_quantity": "Line %line%: could not read the quantity for %sku%.",
+      "total": "Total: %amount%",
+      "add_all": "Add everything to my cart",
+      "adding": "Adding to your cart…",
+      "out_of_stock": "Out of stock",
+      "backorder": "On backorder",
+      "low_stock": "Only %count% left",
+      "col_sku": "SKU",
+      "col_item": "Item",
+      "col_quantity": "Quantity",
+      "col_price": "Unit price",
+      "col_total": "Total",
+      "col_stock": "Stock"
+    },
+    "variants": {
+      "needs_product": "This block belongs on a product page. Add it to your product template.",
+      "col_variant": "Option",
+      "col_sku": "SKU",
+      "col_price": "Price",
+      "col_stock": "Stock",
+      "col_quantity": "Quantity",
+      "quantity_for": "Quantity of {{ variant }}",
+      "in_stock": "In stock",
+      "low_stock": {
+        "one": "Only 1 left",
+        "other": "Only {{ count }} left"
+      },
+      "out_of_stock": "Out of stock",
+      "add_all": "Add everything to my cart",
+      "your_price": "Prices shown are your wholesale prices.",
+      "add_row": "Add"
     }
   }
 }

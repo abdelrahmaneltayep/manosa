@@ -30,6 +30,15 @@ redirect_urls = [
   "https://localhost:3000/api/auth/callback"
 ]
 
+# The storefront blocks call the app through Shopify's App Proxy, at
+# /apps/mannon/... on the merchant's own domain. Shopify signs each request and
+# passes the logged-in customer id — that signature is the whole security model
+# for wholesale prices, since without it anyone could ask for any buyer's.
+[app_proxy]
+url = "https://localhost:3000/proxy"
+prefix = "apps"
+subpath = "mannon"
+
 [webhooks]
 api_version = "2025-07"
 

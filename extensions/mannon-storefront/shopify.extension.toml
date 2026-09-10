@@ -1,8 +1,12 @@
 # Mannon's buyer-facing blocks.
 #
-# One block today: the wholesale registration form. It embeds the app's own
-# standalone form rather than re-implementing it in Liquid — see
-# docs/adr/0012-registration-forms.md for why there is one renderer and not two.
+# Three: the wholesale registration form, quick order by SKU, and the variants
+# table on a product page.
+#
+# None of them computes a price. The registration form embeds the app's own
+# page (docs/adr/0012); the two order blocks ask the app through Shopify's App
+# Proxy, so the number a buyer is shown comes from the same pricing engine the
+# checkout Function runs (docs/adr/0017).
 
 api_version = "2025-07"
 

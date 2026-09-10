@@ -169,6 +169,7 @@
     "csv_import": "CSV price import and export",
     "auto_tagging": "Automatic customer tagging",
     "order_limits": "Order limits and case packs",
+    "quick_order": "Quick order for buyers",
     "net_terms": "Net payment terms",
     "shipping_rules": "Wholesale shipping rules",
     "draft_orders": "Draft orders and quotes",

@@ -8,6 +8,47 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — Quick order is on the Pro plan (flagged assumption)
+
+The spec's plan ladder does not place the storefront quick-order tools. They sit
+on Pro ($29) with CSV import and auto-tagging, because they are a wholesale
+convenience rather than a premium capability like net terms or an agent — a free
+store with one pricing rule has no use for a bulk SKU form. Rejected: Growth
+($59), which would put a basic ordering aid behind the terms tier. **Flagged:**
+move it with a one-line change in `plans.ts` if that reading is wrong.
+
+## 2026-09-10 — The variants table uses one form per row, not one for the table
+
+A single form posts every variant, including the ones left at zero, and
+Shopify's `/cart/add` refuses a line of zero. Per-row forms mean every row works
+with JavaScript off, and "add all" becomes the script's contribution — hidden
+until the script is there to make it work. Rejected: one form plus a JS filter,
+which would have made the no-JS path silently broken.
+
+## 2026-09-10 — Quick order says it needs JavaScript; the variants table does not
+
+They degrade differently because they are different. There is no SKU lookup
+without a request, so quick order shows a note and a catalogue link — the
+checklist's own fallback — rather than a form that cannot submit. The variants
+table has everything it needs in the theme's own render, so it works entirely
+without a script and the price shown in advance is the enhancement.
+
+## 2026-09-10 — The variants block sends list prices as minor units
+
+Liquid's `variant.price` is already an integer in the currency's subunit, so it
+goes to the app as-is. A decimal round-trip would be wrong in every three-decimal
+currency — the bug 3.2 shipped. Rejected: sending a decimal string for
+consistency with Shopify's Admin API, which uses one.
+
+## 2026-09-10 — Theme blocks are tested through a Liquid stand-in
+
+`tests/support/liquid-stand-in.ts` renders enough Liquid to get a block into
+Chromium, so the JavaScript that actually ships can be driven against a stubbed
+proxy. It is not a Liquid implementation and does not prove Shopify renders the
+markup identically — but the script is the part that can break, and it was
+untested otherwise. Rejected: shipping the blocks with no browser coverage at
+all, and pulling in a real Liquid engine for a test harness.
+
 ## 2026-09-10 — A quote's accept link is a random token, not a cuid
 
 Registration forms use `@default(cuid())` for their public id. A quote's link

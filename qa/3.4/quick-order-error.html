@@ -1,0 +1,316 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Mannon storefront block</title>
+<style>
+ body{font:15px/1.5 system-ui,-apple-system,sans-serif;margin:0;padding:1.5rem;background:#f6f6f7;color:#1c1d2b}
+ table{border-collapse:collapse;width:100%;margin:.75rem 0}
+ th,td{padding:.45rem .5rem;border-bottom:1px solid #e3e3e3;text-align:start;vertical-align:top}
+ textarea{padding:.5rem;border:1px solid #c9c9c9;border-radius:6px}
+ button{font:inherit;padding:.45rem .9rem;border-radius:8px;border:1px solid #c9c9c9;background:#fff;cursor:pointer}
+ .mannon-quick-order__add,.mannon-variants__add{background:#4f46e5;color:#fff;border-color:#4f46e5;font-weight:700}
+ .mannon-quick-order__row--problem{color:#a11f1f}
+ .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+</style></head><body>
+<div style="background:#fff4e4;border:1px solid #e0b252;border-radius:8px;
+  padding:.75rem 1rem;margin-bottom:1.25rem;font:12px/1.5 system-ui;color:#5e4200">
+  <strong>QA capture — the block's own script, in a real browser.</strong> The Liquid around it is
+  rendered by a stand-in rather than by Shopify, so the layout is approximate; the JavaScript,
+  the states it renders and the requests it makes are the real ones.
+</div>
+<script>window.Shopify = { routes: { root: "/" } };</script>
+<script>
+    window.fetch = function (url, options) {
+      var settings = options || {};
+      window.__mannonRecord(
+        String(url),
+        settings.method || 'GET',
+        typeof settings.body === 'string' ? settings.body : ''
+      );
+      return Promise.resolve({
+        ok: 500 >= 200 && 500 < 300,
+        status: 500,
+        json: function () { return Promise.resolve({}); }
+      });
+    };</script>
+
+
+
+
+
+<div class="mannon-quick-order" id="mannon-qo-qo1" >
+  
+    <h2 class="mannon-quick-order__heading">Quick order</h2>
+  
+
+  
+    <p class="mannon-quick-order__intro">Paste your order below — one SKU per line, with the quantity after a comma.</p>
+  
+
+  <noscript>
+    <p class="mannon-quick-order__fallback">
+      Ordering by SKU needs JavaScript, which is switched off in this browser.
+      <a href="/collections/all">Browse the catalogue instead</a>
+    </p>
+  </noscript>
+
+  
+  <form class="mannon-quick-order__form" data-mannon-form hidden>
+    <label class="mannon-quick-order__label" for="mannon-qo-qo1-list">
+      Your order
+    </label>
+    <textarea
+      id="mannon-qo-qo1-list"
+      name="list"
+      rows="8"
+      spellcheck="false"
+      placeholder="MUG-BL-L, 100
+MUG-BL-S, 50
+GRINDER-01, 12"
+      style="width:100%;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
+    ></textarea>
+    <p class="mannon-quick-order__help">One per line: the SKU, then the quantity. A comma, a tab or a space between them all work.</p>
+
+    <button type="submit" class="mannon-quick-order__check">
+      Check prices
+    </button>
+  </form>
+
+  <div data-mannon-status role="status" aria-live="polite"></div>
+  <div data-mannon-results></div>
+</div>
+
+<script>
+  (function () {
+    var root = document.getElementById('mannon-qo-qo1');
+    if (!root) return;
+
+    // Shopify's routes object carries the locale prefix. Without it the URLs
+    // would be wrong on every non-default-language storefront, so the block
+    // stays in its no-JS state rather than guessing at "/".
+    var routes = window.Shopify && window.Shopify.routes && window.Shopify.routes.root;
+    if (!routes) return;
+
+    var form = root.querySelector('[data-mannon-form]');
+    var status = root.querySelector('[data-mannon-status]');
+    var results = root.querySelector('[data-mannon-results]');
+    if (!form || !status || !results) return;
+
+    // Only now is the form usable, so only now is it shown.
+    form.hidden = false;
+
+    var strings = {
+      checking: "Looking up your order…",
+      failed: "That did not go through. Try again in a moment.",
+      unavailable: "Quick ordering is not switched on for this store.",
+      empty: "Paste your order above and we will price it.",
+      notFound: "No product with this SKU",
+      unresolved: "Not available to order",
+      duplicate: "Line %line%: %sku% appears more than once, so the quantities were added together.",
+      badQuantity: "Line %line%: could not read the quantity for %sku%.",
+      total: "Total: %amount%",
+      addAll: "Add everything to my cart",
+      adding: "Adding to your cart…",
+      outOfStock: "Out of stock",
+      backorder: "On backorder",
+      low: "Only %count% left",
+      columns: [
+        "SKU",
+        "Item",
+        "Quantity",
+        "Unit price",
+        "Total",
+        "Stock"
+      ]
+    };
+
+    function text(node, value) {
+      node.textContent = value;
+    }
+
+    function row(cells) {
+      var tr = document.createElement('tr');
+      cells.forEach(function (cell, index) {
+        // The SKU names the row, so it is the row's heading rather than a
+        // sixth anonymous cell.
+        var td = document.createElement(index === 0 ? 'th' : 'td');
+        if (index === 0) td.scope = 'row';
+        // textContent throughout: a product title is the merchant's data, and
+        // building this with innerHTML would make it executable.
+        if (typeof cell === 'string') td.textContent = cell;
+        else td.appendChild(cell);
+        tr.appendChild(td);
+      });
+      return tr;
+    }
+
+    function stockNote(line) {
+      if (line.stock === 'out_of_stock') return strings.outOfStock;
+      if (line.stock === 'backorder') return strings.backorder;
+      if (line.stock === 'low' && line.stockCount !== null) {
+        return strings.low.replace('%count%', String(line.stockCount));
+      }
+      return '';
+    }
+
+    function render(data) {
+      results.replaceChildren();
+      if (!data.lines.length && !data.unresolved.length && !data.issues.length) {
+        text(status, strings.empty);
+        return;
+      }
+
+      // Six columns of order data will not fit a phone. The table scrolls
+      // inside its own box rather than pushing the whole page sideways, which
+      // is the difference between a wide table and a broken storefront.
+      var scroller = document.createElement('div');
+      scroller.className = 'mannon-quick-order__scroll';
+      scroller.style.overflowX = 'auto';
+      scroller.style.maxWidth = '100%';
+
+      var table = document.createElement('table');
+      table.className = 'mannon-quick-order__table';
+
+      // Six unlabelled columns of numbers are a puzzle, and to a screen reader
+      // they are nothing at all. Real header cells, with a scope.
+      var head = document.createElement('thead');
+      var headRow = document.createElement('tr');
+      strings.columns.forEach(function (label) {
+        var th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = label;
+        headRow.appendChild(th);
+      });
+      head.appendChild(headRow);
+      table.appendChild(head);
+
+      var body = document.createElement('tbody');
+
+      data.lines.forEach(function (line) {
+        var note = stockNote(line);
+        var price = document.createElement('span');
+        price.textContent = line.unitPrice;
+        if (line.wasPrice) {
+          var was = document.createElement('s');
+          was.textContent = line.wasPrice;
+          was.style.opacity = '0.6';
+          was.style.marginInlineEnd = '0.4em';
+          price.prepend(was);
+        }
+        body.appendChild(
+          row([line.sku, line.title, String(line.quantity), price, line.lineTotal, note])
+        );
+      });
+
+      data.unresolved.forEach(function (line) {
+        var template = line.reason === 'not_found' ? strings.notFound : strings.unresolved;
+        var tr = row([line.sku, template, String(line.quantity), '', '', '']);
+        tr.className = 'mannon-quick-order__row--problem';
+        body.appendChild(tr);
+      });
+
+      table.appendChild(body);
+      scroller.appendChild(table);
+      results.appendChild(scroller);
+
+      if (data.issues.length) {
+        var list = document.createElement('ul');
+        data.issues.forEach(function (issue) {
+          var item = document.createElement('li');
+          var template = issue.code === 'duplicate' ? strings.duplicate : strings.badQuantity;
+          item.textContent = template
+            .replace('%line%', String(issue.lineNumber))
+            .replace('%sku%', issue.sku || '');
+          list.appendChild(item);
+        });
+        results.appendChild(list);
+      }
+
+      if (data.lines.length) {
+        var total = document.createElement('p');
+        total.className = 'mannon-quick-order__total';
+        total.textContent = strings.total.replace('%amount%', data.subtotal);
+        results.appendChild(total);
+
+        var add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'mannon-quick-order__add';
+        add.textContent = strings.addAll;
+        add.addEventListener('click', function () {
+          addAll(data.lines, add);
+        });
+        results.appendChild(add);
+      }
+
+      text(status, '');
+    }
+
+    function addAll(lines, button) {
+      button.disabled = true;
+      text(status, strings.adding);
+
+      fetch(routes + 'cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: lines.map(function (line) {
+            return {
+              id: Number(line.variantId.split('/').pop()),
+              quantity: line.quantity
+            };
+          }),
+          // How the order was placed, read back by the orders list. Shopify
+          // reports every app extension's cart as the storefront, so this
+          // attribute is the only way to tell a quick order from a normal one.
+          attributes: { _mannon_source: 'quick_order' }
+        })
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error('cart');
+          window.location.href = routes + 'cart';
+        })
+        .catch(function () {
+          button.disabled = false;
+          text(status, strings.failed);
+        });
+    }
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var field = form.querySelector('[name="list"]');
+      var list = field ? field.value : '';
+      if (!list.trim()) {
+        text(status, strings.empty);
+        return;
+      }
+
+      text(status, strings.checking);
+      results.replaceChildren();
+
+      var body = new FormData();
+      body.append('list', list);
+      body.append('defaultQuantity', '1');
+
+      fetch(routes + 'apps/mannon/quick-order', {
+        method: 'POST',
+        body: body
+      })
+        .then(function (response) {
+          if (response.status === 402) {
+            text(status, strings.unavailable);
+            return null;
+          }
+          if (!response.ok) throw new Error('lookup');
+          return response.json();
+        })
+        .then(function (data) {
+          if (data) render(data);
+        })
+        .catch(function () {
+          text(status, strings.failed);
+        });
+    });
+  })();
+</script>
+
+
+
+</body></html>

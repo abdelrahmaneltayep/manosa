@@ -1,0 +1,312 @@
+{% comment %}
+  Mannon — variants table on a product page.
+
+  A wholesale buyer ordering across sizes wants one grid with a quantity box
+  per variant, not eight trips through a picker.
+
+  This block works with JavaScript switched off, and that is not a courtesy —
+  the theme already has the variants and their prices, so the table renders
+  server-side and the form posts straight to /cart/add. A buyer without a
+  script still adds a mixed case to their cart, and still pays the wholesale
+  price, because the checkout Function applies it whatever the page said.
+
+  What the script adds is the *wholesale price shown in advance*, fetched from
+  the app because only the pricing engine knows it. That is an enhancement to a
+  page that already works, which is the only honest way to lazy-load anything
+  on a storefront.
+{% endcomment %}
+
+{%- assign block_id = 'mannon-vt-' | append: block.id -%}
+
+{%- if product == blank or product.variants.size == 0 -%}
+  {%- if request.design_mode -%}
+    <p>{{ 'mannon.variants.needs_product' | t }}</p>
+  {%- endif -%}
+{%- else -%}
+  <div class="mannon-variants" id="{{ block_id }}" {{ block.shopify_attributes }}>
+    {%- if block.settings.heading != blank -%}
+      <h2 class="mannon-variants__heading">{{ block.settings.heading }}</h2>
+    {%- endif -%}
+
+    {%- comment -%}
+      One form per row, not one form for the table.
+
+      A single form would post every variant, including the ones left at zero,
+      and Shopify's /cart/add refuses a line of zero. So each row adds itself
+      and every row works with JavaScript switched off. "Add all" is added by
+      the script below, which can collect the non-zero rows and post them
+      together — an enhancement to a table that already works.
+    {%- endcomment -%}
+    {%- comment -%}
+      Five columns and a quantity form will not fit a phone. The table scrolls
+      inside its own box rather than pushing the whole page sideways.
+    {%- endcomment -%}
+    <div class="mannon-variants__scroll" style="overflow-x:auto;max-width:100%;">
+    <table class="mannon-variants__table">
+        <thead>
+          <tr>
+            <th scope="col">{{ 'mannon.variants.col_variant' | t }}</th>
+            <th scope="col">{{ 'mannon.variants.col_sku' | t }}</th>
+            <th scope="col">{{ 'mannon.variants.col_price' | t }}</th>
+            <th scope="col">{{ 'mannon.variants.col_stock' | t }}</th>
+            <th scope="col">{{ 'mannon.variants.col_quantity' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {%- for variant in product.variants -%}
+            {%- comment -%}
+              Liquid's `variant.price` is already an integer in the currency's
+              minor unit — cents, or fils in a three-decimal currency — which is
+              exactly what the pricing engine takes. Sending it as-is avoids a
+              decimal round-trip that would be wrong in half the Gulf.
+            {%- endcomment -%}
+            <tr data-mannon-variant="{{ variant.id }}" data-mannon-list="{{ variant.price }}">
+              <th scope="row">{{ variant.title }}</th>
+              <td>{{ variant.sku | default: '—' }}</td>
+              <td data-mannon-price>
+                {%- comment -%}
+                  The theme's own price until the app answers. Never blank: a
+                  buyer with a slow connection sees a real number rather than a
+                  gap where one should be.
+                {%- endcomment -%}
+                {{ variant.price | money }}
+              </td>
+              <td>
+                {%- if variant.available -%}
+                  {%- if variant.inventory_management != blank
+                    and variant.inventory_policy == 'deny'
+                    and variant.inventory_quantity > 0
+                    and variant.inventory_quantity <= block.settings.low_stock_at -%}
+                    {{ 'mannon.variants.low_stock' | t: count: variant.inventory_quantity }}
+                  {%- else -%}
+                    {{ 'mannon.variants.in_stock' | t }}
+                  {%- endif -%}
+                {%- else -%}
+                  {{ 'mannon.variants.out_of_stock' | t }}
+                {%- endif -%}
+              </td>
+              <td>
+                <form method="post" action="{{ routes.cart_add_url }}" class="mannon-variants__row-form">
+                  <input type="hidden" name="form_type" value="product">
+                  <input type="hidden" name="utf8" value="✓">
+                  <input type="hidden" name="id" value="{{ variant.id }}">
+                  {%- comment -%}
+                    How the order was placed, read back by the orders list in
+                    the admin. Shopify reports every app extension's cart as the
+                    storefront, so this attribute is the only way to tell a
+                    quick order from a normal one — and it is in the markup, so
+                    it survives with JavaScript off.
+                  {%- endcomment -%}
+                  <input type="hidden" name="attributes[_mannon_source]" value="quick_order">
+
+                  <label class="visually-hidden" for="{{ block_id }}-{{ variant.id }}">
+                    {{ 'mannon.variants.quantity_for' | t: variant: variant.title }}
+                  </label>
+                  <input
+                    id="{{ block_id }}-{{ variant.id }}"
+                    type="number"
+                    inputmode="numeric"
+                    min="{{ block.settings.quantity_step }}"
+                    step="{{ block.settings.quantity_step }}"
+                    value=""
+                    name="quantity"
+                    data-mannon-qty
+                    style="width:6rem;"
+                    {% unless variant.available %}disabled{% endunless %}
+                  >
+                  <button type="submit" {% unless variant.available %}disabled{% endunless %}>
+                    {{ 'mannon.variants.add_row' | t }}
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {%- endfor -%}
+        </tbody>
+    </table>
+    </div>
+
+    {%- comment -%}
+      Shown by the script, because without one it cannot do anything. A button
+      that needs JavaScript should not be on the page until JavaScript is there.
+    {%- endcomment -%}
+    <button type="button" class="mannon-variants__add" data-mannon-add-all hidden>
+      {{ 'mannon.variants.add_all' | t }}
+    </button>
+
+    <p data-mannon-note class="mannon-variants__note" hidden></p>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.getElementById('{{ block_id }}');
+      if (!root) return;
+
+      var routes = window.Shopify && window.Shopify.routes && window.Shopify.routes.root;
+      if (!routes) return;
+
+      var rows = root.querySelectorAll('[data-mannon-variant]');
+      if (!rows.length) return;
+
+      var note = root.querySelector('[data-mannon-note]');
+      var yourPrice = {{ 'mannon.variants.your_price' | t | json }};
+
+      var payload = [];
+      rows.forEach(function (row) {
+        payload.push({
+          variantId: 'gid://shopify/ProductVariant/' + row.getAttribute('data-mannon-variant'),
+          productId: 'gid://shopify/Product/{{ product.id }}',
+          priceMinor: Number(row.getAttribute('data-mannon-list')) || 0
+        });
+      });
+
+      function apply() {
+        var url =
+          routes +
+          'apps/mannon/variants?variants=' +
+          encodeURIComponent(JSON.stringify(payload));
+
+        fetch(url)
+          .then(function (response) {
+            // 402 means the merchant's plan does not include this. The theme's
+            // own prices stay on the page; nothing is said to the buyer, who
+            // has no stake in their supplier's billing.
+            if (!response.ok) return null;
+            return response.json();
+          })
+          .then(function (data) {
+            if (!data || !data.ok || !data.variants.length) return;
+            var changed = 0;
+
+            data.variants.forEach(function (priced) {
+              var id = priced.variantId.split('/').pop();
+              var row = root.querySelector('[data-mannon-variant="' + id + '"]');
+              if (!row) return;
+              var cell = row.querySelector('[data-mannon-price]');
+              if (!cell) return;
+
+              cell.replaceChildren();
+              if (priced.wasPrice) {
+                var was = document.createElement('s');
+                was.textContent = priced.wasPrice;
+                was.style.opacity = '0.6';
+                was.style.marginInlineEnd = '0.4em';
+                cell.appendChild(was);
+                changed += 1;
+              }
+              var now = document.createElement('span');
+              now.textContent = priced.unitPrice;
+              cell.appendChild(now);
+
+              if (priced.ruleSummary) {
+                // Deciding shows its working, on the storefront too.
+                var why = document.createElement('small');
+                why.style.display = 'block';
+                why.style.opacity = '0.7';
+                why.textContent = priced.ruleSummary;
+                cell.appendChild(why);
+              }
+            });
+
+            if (changed && note) {
+              note.textContent = yourPrice;
+              note.hidden = false;
+            }
+          })
+          .catch(function () {
+            // The theme's prices are already on the page and are not wrong —
+            // they are just not this buyer's. Silence beats an error next to a
+            // price.
+          });
+      }
+
+      var addAll = root.querySelector('[data-mannon-add-all]');
+      if (addAll) {
+        addAll.hidden = false;
+        addAll.addEventListener('click', function () {
+          var items = [];
+          rows.forEach(function (row) {
+            var field = row.querySelector('[data-mannon-qty]');
+            var quantity = field ? parseInt(field.value, 10) : 0;
+            if (!quantity || quantity < 1) return;
+            items.push({
+              id: Number(row.getAttribute('data-mannon-variant')),
+              quantity: quantity
+            });
+          });
+          if (!items.length) return;
+
+          addAll.disabled = true;
+          fetch(routes + 'cart/add.js', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: items,
+              attributes: { _mannon_source: 'quick_order' }
+            })
+          })
+            .then(function (response) {
+              if (!response.ok) throw new Error('cart');
+              window.location.href = routes + 'cart';
+            })
+            .catch(function () {
+              // Each row still has its own working button, so the buyer is not
+              // stuck — the shortcut failed, not the table.
+              addAll.disabled = false;
+            });
+        });
+      }
+
+      // Nothing is fetched until the table is close to being looked at, so the
+      // block costs a product page nothing on load. Browsers without the
+      // observer simply fetch straight away.
+      if ('IntersectionObserver' in window) {
+        var seen = false;
+        var observer = new IntersectionObserver(
+          function (entries) {
+            if (seen || !entries.some(function (entry) { return entry.isIntersecting; })) return;
+            seen = true;
+            observer.disconnect();
+            apply();
+          },
+          { rootMargin: '200px' }
+        );
+        observer.observe(root);
+      } else {
+        apply();
+      }
+    })();
+  </script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Wholesale variants table",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Order by the case"
+    },
+    {
+      "type": "number",
+      "id": "quantity_step",
+      "label": "Quantity step",
+      "default": 1,
+      "info": "Set this to your case size so the arrows move a case at a time."
+    },
+    {
+      "type": "range",
+      "id": "low_stock_at",
+      "label": "Show the stock count below",
+      "min": 0,
+      "max": 200,
+      "step": 5,
+      "default": 20,
+      "unit": "units"
+    }
+  ],
+  "presets": [{ "name": "Wholesale variants table" }]
+}
+{% endschema %}
