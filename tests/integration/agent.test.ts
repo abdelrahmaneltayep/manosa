@@ -2,6 +2,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "~/db.server";
 import { resetAnthropicClient, type MessagesApi } from "~/lib/ai/client.server";
+import { getFixedT } from "~/i18n.server";
+import { translate, type Translate } from "~/i18n/translate";
 import { answerAsk } from "~/lib/agent/ask.server";
 import {
   generateBriefing,
@@ -361,12 +363,22 @@ describe("answering a routed question", () => {
     ...overrides,
   });
 
+  // The real English catalogue, so a headline that needs a plural rule or an
+  // interpolation gets one — a stub `t` would pass while the merchant reads a
+  // raw key.
+  let english: Translate | null = null;
+  const askOptions = async () => ({
+    locale: "en",
+    t: (english ??= translate(await getFixedT("en"))),
+    now: NOW,
+  });
+
   it("answers from this shop's own rows", async () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
       await overdueOrder();
-      const result = await answerAsk(ask(), { locale: "en", now: NOW });
+      const result = await answerAsk(ask(), await askOptions());
 
       expect(result.headline.params.count).toBe(1);
       expect(result.rows[0]?.label).toContain("#1001");
@@ -380,7 +392,7 @@ describe("answering a routed question", () => {
     await inBeta(() => overdueOrder());
 
     await inAlpha(async () => {
-      const result = await answerAsk(ask(), { locale: "en", now: NOW });
+      const result = await answerAsk(ask(), await askOptions());
       expect(result.headline.params.count).toBe(0);
       expect(result.rows).toEqual([]);
     });
@@ -405,7 +417,7 @@ describe("answering a routed question", () => {
 
       const result = await answerAsk(
         ask({ intent: "open_builder", target: "pricing_rule" }),
-        { locale: "en", now: NOW },
+        await askOptions(),
       );
 
       expect(result.isBuilder).toBe(true);
@@ -437,10 +449,7 @@ describe("answering a routed question", () => {
         ],
       });
 
-      const result = await answerAsk(ask({ intent: "count_buyers" }), {
-        locale: "en",
-        now: NOW,
-      });
+      const result = await answerAsk(ask({ intent: "count_buyers" }), await askOptions());
       expect(result.headline.params.count).toBe(1);
     });
   });

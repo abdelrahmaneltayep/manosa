@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T15:40:00Z
+Updated: 2026-09-10T16:50:00Z
 Current milestone: 4 — Claude
-Current task: 4.5 Home page assembled, Setup Wizard [in progress]
+Current task: 4.5 Home page assembled, Setup Wizard [in progress — 4.4's fix round is done and committed]
 
 ## Done
 
@@ -23,7 +23,7 @@ Current task: 4.5 Home page assembled, Setup Wizard [in progress]
 - [x] 4.1 AI infrastructure: client, streaming, timeouts, audit hooks — commit `b8136b5` — QA: `qa/4.1/REPORT.md`
 - [x] 4.2 Rule-from-a-sentence, margin guard — commit `d45f02b` — QA: `qa/4.2/REPORT.md`
 - [x] 4.3 Screening, drafted emails, segments, CSV whisperer — commit `be3c6d0` — QA: `qa/4.3/REPORT.md`
-- [x] 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order — commit `b073b74` — QA: `qa/4.4/REPORT.md` (gate clean; independent cold read outstanding)
+- [x] 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order — commits `b073b74` + fix round — QA: `qa/4.4/REPORT.md` (cold read returned FAIL on 17 findings; all fixed, gate re-run clean)
 
 ## Next up
 
@@ -207,6 +207,12 @@ Neither is blocking; both would change product decisions if answered.
   (twice), a pluralised key called without `count`, and — new in 3.1 — a
   machine-readable code that ends in a plural suffix (`increment_below_two`),
   which i18next reads as Arabic `_two`.
+- **A view-model that lives in a route cannot be tested here.** Driving a Remix
+  loader needs a Shopify session this environment cannot mint, so anything worth
+  asserting belongs in a module the route imports: `app/lib/agent/home-view.server.ts`
+  and `app/lib/orders/po-envelope.server.ts` were both pulled out of their routes
+  in 4.4's fix round for exactly this, and both immediately found bugs. The route
+  keeps the wiring; the decisions move out.
 - **Theme blocks are driven in a browser** by `tests/e2e/storefront-blocks.spec.ts`
   through `tests/support/liquid-stand-in.ts`. Adding a Liquid construct a block
   uses may need adding to the stand-in — it renders unknown tags as nothing, so

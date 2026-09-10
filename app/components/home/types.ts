@@ -19,18 +19,24 @@ export interface BriefingItemView {
 
 export interface BriefingView {
   /**
-   * `ready` has items. `quiet` ran and found nothing — a designed state.
-   * `empty` is day one. `unavailable` means today's could not be had; when
-   * `items` is non-empty it is yesterday's, and `writtenAt` says when.
+   * `ready` has items. `quiet` means nothing at all is true of this shop right
+   * now. `cleared` means this morning's list is dealt with but other things
+   * are outstanding and the briefing has not been rewritten yet. `empty` is day
+   * one. `unavailable` means today's could not be written; when `items` is
+   * non-empty it is the previous one, and `writtenAt` says when.
    */
-  status: "ready" | "quiet" | "empty" | "unavailable" | "loading" | "off";
+  status: "ready" | "quiet" | "cleared" | "empty" | "unavailable" | "loading" | "off";
   items: BriefingItemView[];
   /** ISO. Null when nothing has ever been written. */
   writtenAt: string | null;
+  /** The same moment, in the merchant's language. Formatted by the loader. */
+  writtenAtLabel: string | null;
   /** Older than a day. The checklist's stale badge. */
   stale: boolean;
-  /** Kinds the merchant has muted, so Settings can show them. */
-  muted: string[];
+  /** Kinds the merchant has muted, each with a way back and a label. */
+  muted: { kind: string; label: string }[];
+  /** The kind whose "don't show this again?" is being asked. */
+  confirmingMute: string | null;
 }
 
 export interface AskRowView {

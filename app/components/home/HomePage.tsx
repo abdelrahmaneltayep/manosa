@@ -42,6 +42,27 @@ function Briefing({ view }: { view: BriefingView }) {
           </s-stack>
         ) : null}
 
+        {view.confirmingMute ? (
+          <s-banner tone="warning">
+            <s-heading>
+              {t("home.briefing.confirmMuteHeading", {
+                kind: t(`home.briefing.mutedKind.${view.confirmingMute}`),
+              })}
+            </s-heading>
+            <s-paragraph>{t("home.briefing.confirmMuteBody")}</s-paragraph>
+            <s-stack direction="inline" gap="small" alignItems="center">
+              <form method="post">
+                <input type="hidden" name="intent" value="mute" />
+                <input type="hidden" name="kind" value={view.confirmingMute} />
+                <s-button type="submit" tone="critical">
+                  {t("home.briefing.confirmMuteYes")}
+                </s-button>
+              </form>
+              <s-link href="/app">{t("home.briefing.confirmMuteNo")}</s-link>
+            </s-stack>
+          </s-banner>
+        ) : null}
+
         {view.items.map((item) => (
           <s-box
             key={item.kind}
@@ -59,19 +80,55 @@ function Briefing({ view }: { view: BriefingView }) {
               </s-stack>
               <s-stack direction="inline" gap="small" alignItems="center">
                 <s-button href={item.href}>{t(item.actionKey)}</s-button>
-                <form method="post">
-                  <input type="hidden" name="intent" value="mute" />
-                  <input type="hidden" name="kind" value={item.kind} />
-                  <s-button type="submit" variant="tertiary">
-                    {t("home.briefing.mute")}
-                  </s-button>
-                </form>
+                {/* Two steps, because muting is not reversible from the row:
+                    the checklist asks "Don't show this type again?" rather
+                    than silently muting on one click. Asking is a link so
+                    that nothing is written until the merchant says yes. */}
+                <s-button
+                  href={`/app?confirm=${encodeURIComponent(item.kind)}`}
+                  variant="tertiary"
+                >
+                  {t("home.briefing.mute")}
+                </s-button>
               </s-stack>
             </s-stack>
           </s-box>
         ))}
+        <Muted view={view} />
       </s-stack>
     </s-section>
+  );
+}
+
+/**
+ * The kinds the merchant has silenced, and the way back.
+ *
+ * Without this, "Not this again" is a one-way door: the kind never appears
+ * again and nothing on any screen says it was muted. The checklist puts this
+ * list in Settings, which is 6.2 — it lives here until then rather than not
+ * existing.
+ */
+function Muted({ view }: { view: BriefingView }) {
+  const { t } = useTranslation();
+  if (view.muted.length === 0) return null;
+
+  return (
+    <s-stack direction="block" gap="small-100">
+      <s-text color="subdued">
+        {t("home.briefing.mutedHeading", { count: view.muted.length })}
+      </s-text>
+      <s-stack direction="inline" gap="small-100">
+        {view.muted.map((entry) => (
+          <form key={entry.kind} method="post">
+            <input type="hidden" name="intent" value="unmute" />
+            <input type="hidden" name="kind" value={entry.kind} />
+            <s-button type="submit" variant="tertiary">
+              {t("home.briefing.unmute", { kind: entry.label })}
+            </s-button>
+          </form>
+        ))}
+      </s-stack>
+    </s-stack>
   );
 }
 
@@ -109,6 +166,17 @@ function Header({ view }: { view: BriefingView }) {
     );
   }
 
+  if (view.status === "cleared") {
+    return (
+      // Not "all quiet": the list is done, but other things have come up since
+      // it was written and the agent has not ranked them yet.
+      <s-banner tone="info">
+        <s-heading>{t("home.briefing.clearedHeading")}</s-heading>
+        <s-paragraph>{t("home.briefing.clearedBody")}</s-paragraph>
+      </s-banner>
+    );
+  }
+
   if (view.status === "unavailable") {
     return (
       <s-banner tone="warning">
@@ -124,11 +192,11 @@ function Header({ view }: { view: BriefingView }) {
     );
   }
 
-  if (view.stale && view.writtenAt) {
+  if (view.stale && view.writtenAtLabel) {
     return (
       <s-stack direction="inline" gap="small" alignItems="center">
         <s-badge tone="warning">
-          {t("home.briefing.stale", { when: view.writtenAt.slice(0, 10) })}
+          {t("home.briefing.stale", { when: view.writtenAtLabel })}
         </s-badge>
       </s-stack>
     );
@@ -193,9 +261,14 @@ function AskFailure({ view }: { view: AskView }) {
       <s-banner tone="warning">
         <s-heading>{t("home.ask.failure.rate_limited.heading")}</s-heading>
         <s-paragraph>
-          {t("home.ask.failure.rate_limited.body", {
-            count: view.cooldownSeconds ?? 30,
-          })}
+          {/* A number only when something measured one. Anthropic's
+              `Retry-After` is not read anywhere, so there usually is not one,
+              and inventing "30 seconds" is a claim the app cannot support. */}
+          {view.cooldownSeconds === null
+            ? t("home.ask.failure.rate_limited.body")
+            : t("home.ask.failure.rate_limited.bodySeconds", {
+                count: view.cooldownSeconds,
+              })}
         </s-paragraph>
       </s-banner>
     );

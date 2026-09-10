@@ -60,13 +60,36 @@ model Shop {
   /// checklist's per-type mute list. Kinds, not items: "don't show me this
   /// type again" is about the type.
   briefingMuted String[]
-  installedAt   DateTime  @default(now())
-  uninstalledAt DateTime?
+
+  /// The last time this shop's storefront called our App Proxy.
+  ///
+  /// This is how the setup checklist knows the theme blocks are live without
+  /// the `themes` protected scope: a proxy request can only come from a theme
+  /// that is actually rendering them. Absence proves nothing, and the checklist
+  /// says so rather than claiming the embed is off — see docs/adr/0022.
+  storefrontSeenAt DateTime?
+  /// The merchant saying "I turned it on", for a store whose storefront has not
+  /// called us yet. Their word, recorded as their word.
+  embedConfirmedAt DateTime?
+
+  /// Set when the merchant finishes or dismisses the setup checklist, so a
+  /// completed checklist collapses to a pill and stays collapsed.
+  setupDismissedAt DateTime?
+
+  /// When the last attempt to write a briefing failed, and why.
+  ///
+  /// Without this the home page cannot tell "the agent had nothing to say"
+  /// from "the agent could not be reached", and shows yesterday's briefing as
+  /// though it were today's. Cleared on the next success.
+  briefingFailedAt     DateTime?
+  briefingFailedReason String?
+  installedAt          DateTime  @default(now())
+  uninstalledAt        DateTime?
   /// Set by the Danger zone "pause app" control (Settings, Phase 6.2).
   /// While paused, pricing rules stop applying but nothing is deleted.
-  pausedAt      DateTime?
+  pausedAt             DateTime?
   /// Set when the post-uninstall PII purge has run (GDPR, within 48h).
-  piiPurgedAt   DateTime?
+  piiPurgedAt          DateTime?
 
   // --- Billing (phase 0.3) -----------------------------------------------
   // Shopify is the source of truth; this is a cache so the gate can answer on

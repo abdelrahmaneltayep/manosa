@@ -294,7 +294,8 @@ export interface PoLineView {
   /** What the document asked for, in the buyer's own words. */
   requested: string;
   quantity: number;
-  confidence: "exact" | "likely" | "ambiguous" | "none";
+  /** `unchecked` means Shopify did not answer — not that nothing matched. */
+  confidence: "exact" | "likely" | "ambiguous" | "none" | "unchecked";
   /** The matched product, when there is one. */
   matched: string | null;
   sku: string | null;
@@ -319,6 +320,8 @@ export interface PurchaseOrderView {
   text: string;
   /** Set when a file could not be read as text — the checklist's fallback. */
   fileError: "unreadable" | "too_large" | null;
+  /** The upload ceiling, formatted, so "too big" can say how big. */
+  fileLimit: string;
   failure:
     | "no_key"
     | "timeout"
@@ -331,6 +334,8 @@ export interface PurchaseOrderView {
   /** The buyer this is being priced for. Null until one is chosen. */
   buyer: { id: string; label: string } | null;
   buyers: { id: string; label: string }[];
+  /** More approved buyers exist than the picker lists. Said, not hidden. */
+  buyersTruncated: boolean;
   lines: PoLineView[];
   /** Recomputed from Mannon rules, never from the document. */
   subtotal: string | null;

@@ -74,6 +74,9 @@ function Composer({ view }: { view: PurchaseOrderView }) {
         {view.fileError ? (
           <s-banner tone="warning">
             <s-heading>{t(`po.fileError.${view.fileError}Heading`)}</s-heading>
+            <s-paragraph>
+              {t(`po.fileError.${view.fileError}Body`, { limit: view.fileLimit })}
+            </s-paragraph>
             {/* The checklist's exact fallback: paste the lines as text. */}
             <s-paragraph>{t("po.fileError.paste")}</s-paragraph>
           </s-banner>
@@ -103,6 +106,11 @@ function Composer({ view }: { view: PurchaseOrderView }) {
                 </s-option>
               ))}
             </s-select>
+            {/* The select lists the largest hundred. Saying so beats a
+                merchant scrolling for a buyer who was never in it. */}
+            {view.buyersTruncated ? (
+              <s-text color="subdued">{t("po.buyersTruncated")}</s-text>
+            ) : null}
             <s-text-area
               name="text"
               rows={8}
@@ -140,6 +148,7 @@ const TONE = {
   likely: "warning",
   ambiguous: "warning",
   none: "critical",
+  unchecked: "warning",
 } as const;
 
 function Review({ view }: { view: PurchaseOrderView }) {
@@ -219,6 +228,10 @@ function Line({ line, view }: { line: PoLineView; view: PurchaseOrderView }) {
           <s-text>
             {t("po.matched", { title: line.matched, sku: line.sku ?? "—" })}
           </s-text>
+        ) : line.confidence === "unchecked" ? (
+          // Not "nothing matched": Shopify did not answer, and saying anything
+          // about the merchant's catalogue on that basis would be a guess.
+          <s-text>{t("po.unchecked")}</s-text>
         ) : (
           // Listed, never dropped. The merchant decides what this line was.
           <s-text>{t("po.unmatched")}</s-text>

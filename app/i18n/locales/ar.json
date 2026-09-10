@@ -2236,6 +2236,33 @@
         "open": "افتح",
         "createRule": "أنشئ قاعدة",
         "share": "شارك الرابط"
+      },
+      "clearedHeading": "أنجزتَ قائمة هذا الصباح",
+      "clearedBody": "أنهيت كل ما أثاره الوكيل. استجدّت أمور أخرى منذ كتابتها — سيلتقطها ملخص الغد، وهي في الصفحات أدناه الآن.",
+      "confirmMuteHeading": "إيقاف عرض «{{kind}}»؟",
+      "confirmMuteBody": "لن يثيره الوكيل مجددًا حتى تعيد تفعيله بالأسفل. لا شيء آخر يتغير.",
+      "confirmMuteYes": "أوقف عرضه",
+      "confirmMuteNo": "أبقِ عرضه",
+      "mutedHeading_zero": "لم توقف أي نوع",
+      "mutedHeading_one": "نوع واحد أوقفته",
+      "mutedHeading_two": "نوعان أوقفتهما",
+      "mutedHeading_few": "{{count}} أنواع أوقفتها",
+      "mutedHeading_many": "{{count}} نوعًا أوقفتها",
+      "mutedHeading_other": "{{count}} نوع أوقفته",
+      "unmute": "أظهر «{{kind}}» مجددًا",
+      "mutedKind": {
+        "applications_waiting": "الطلبات المنتظرة",
+        "screening_flagged": "طلبات تستحق نظرة ثانية",
+        "invoices_overdue": "الفواتير المتأخرة",
+        "credit_exceeded": "مشترون تجاوزوا حد الائتمان",
+        "quotes_expiring": "عروض أسعار توشك على الانتهاء",
+        "orders_needing_resync": "طلبات غير متوافقة مع Shopify",
+        "rules_unused": "قواعد لا تطابق شيئًا",
+        "no_active_rules": "لا قواعد تسعير مفعّلة",
+        "buyers_gone_quiet": "مشترون توقفوا عن الطلب",
+        "wholesale_week": "طلبات الجملة هذا الأسبوع",
+        "form_never_opened": "نماذج لم يفتحها أحد",
+        "uploads_unscanned": "ملفات تنتظر الفحص"
       }
     },
     "ask": {
@@ -2265,12 +2292,13 @@
         },
         "rate_limited": {
           "heading": "أسئلة كثيرة في وقت واحد",
-          "body_zero": "حاول مجددًا الآن.",
-          "body_one": "حاول مجددًا بعد ثانية.",
-          "body_two": "حاول مجددًا بعد ثانيتين.",
-          "body_few": "حاول مجددًا بعد {{count}} ثوانٍ.",
-          "body_many": "حاول مجددًا بعد {{count}} ثانية.",
-          "body_other": "حاول مجددًا بعد {{count}} ثانية."
+          "body": "انتظر لحظة ثم اسأل مرة أخرى.",
+          "bodySeconds_zero": "حاول مجددًا الآن.",
+          "bodySeconds_one": "حاول مجددًا بعد ثانية.",
+          "bodySeconds_two": "حاول مجددًا بعد ثانيتين.",
+          "bodySeconds_few": "حاول مجددًا بعد {{count}} ثوانٍ.",
+          "bodySeconds_many": "حاول مجددًا بعد {{count}} ثانية.",
+          "bodySeconds_other": "حاول مجددًا بعد {{count}} ثانية."
         },
         "refused": {
           "heading": "لم أفهم ذلك",
@@ -2311,24 +2339,24 @@
       "list_overdue_few": "{{count}} فواتير متأخرة — {{amount}} مستحقة.",
       "list_overdue_many": "{{count}} فاتورة متأخرة — {{amount}} مستحقة.",
       "list_overdue_other": "{{count}} فاتورة متأخرة — {{amount}} مستحقة.",
-      "list_expiring_quotes_zero": "لا عروض تنتهي خلال {{days}} يومًا.",
-      "list_expiring_quotes_one": "عرض واحد ينتهي خلال {{days}} يومًا.",
-      "list_expiring_quotes_two": "عرضان ينتهيان خلال {{days}} يومًا.",
-      "list_expiring_quotes_few": "{{count}} عروض تنتهي خلال {{days}} يومًا.",
-      "list_expiring_quotes_many": "{{count}} عرضًا ينتهي خلال {{days}} يومًا.",
-      "list_expiring_quotes_other": "{{count}} عرض ينتهي خلال {{days}} يومًا.",
-      "wholesale_sales_zero": "لا مبيعات جملة خلال {{days}} يومًا.",
-      "wholesale_sales_one": "{{amount}} من طلب جملة واحد خلال {{days}} يومًا.",
-      "wholesale_sales_two": "{{amount}} من طلبي جملة خلال {{days}} يومًا.",
-      "wholesale_sales_few": "{{amount}} من {{count}} طلبات جملة خلال {{days}} يومًا.",
-      "wholesale_sales_many": "{{amount}} من {{count}} طلب جملة خلال {{days}} يومًا.",
-      "wholesale_sales_other": "{{amount}} من {{count}} طلب جملة خلال {{days}} يومًا.",
-      "list_quiet_buyers_zero": "لا مشترين توقفوا عن الطلب خلال {{days}} يومًا.",
-      "list_quiet_buyers_one": "مشترٍ واحد لم يطلب منذ {{days}} يومًا.",
-      "list_quiet_buyers_two": "مشتريان لم يطلبا منذ {{days}} يومًا.",
-      "list_quiet_buyers_few": "{{count}} مشترين لم يطلبوا منذ {{days}} يومًا.",
-      "list_quiet_buyers_many": "{{count}} مشتريًا لم يطلب منذ {{days}} يومًا.",
-      "list_quiet_buyers_other": "{{count}} مشترٍ لم يطلب منذ {{days}} يومًا.",
+      "list_expiring_quotes_zero": "لا عروض تنتهي خلال {{window}}.",
+      "list_expiring_quotes_one": "عرض واحد ينتهي خلال {{window}}.",
+      "list_expiring_quotes_two": "عرضان ينتهيان خلال {{window}}.",
+      "list_expiring_quotes_few": "{{count}} عروض تنتهي خلال {{window}}.",
+      "list_expiring_quotes_many": "{{count}} عرضًا ينتهي خلال {{window}}.",
+      "list_expiring_quotes_other": "{{count}} عرض ينتهي خلال {{window}}.",
+      "wholesale_sales_zero": "لا مبيعات جملة خلال {{window}}.",
+      "wholesale_sales_one": "{{amount}} من طلب جملة واحد خلال {{window}}.",
+      "wholesale_sales_two": "{{amount}} من طلبي جملة خلال {{window}}.",
+      "wholesale_sales_few": "{{amount}} من {{count}} طلبات جملة خلال {{window}}.",
+      "wholesale_sales_many": "{{amount}} من {{count}} طلب جملة خلال {{window}}.",
+      "wholesale_sales_other": "{{amount}} من {{count}} طلب جملة خلال {{window}}.",
+      "list_quiet_buyers_zero": "لا مشترين توقفوا عن الطلب خلال {{window}}.",
+      "list_quiet_buyers_one": "مشترٍ واحد لم يطلب منذ {{window}}.",
+      "list_quiet_buyers_two": "مشتريان لم يطلبا منذ {{window}}.",
+      "list_quiet_buyers_few": "{{count}} مشترين لم يطلبوا منذ {{window}}.",
+      "list_quiet_buyers_many": "{{count}} مشتريًا لم يطلب منذ {{window}}.",
+      "list_quiet_buyers_other": "{{count}} مشترٍ لم يطلب منذ {{window}}.",
       "find_rule_zero": "لا قواعد تطابق «{{search}}».",
       "find_rule_one": "قاعدة واحدة تطابق «{{search}}».",
       "find_rule_two": "قاعدتان تطابقان «{{search}}».",
@@ -2343,7 +2371,13 @@
         "quote": "هذا عرض سعر — من هنا تكتب مسودته.",
         "csv_import": "هذا استيراد — من هنا ترفع الملف.",
         "customer_group": "هذا تغيير في مجموعات العملاء."
-      }
+      },
+      "window_zero": "{{count}} يوم",
+      "window_one": "يوم واحد",
+      "window_two": "يومين",
+      "window_few": "{{count}} أيام",
+      "window_many": "{{count}} يومًا",
+      "window_other": "{{count}} يوم"
     }
   },
   "po": {
@@ -2383,7 +2417,8 @@
       "exact": "رمز مطابق",
       "likely": "تطابق واحد",
       "ambiguous": "عدة تطابقات",
-      "none": "لا تطابق"
+      "none": "لا تطابق",
+      "unchecked": "تعذّر الفحص"
     },
     "locked": {
       "no_keyHeading": "✦ الميزة متوقفة",
@@ -2394,7 +2429,9 @@
     "fileError": {
       "unreadableHeading": "تعذّرت قراءة هذا الملف",
       "too_largeHeading": "هذا الملف كبير جدًا",
-      "paste": "الصق السطور كنص بدلًا من ذلك — هذا ينجح دائمًا."
+      "paste": "الصق السطور كنص بدلًا من ذلك — هذا ينجح دائمًا.",
+      "unreadableBody": "يقرأ مانون الملفات النصية — ‏.csv و‏.txt و‏.eml. أما ملفات PDF وجداول البيانات فتصل كبايتات لا يمكن فهمها.",
+      "too_largeBody": "يمكن رفع ملفات حتى {{limit}}. هذا الملف أكبر."
     },
     "failure": {
       "no_key": {
@@ -2425,6 +2462,8 @@
         "heading": "لا شيء لقراءته",
         "body": "الصق أمر الشراء، أو ارفع ملفًا يحتوي السطور."
       }
-    }
+    },
+    "unchecked": "لم يستجب Shopify عند البحث عن هذا السطر، فلا يمكننا تحديد ما إذا كان لديك. أعد المحاولة بعد قليل.",
+    "buyersTruncated": "تُعرض أكبر 100 مشترٍ لديك. لتسعير أي مشترٍ آخر، افتحه من العملاء وابدأ أمر الشراء من هناك."
   }
 }

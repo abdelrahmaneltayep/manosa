@@ -1,5 +1,7 @@
 import {
   formatMoney,
+  money,
+  multiplyMoney,
   parseMoney,
   subtractMoney,
   type Money,
@@ -9,7 +11,7 @@ import type { PoLine } from "~/lib/ai/prompts/purchase-order.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { activeEngineRules } from "~/lib/pricing/rules.server";
 import {
-  searchVariants,
+  searchVariantsResult,
   VARIANT_SEARCH_LIMIT,
   type VariantMatch,
 } from "~/lib/quotes/admin-graphql.server";
@@ -30,7 +32,7 @@ import { priceLine, type BuyerForPricing } from "~/lib/quotes/pricing.server";
  */
 
 /** A line's match, and how sure the catalogue is about it. */
-export type MatchConfidence = "exact" | "likely" | "ambiguous" | "none";
+export type MatchConfidence = "exact" | "likely" | "ambiguous" | "none" | "unchecked";
 
 export interface MatchedPoLine {
   /** Position in the document, so the screen can point back at it. */
@@ -78,6 +80,14 @@ export interface MatchOptions {
   buyer: BuyerForPricing;
   currencyCode: string;
   now: Date;
+  /**
+   * The merchant's answers to ambiguous lines: line index → variant id.
+   *
+   * Applied here, not in the view. Applying it only to what was rendered meant
+   * a line the merchant had resolved was shown as an exact match and then left
+   * off the order — the screen said one thing and the draft order did another.
+   */
+  chosen?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -99,19 +109,47 @@ export async function matchPurchaseOrder(
 
   for (const [index, requested] of poLines.entries()) {
     const term = requested.sku ?? requested.description ?? "";
-    const matches = await searchVariants(admin, term, VARIANT_SEARCH_LIMIT);
+
+    // A throttle or an outage answers with the same empty list as "nothing
+    // matched", and printing "nothing in your catalogue matched this line"
+    // would be a claim about the merchant's catalogue we have no basis for.
+    const search = await searchVariantsResult(admin, term, VARIANT_SEARCH_LIMIT);
+    const matches = search.matches;
+
+    if (!search.ok) {
+      lines.push({
+        index,
+        requested,
+        confidence: "unchecked",
+        variant: null,
+        candidates: [],
+        unitPrice: null,
+        lineTotal: null,
+        statedPrice: readStated(requested.statedPrice, options.currencyCode),
+        priceDelta: null,
+        ruleSummary: null,
+      });
+      continue;
+    }
+
+    // What the merchant picked wins over anything the catalogue guessed.
+    const picked = options.chosen?.[String(index)]
+      ? (matches.find((match) => match.id === options.chosen?.[String(index)]) ?? null)
+      : null;
 
     const exact = requested.sku ? exactSku(requested.sku, matches) : null;
     const only = matches.length === 1 ? matches[0]! : null;
-    const chosen = exact ?? only;
+    const chosen = picked ?? exact ?? only;
 
-    const confidence: MatchConfidence = exact
+    const confidence: MatchConfidence = picked
       ? "exact"
-      : only
-        ? "likely"
-        : matches.length > 1
-          ? "ambiguous"
-          : "none";
+      : exact
+        ? "exact"
+        : only
+          ? "likely"
+          : matches.length > 1
+            ? "ambiguous"
+            : "none";
 
     const stated = readStated(requested.statedPrice, options.currencyCode);
 
@@ -164,8 +202,10 @@ export async function matchPurchaseOrder(
       { now: options.now, currencyCode: options.currencyCode },
     );
 
-    const lineTotal = priced.unitPrice.amount * requested.quantity;
-    subtotal += lineTotal;
+    // Through the engine, which refuses a fractional or unsafe quantity — the
+    // guard that a hand-built `{ amount, currencyCode }` walks straight past.
+    const lineTotal = multiplyMoney(priced.unitPrice, requested.quantity);
+    subtotal += lineTotal.amount;
 
     lines.push({
       index,
@@ -174,7 +214,7 @@ export async function matchPurchaseOrder(
       variant: chosen,
       candidates: matches,
       unitPrice: priced.unitPrice,
-      lineTotal: { amount: lineTotal, currencyCode: options.currencyCode },
+      lineTotal,
       statedPrice: stated,
       // Shown, never applied. "PO says $4.00, contract price is $4.10".
       priceDelta: stated ? subtractMoney(priced.unitPrice, stated) : null,
@@ -184,7 +224,7 @@ export async function matchPurchaseOrder(
 
   return {
     lines,
-    subtotal: { amount: subtotal, currencyCode: options.currencyCode },
+    subtotal: money(subtotal, options.currencyCode),
     currencyCode: options.currencyCode,
     needsAttention: lines.filter((line) => line.confidence !== "exact").length,
   };

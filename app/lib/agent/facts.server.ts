@@ -63,6 +63,8 @@ const UNUSED_DAYS = 30;
 const QUIET_DAYS = 60;
 /** A quote expiring within this window is still worth chasing. */
 const EXPIRING_DAYS = 3;
+/** The most overdue invoices one briefing reads. Bounded, on the home path. */
+export const OVERDUE_SCAN_LIMIT = 500;
 
 /**
  * Everything true about this shop, in one pass.
@@ -81,6 +83,7 @@ export async function briefingFacts(now = new Date()): Promise<AgentFact[]> {
   const [
     applicationsWaiting,
     screeningFlagged,
+    withCredit,
     overdue,
     quotesExpiring,
     needingResync,
@@ -94,13 +97,41 @@ export async function briefingFacts(now = new Date()): Promise<AgentFact[]> {
   ] = await Promise.all([
     db.formSubmission.count({ where: { status: "PENDING" } }),
     db.formSubmission.count({ where: { status: "PENDING", screening: "LOOK" } }),
+    // Buyers over the credit ceiling their group or their own terms set. The
+    // ledger already computes this the same way; checklist §5 asks that the
+    // agent and checkout say so with the same number.
+    db.customer.findMany({
+      where: {
+        status: "APPROVED",
+        deletedInShopifyAt: null,
+        OR: [{ creditLimit: { not: null } }, { group: { creditLimit: { not: null } } }],
+      },
+      select: {
+        id: true,
+        company: true,
+        email: true,
+        creditLimit: true,
+        customerId: true,
+        group: { select: { creditLimit: true } },
+      },
+      take: 200,
+    }),
     db.order.findMany({
       where: {
         paidAt: null,
         cancelledAt: null,
         netTermsDueAt: { lt: now },
       },
-      select: { totalPrice: true, amountPaid: true, currencyCode: true },
+      select: {
+        totalPrice: true,
+        amountPaid: true,
+        currencyCode: true,
+        customerId: true,
+      },
+      // Bounded. A shop with ten thousand overdue invoices has a problem this
+      // card cannot express, and loading them all to say "10,000" is a page
+      // load every morning for a number that is wrong either way.
+      take: OVERDUE_SCAN_LIMIT,
     }),
     db.quote.count({
       where: {
@@ -203,6 +234,30 @@ export async function briefingFacts(now = new Date()): Promise<AgentFact[]> {
   add("invoices_overdue", overdue.length, {
     href: "/app/orders/terms",
     amount: owed > 0 ? money(owed, currencyCode) : null,
+  });
+
+  // Over their ceiling: what they still owe against the limit that applies to
+  // them. Their own limit replaces their group's; it never merges with it.
+  const owedByCustomer = new Map<string, number>();
+  for (const order of overdue) {
+    if (!order.customerId) continue;
+    if (order.currencyCode !== currencyCode) continue;
+    owedByCustomer.set(
+      order.customerId,
+      (owedByCustomer.get(order.customerId) ?? 0) +
+        Math.max(0, order.totalPrice - order.amountPaid),
+    );
+  }
+
+  const overLimit = withCredit.filter((customer) => {
+    const limit = customer.creditLimit ?? customer.group?.creditLimit ?? null;
+    if (limit === null) return false;
+    return (owedByCustomer.get(customer.customerId) ?? 0) > limit;
+  });
+
+  add("credit_exceeded", overLimit.length, {
+    href: "/app/orders/terms",
+    subject: overLimit[0]?.company ?? overLimit[0]?.email ?? null,
   });
 
   add("quotes_expiring", quotesExpiring, { href: "/app/orders/quotes" });

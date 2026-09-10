@@ -1807,6 +1807,29 @@
         "open": "Open",
         "createRule": "Create a rule",
         "share": "Share the link"
+      },
+      "clearedHeading": "This morning's list is done",
+      "clearedBody": "You have cleared everything the agent raised. Other things have come up since it was written — tomorrow's briefing will pick them up, and the pages below have them now.",
+      "confirmMuteHeading": "Stop showing “{{kind}}”?",
+      "confirmMuteBody": "The agent will not raise it again until you turn it back on below. Nothing else changes.",
+      "confirmMuteYes": "Stop showing it",
+      "confirmMuteNo": "Keep showing it",
+      "mutedHeading_one": "{{count}} type you have muted",
+      "mutedHeading_other": "{{count}} types you have muted",
+      "unmute": "Show “{{kind}}” again",
+      "mutedKind": {
+        "applications_waiting": "Applications waiting",
+        "screening_flagged": "Applications worth a second look",
+        "invoices_overdue": "Overdue invoices",
+        "credit_exceeded": "Buyers over their credit limit",
+        "quotes_expiring": "Quotes about to expire",
+        "orders_needing_resync": "Orders out of step with Shopify",
+        "rules_unused": "Rules nothing matches",
+        "no_active_rules": "No live pricing rules",
+        "buyers_gone_quiet": "Buyers who have gone quiet",
+        "wholesale_week": "This week's wholesale orders",
+        "form_never_opened": "Forms nobody has opened",
+        "uploads_unscanned": "Files waiting to be scanned"
       }
     },
     "ask": {
@@ -1836,8 +1859,9 @@
         },
         "rate_limited": {
           "heading": "Too many questions just now",
-          "body_one": "Try again in {{count}} second.",
-          "body_other": "Try again in {{count}} seconds."
+          "body": "Wait a moment and ask again.",
+          "bodySeconds_one": "Try again in {{count}} second.",
+          "bodySeconds_other": "Try again in {{count}} seconds."
         },
         "refused": {
           "heading": "I didn't catch that",
@@ -1866,12 +1890,12 @@
       "count_applications_other": "{{count}} applications are waiting for you.",
       "list_overdue_one": "{{count}} invoice is overdue — {{amount}} outstanding.",
       "list_overdue_other": "{{count}} invoices are overdue — {{amount}} outstanding.",
-      "list_expiring_quotes_one": "{{count}} quote expires in the next {{days}} days.",
-      "list_expiring_quotes_other": "{{count}} quotes expire in the next {{days}} days.",
-      "wholesale_sales_one": "{{amount}} across {{count}} wholesale order in the last {{days}} days.",
-      "wholesale_sales_other": "{{amount}} across {{count}} wholesale orders in the last {{days}} days.",
-      "list_quiet_buyers_one": "{{count}} buyer has not ordered in {{days}} days.",
-      "list_quiet_buyers_other": "{{count}} buyers have not ordered in {{days}} days.",
+      "list_expiring_quotes_one": "{{count}} quote expires in the next {{window}}.",
+      "list_expiring_quotes_other": "{{count}} quotes expire in the next {{window}}.",
+      "wholesale_sales_one": "{{amount}} across {{count}} wholesale order in the last {{window}}.",
+      "wholesale_sales_other": "{{amount}} across {{count}} wholesale orders in the last {{window}}.",
+      "list_quiet_buyers_one": "{{count}} buyer has not ordered in {{window}}.",
+      "list_quiet_buyers_other": "{{count}} buyers have not ordered in {{window}}.",
       "find_rule_one": "{{count}} rule matches “{{search}}”.",
       "find_rule_other": "{{count}} rules match “{{search}}”.",
       "explain_price": "Prices depend on who is buying — open the price explainer and pick the buyer for {{sku}} at {{quantity}}.",
@@ -1882,7 +1906,9 @@
         "quote": "That's a quote — here's where you draft one.",
         "csv_import": "That's an import — here's where you upload the file.",
         "customer_group": "That's a change to your customer groups."
-      }
+      },
+      "window_one": "{{count}} day",
+      "window_other": "{{count}} days"
     }
   },
   "po": {
@@ -1918,7 +1944,8 @@
       "exact": "Exact SKU",
       "likely": "One match",
       "ambiguous": "Several matches",
-      "none": "No match"
+      "none": "No match",
+      "unchecked": "Could not check"
     },
     "locked": {
       "no_keyHeading": "✦ PO-to-order is off",
@@ -1929,7 +1956,9 @@
     "fileError": {
       "unreadableHeading": "Couldn't read this file",
       "too_largeHeading": "That file is too big",
-      "paste": "Paste the lines as text instead — that always works."
+      "paste": "Paste the lines as text instead — that always works.",
+      "unreadableBody": "Mannon reads text files — .csv, .txt and .eml. A PDF or a spreadsheet arrives as bytes it cannot make sense of.",
+      "too_largeBody": "Files up to {{limit}} can be uploaded. This one is larger."
     },
     "failure": {
       "no_key": {
@@ -1960,6 +1989,8 @@
         "heading": "Nothing to read",
         "body": "Paste the order, or upload a file with the lines in it."
       }
-    }
+    },
+    "unchecked": "Shopify did not answer when we looked this one up, so we cannot say whether you stock it. Try again in a moment.",
+    "buyersTruncated": "Showing your 100 largest buyers. To price for anyone else, open them in Customers and start the purchase order from there."
   }
 }

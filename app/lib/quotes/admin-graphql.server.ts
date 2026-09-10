@@ -141,13 +141,35 @@ export const VARIANT_SEARCH_LIMIT = 10;
  * than an error page, and the search box is the one part of this screen a
  * merchant can simply try again.
  */
+/**
+ * A search, and whether it actually ran.
+ *
+ * "No results" and "Shopify did not answer" are the same empty array and very
+ * different sentences: one is a fact about the merchant's catalogue, the other
+ * is a fact about us. PO-to-order prints one of them next to a line, so it
+ * needs to know which.
+ */
+export interface VariantSearch {
+  ok: boolean;
+  matches: VariantMatch[];
+}
+
+/** Forgiving: an empty list on any failure. The quote builder's own behaviour. */
 export async function searchVariants(
   admin: AdminGraphql,
   query: string,
   first: number = VARIANT_SEARCH_LIMIT,
 ): Promise<VariantMatch[]> {
+  return (await searchVariantsResult(admin, query, first)).matches;
+}
+
+export async function searchVariantsResult(
+  admin: AdminGraphql,
+  query: string,
+  first: number = VARIANT_SEARCH_LIMIT,
+): Promise<VariantSearch> {
   const term = query.trim();
-  if (!term) return [];
+  if (!term) return { ok: true, matches: [] };
 
   try {
     const response = await admin.graphql(VARIANT_SEARCH, {
@@ -168,22 +190,25 @@ export async function searchVariants(
       console.warn(
         `[mannon] variant search failed: ${body.errors.map((e) => e.message).join("; ")}`,
       );
-      return [];
+      return { ok: false, matches: [] };
     }
 
-    return (body.data?.productVariants?.nodes ?? []).map((node) => ({
-      id: node.id,
-      title: [node.product?.title, node.title].filter(Boolean).join(" — ") || node.id,
-      sku: node.sku?.trim() || null,
-      price: node.price ?? "0",
-      productId: node.product?.id ?? node.id,
-    }));
+    return {
+      ok: true,
+      matches: (body.data?.productVariants?.nodes ?? []).map((node) => ({
+        id: node.id,
+        title: [node.product?.title, node.title].filter(Boolean).join(" — ") || node.id,
+        sku: node.sku?.trim() || null,
+        price: node.price ?? "0",
+        productId: node.product?.id ?? node.id,
+      })),
+    };
   } catch (error) {
     console.warn(
       `[mannon] variant search failed: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
-    return [];
+    return { ok: false, matches: [] };
   }
 }

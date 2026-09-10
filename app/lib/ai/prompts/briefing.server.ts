@@ -84,8 +84,19 @@ export function briefingUser(
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** Digits in a reason mean the model supplied a figure. It may not. */
-const HAS_NUMBER = /\d/;
+/**
+ * Digits in a reason mean the model supplied a figure. It may not.
+ *
+ * `/\d/` is ASCII-only, and the prompt is handed the merchant's locale — so an
+ * Arabic-language shop is precisely where a model writes ٦ and walks past the
+ * one rule this feature rests on. Arabic-Indic and Extended Arabic-Indic digits
+ * are here for that reason.
+ *
+ * Spelled-out numerals still get through. That is a real limit, and the reason
+ * the figure beside the line is ours: a sentence saying "six" next to our own
+ * "6 applications" is redundant, not wrong.
+ */
+const HAS_NUMBER = /[\d\u0660-\u0669\u06F0-\u06F9]/u;
 
 /**
  * Narrow the answer against the facts it was given.

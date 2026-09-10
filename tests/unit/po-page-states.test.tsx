@@ -52,9 +52,11 @@ const view = (overrides: Partial<PurchaseOrderView> = {}): PurchaseOrderView => 
   locked: null,
   text: "",
   fileError: null,
+  fileLimit: "10 MB",
   failure: null,
   buyer: { id: "c1", label: "Acme Ltd" },
   buyers: [{ id: "c1", label: "Acme Ltd" }],
+  buyersTruncated: false,
   lines: [],
   subtotal: null,
   reference: null,
@@ -94,7 +96,24 @@ describe("the composer", () => {
     expect(html).toContain("Couldn&#x27;t read this file");
     // The checklist's exact fallback.
     expect(html).toContain("Paste the lines as text instead");
+    expect(html).toContain("Mannon reads text files");
     capture("22-po-unreadable-file", html);
+  });
+
+  it("says how big is too big", () => {
+    const html = render(<PurchaseOrderPage view={view({ fileError: "too_large" })} />);
+
+    expect(html).toContain("That file is too big");
+    // "Too big" without a number is not something a merchant can act on.
+    expect(html).toContain("Files up to 10 MB can be uploaded");
+    capture("29-po-file-too-large", html);
+  });
+
+  it("says the picker is not everybody, when it is not", () => {
+    const html = render(<PurchaseOrderPage view={view({ buyersTruncated: true })} />);
+
+    expect(html).toContain("Showing your 100 largest buyers");
+    capture("30-po-buyers-truncated", html);
   });
 
   it("says what happened when the model did not answer", () => {

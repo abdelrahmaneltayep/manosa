@@ -104,6 +104,9 @@ export function proxyContext(request: Request): ProxyContext {
   };
 }
 
+/** How often the "your storefront called us" stamp is refreshed. */
+export const STOREFRONT_SEEN_INTERVAL_MS = 60 * 60 * 1000;
+
 /**
  * Verify, open the shop's scope, and run.
  *
@@ -126,6 +129,19 @@ export async function withProxy<T>(
     // The app being paused is the merchant saying "stop applying my rules".
     // The blocks go quiet rather than pricing from a stale idea of them.
     if (record.pausedAt) throw new Response("App paused", { status: 503 });
+
+    // A proxy request can only come from a theme that is rendering our blocks,
+    // so this is the one honest signal that the app embed is live — no
+    // `themes` scope, no guess. Stamped at most hourly: the home page wants to
+    // know *whether*, not *how often*, and a write per storefront request is a
+    // cost with no reader.
+    const seen = record.storefrontSeenAt;
+    if (!seen || Date.now() - seen.getTime() > STOREFRONT_SEEN_INTERVAL_MS) {
+      await db.shop.update({
+        where: { shop: context.shop },
+        data: { storefrontSeenAt: new Date() },
+      });
+    }
 
     return handler(context);
   });

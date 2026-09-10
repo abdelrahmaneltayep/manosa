@@ -7,14 +7,17 @@ import type { PoLineView, PurchaseOrderView } from "~/components/orders/types";
 import { db } from "~/db.server";
 import { detectLocale } from "~/i18n.server";
 import { isAiAvailable } from "~/lib/ai/client.server";
-import {
-  MAX_PO_CHARS,
-  readPurchaseOrder,
-  type PoLine,
-} from "~/lib/ai/prompts/purchase-order.server";
+import { MAX_PO_CHARS, readPurchaseOrder } from "~/lib/ai/prompts/purchase-order.server";
 import { recordAudit } from "~/lib/audit/record.server";
+import { MAX_FILE_BYTES } from "~/lib/pricing/csv/import.server";
 import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { formatCurrency } from "~/lib/money";
+import {
+  decode,
+  encode,
+  isReadableText,
+  type PoEnvelope,
+} from "~/lib/orders/po-envelope.server";
 import {
   matchPurchaseOrder,
   orderableLines,
@@ -36,65 +39,59 @@ import { withAdmin } from "~/shopify.server";
  * wants to see.
  */
 
-/** A pasted or uploaded document bigger than this is not a purchase order. */
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
+/** How many buyers the picker lists. A `s-select` is not a paginated list. */
+const BUYER_OPTIONS = 100;
 
-interface PoEnvelope {
-  buyerId: string | null;
-  reference: string | null;
-  notes: string | null;
-  lines: PoLine[];
-  /** Merchant answers to ambiguous lines: line index → variant id. */
-  chosen: Record<string, string>;
-}
+const BUYER_FIELDS = {
+  id: true,
+  customerId: true,
+  company: true,
+  email: true,
+  tags: true,
+  groupId: true,
+} as const;
 
-const encode = (envelope: PoEnvelope) => JSON.stringify(envelope);
+/**
+ * The picker's options — and always the buyer this PO is for.
+ *
+ * The largest hundred fit in a select; buyer 101 does not. Resolving the
+ * chosen buyer out of that same capped list is what made a shop with more
+ * buyers than the cap price a purchase order as though nobody was buying it:
+ * `find` returned nothing and the engine was handed an anonymous buyer.
+ * So the selected one is fetched by id whenever the list does not hold it,
+ * and the page says the list is not everybody.
+ */
+async function buyers(selectedId: string | null) {
+  const where = { status: "APPROVED" as const, deletedInShopifyAt: null };
+  const [total, rows] = await Promise.all([
+    db.customer.count({ where }),
+    db.customer.findMany({
+      where,
+      orderBy: { lifetimeSpend: "desc" },
+      take: BUYER_OPTIONS,
+      select: BUYER_FIELDS,
+    }),
+  ]);
 
-function decode(raw: string): PoEnvelope | null {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return null;
-    const envelope = parsed as Partial<PoEnvelope>;
-    if (!Array.isArray(envelope.lines) || envelope.lines.length === 0) return null;
-
-    const chosen: Record<string, string> = {};
-    for (const [index, id] of Object.entries(envelope.chosen ?? {})) {
-      if (typeof id === "string" && id !== "") chosen[index] = id;
-    }
-
-    return {
-      buyerId: typeof envelope.buyerId === "string" ? envelope.buyerId : null,
-      reference: typeof envelope.reference === "string" ? envelope.reference : null,
-      notes: typeof envelope.notes === "string" ? envelope.notes : null,
-      lines: envelope.lines as PoLine[],
-      chosen,
-    };
-  } catch {
-    return null;
+  if (selectedId && !rows.some((row) => row.id === selectedId)) {
+    const selected = await db.customer.findFirst({
+      where: { ...where, id: selectedId },
+      select: BUYER_FIELDS,
+    });
+    if (selected) rows.unshift(selected);
   }
+
+  return { rows, truncated: total > BUYER_OPTIONS };
 }
 
-async function buyers() {
-  return db.customer.findMany({
-    where: { status: "APPROVED", deletedInShopifyAt: null },
-    orderBy: { lifetimeSpend: "desc" },
-    take: 100,
-    select: {
-      id: true,
-      customerId: true,
-      company: true,
-      email: true,
-      tags: true,
-      groupId: true,
-    },
-  });
-}
-
-async function baseView(): Promise<PurchaseOrderView> {
+async function baseView(
+  selectedId: string | null,
+  locale: string,
+): Promise<PurchaseOrderView> {
   const entitlements = await loadEntitlements();
   const entitled = hasFeature(entitlements, "po_to_order");
   const keyed = isAiAvailable();
-  const rows = await buyers();
+  const { rows, truncated } = await buyers(selectedId);
 
   return {
     available: entitled && keyed,
@@ -107,6 +104,14 @@ async function baseView(): Promise<PurchaseOrderView> {
       id: row.id,
       label: row.company ?? row.email ?? row.id,
     })),
+    buyersTruncated: truncated,
+    // Stated, not implied: an error that says "too big" without saying how
+    // big is one the merchant cannot act on.
+    fileLimit: new Intl.NumberFormat(locale, {
+      style: "unit",
+      unit: "megabyte",
+      unitDisplay: "short",
+    }).format(Math.floor(MAX_FILE_BYTES / (1024 * 1024))),
     lines: [],
     subtotal: null,
     reference: null,
@@ -145,7 +150,15 @@ function lineViews(matched: MatchedPo, locale: string): PoLineView[] {
 }
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
-  withAdmin(request, async () => json({ view: await baseView() }));
+  withAdmin(request, async () => {
+    // `?buyerId=` is how a buyer outside the picker's hundred is reached: the
+    // customers list paginates, and its "raise a purchase order" link lands
+    // here with that buyer already selected.
+    const selected = new URL(request.url).searchParams.get("buyerId");
+    return json({
+      view: await baseView(selected || null, detectLocale(request)),
+    });
+  });
 
 export const action = ({ request }: ActionFunctionArgs) =>
   withAdmin(request, async ({ admin, session }) => {
@@ -153,7 +166,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
     const form = await request.formData();
     const intent = (form.get("intent") ?? "").toString();
     const locale = detectLocale(request);
-    const base = await baseView();
+    const base = await baseView((form.get("buyerId") ?? "").toString() || null, locale);
 
     // Gated server-side. A plan that does not include PO-to-order, or a shop
     // with no key, cannot reach the model by posting to this route directly.
@@ -167,11 +180,13 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     /** Match, price and render one envelope. */
     const review = async (envelope: PoEnvelope): Promise<PurchaseOrderView> => {
-      const rows = await buyers();
+      const { rows } = await buyers(envelope.buyerId);
       const buyer = envelope.buyerId
         ? (rows.find((row) => row.id === envelope.buyerId) ?? null)
         : null;
 
+      // `chosen` goes into the match, not over the top of it: the merchant's
+      // pick has to reach the price and the order, not just the screen.
       const matched = await matchPurchaseOrder(admin, envelope.lines, {
         buyer: {
           customerId: buyer?.customerId ?? null,
@@ -180,30 +195,20 @@ export const action = ({ request }: ActionFunctionArgs) =>
         },
         currencyCode,
         now,
+        chosen: envelope.chosen,
       });
 
-      // The merchant's answers to the ambiguous lines, applied after matching
-      // so what is shown is what they actually chose.
-      const lines = lineViews(matched, locale).map((line) => {
-        const choice = envelope.chosen[String(line.index)];
-        if (!choice) return line;
-
-        const picked = matched.lines[line.index]?.candidates.find(
-          (candidate) => candidate.id === choice,
-        );
-        return picked
-          ? {
-              ...line,
-              confidence: "exact" as const,
-              matched: picked.title,
-              sku: picked.sku,
-              candidates: [],
-            }
-          : line;
-      });
+      const lines = lineViews(matched, locale);
 
       return {
         ...base,
+        // Rebuilt here, not taken from `base`: the buyer this PO is for has to
+        // be one of the options, whether or not they are in the largest
+        // hundred.
+        buyers: rows.map((row) => ({
+          id: row.id,
+          label: row.company ?? row.email ?? row.id,
+        })),
         buyer: buyer
           ? { id: buyer.id, label: buyer.company ?? buyer.email ?? buyer.id }
           : null,
@@ -261,6 +266,9 @@ export const action = ({ request }: ActionFunctionArgs) =>
         notes: read.value.notes,
         lines: read.value.lines,
         chosen: {},
+        model: read.model,
+        promptVersion: read.promptVersion,
+        requestId: read.requestId,
       };
 
       return json({ view: { ...(await review(envelope)), text } });
@@ -291,13 +299,14 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     if (intent !== "create") throw new Response("Unknown intent", { status: 400 });
 
-    const rows = await buyers();
+    const { rows } = await buyers(envelope.buyerId);
     const buyer = envelope.buyerId
       ? (rows.find((row) => row.id === envelope.buyerId) ?? null)
       : null;
 
     // Re-matched and re-priced inside this request. The prices that go on the
-    // order are this moment's, not the ones the page was showing.
+    // order are this moment's, not the ones the page was showing — and the
+    // merchant's answers to the ambiguous lines come with them.
     const matched = await matchPurchaseOrder(admin, envelope.lines, {
       buyer: {
         customerId: buyer?.customerId ?? null,
@@ -306,6 +315,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
       },
       currencyCode,
       now,
+      chosen: envelope.chosen,
     });
 
     const lines = orderableLines(matched);
@@ -334,6 +344,12 @@ export const action = ({ request }: ActionFunctionArgs) =>
         lines: lines.length,
         unmatched: matched.lines.length - lines.length,
       },
+      // Which model read the document, so the order can be joined to its run.
+      ai: {
+        model: envelope.model,
+        promptVersion: envelope.promptVersion,
+        requestId: envelope.requestId,
+      },
       // Live commercial data, created on Claude's reading of a document.
       aiAssisted: true,
       approval: { byId: session.id },
@@ -346,27 +362,6 @@ export const action = ({ request }: ActionFunctionArgs) =>
       },
     });
   });
-
-/**
- * Is this text, or is it the bytes of a PDF?
- *
- * A cheap, honest test. A document we cannot read as text gets the checklist's
- * "Couldn't read this — paste the lines as text?" rather than twenty seconds of
- * a model staring at binary.
- */
-export function isReadableText(content: string): boolean {
-  if (content.startsWith("%PDF")) return false;
-  // A .xlsx or .docx is a zip.
-  if (content.startsWith("PK")) return false;
-
-  const sample = content.slice(0, 2_000);
-  const printable = [...sample].filter((char) => {
-    const code = char.charCodeAt(0);
-    return code >= 32 || code === 9 || code === 10 || code === 13;
-  }).length;
-
-  return sample.length === 0 || printable / sample.length > 0.95;
-}
 
 export default function PurchaseOrder() {
   const actionData = useActionData<typeof action>();

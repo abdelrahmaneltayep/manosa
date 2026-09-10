@@ -36,11 +36,19 @@ export async function latestBriefing(): Promise<MerchantBriefing | null> {
   return db.merchantBriefing.findFirst({ orderBy: { generatedAt: "desc" } });
 }
 
+/**
+ * The kinds this shop has silenced.
+ *
+ * Deduplicated on the way out. The column is appended to with `push`, which is
+ * atomic and so never loses a concurrent mute — but two tabs muting the same
+ * kind at once both pass the `includes` check below and both append. Reading
+ * unique is cheaper than locking the row for a list of at most twelve strings.
+ */
 export async function mutedKinds(): Promise<string[]> {
   const shop = await db.shop.findUnique({
     where: { shop: shopScope.require("briefing mutes") },
   });
-  return shop?.briefingMuted ?? [];
+  return [...new Set(shop?.briefingMuted ?? [])];
 }
 
 /** Stop showing this kind. One click from the item itself. */
@@ -69,14 +77,29 @@ export async function muteKind(kind: string, actorId: string | null): Promise<vo
   });
 }
 
-export async function unmuteKind(kind: string): Promise<void> {
+/** Start showing this kind again. Audited, like the mute it undoes. */
+export async function unmuteKind(kind: string, actorId: string | null): Promise<void> {
+  if (!isFactKind(kind)) throw new Response("Unknown briefing item", { status: 400 });
+
   const shop = shopScope.require("unmute briefing item");
   const current = await db.shop.findUnique({ where: { shop } });
   if (!current) return;
+  if (!current.briefingMuted.includes(kind)) return;
 
-  await db.shop.update({
-    where: { shop },
-    data: { briefingMuted: current.briefingMuted.filter((one) => one !== kind) },
+  await db.$transaction(async (tx) => {
+    await tx.shop.update({
+      where: { shop },
+      data: { briefingMuted: current.briefingMuted.filter((one) => one !== kind) },
+    });
+    await recordAudit(
+      {
+        actor: { type: "STAFF", id: actorId },
+        action: "briefing.unmuted",
+        summary: `Let the Merchant Agent raise “${kind}” again.`,
+        metadata: { kind },
+      },
+      tx,
+    );
   });
 }
 
@@ -111,8 +134,13 @@ export async function generateBriefing(
   const result = await draftBriefing(facts, { locale: options.locale, muted }, deps);
 
   if (!result.ok) {
-    // Nothing is written. The page falls back to whatever was there before,
-    // and says the briefing is unavailable — checklist §1.
+    // Nothing is written, and the failure is *recorded*. Without this the home
+    // page cannot tell "nothing to say" from "could not be reached", and shows
+    // yesterday's briefing as though it were today's — checklist §1.
+    await db.shop.update({
+      where: { shop: shopScope.require("briefing failure") },
+      data: { briefingFailedAt: now, briefingFailedReason: result.reason },
+    });
     return { briefing: null, failure: result.reason };
   }
 
@@ -131,12 +159,30 @@ export async function generateBriefing(
   };
 }
 
+/** The last failure, when it is more recent than the last briefing. */
+export async function briefingFailure(
+  latest: MerchantBriefing | null,
+): Promise<string | null> {
+  const shop = await db.shop.findUnique({
+    where: { shop: shopScope.require("briefing failure") },
+  });
+  if (!shop?.briefingFailedAt) return null;
+  if (latest && latest.generatedAt >= shop.briefingFailedAt) return null;
+  return shop.briefingFailedReason;
+}
+
 async function writeBriefing(
   items: BriefingItem[],
   quiet: boolean,
   now: Date,
   ai: { model: string; promptVersion: string; requestId: string | null } | null,
 ): Promise<MerchantBriefing> {
+  // A success clears the failure, so a card that recovered stops apologising.
+  await db.shop.updateMany({
+    where: { shop: shopScope.require("briefing") },
+    data: { briefingFailedAt: null, briefingFailedReason: null },
+  });
+
   return db.merchantBriefing.create({
     data: {
       ...tenant(),

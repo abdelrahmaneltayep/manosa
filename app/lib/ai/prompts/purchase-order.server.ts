@@ -70,6 +70,53 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const MAX_QUANTITY = 1_000_000;
 const DECIMAL = /^\d+(\.\d+)?$/;
 
+/**
+ * One line, checked.
+ *
+ * Exported because the *round trip* needs it as much as the model's answer
+ * does: the draft travels in a hidden field, and a hand-edited quantity of -5
+ * reached `draftOrderCreate` before this was shared.
+ */
+export function readPoLine(
+  raw: unknown,
+  index: number,
+): { ok: true; value: PoLine } | { ok: false; error: string } {
+  if (!isRecord(raw)) return { ok: false, error: `lines[${index}] must be an object.` };
+
+  const quantity = Number(raw.quantity);
+  if (!Number.isSafeInteger(quantity) || quantity <= 0 || quantity > MAX_QUANTITY) {
+    return {
+      ok: false,
+      error: `lines[${index}].quantity was ${JSON.stringify(raw.quantity)}; it must be a whole number of units.`,
+    };
+  }
+
+  const sku = readText(raw.sku);
+  const description = readText(raw.description);
+  if (!sku && !description) {
+    return {
+      ok: false,
+      error: `lines[${index}] has neither a sku nor a description, so nothing can be matched to it.`,
+    };
+  }
+
+  const statedPrice = readText(raw.statedPrice);
+  if (statedPrice !== null && !DECIMAL.test(statedPrice)) {
+    return {
+      ok: false,
+      error: `lines[${index}].statedPrice was "${statedPrice}"; it must be a plain decimal with no symbol, or null.`,
+    };
+  }
+
+  return { ok: true, value: { sku, description, quantity, statedPrice } };
+}
+
+function readText(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed === "" ? null : trimmed.slice(0, 200);
+}
+
 export function readPo(
   value: unknown,
 ): { ok: true; value: PoReading } | { ok: false; error: string } {
@@ -77,45 +124,12 @@ export function readPo(
   if (!Array.isArray(value.lines))
     return { ok: false, error: `"lines" must be an array.` };
 
-  const text = (raw: unknown): string | null => {
-    if (typeof raw !== "string") return null;
-    const trimmed = raw.trim();
-    return trimmed === "" ? null : trimmed.slice(0, 200);
-  };
-
   const lines: PoLine[] = [];
 
   for (const [index, raw] of value.lines.entries()) {
-    if (!isRecord(raw)) {
-      return { ok: false, error: `lines[${index}] must be an object.` };
-    }
-
-    const quantity = Number(raw.quantity);
-    if (!Number.isSafeInteger(quantity) || quantity <= 0 || quantity > MAX_QUANTITY) {
-      return {
-        ok: false,
-        error: `lines[${index}].quantity was ${JSON.stringify(raw.quantity)}; it must be a whole number of units.`,
-      };
-    }
-
-    const sku = text(raw.sku);
-    const description = text(raw.description);
-    if (!sku && !description) {
-      return {
-        ok: false,
-        error: `lines[${index}] has neither a sku nor a description, so nothing can be matched to it.`,
-      };
-    }
-
-    const statedPrice = text(raw.statedPrice);
-    if (statedPrice !== null && !DECIMAL.test(statedPrice)) {
-      return {
-        ok: false,
-        error: `lines[${index}].statedPrice was "${statedPrice}"; it must be a plain decimal with no symbol, or null.`,
-      };
-    }
-
-    lines.push({ sku, description, quantity, statedPrice });
+    const line = readPoLine(raw, index);
+    if (!line.ok) return line;
+    lines.push(line.value);
   }
 
   if (lines.length === 0) {
@@ -126,8 +140,8 @@ export function readPo(
     ok: true,
     value: {
       lines: lines.slice(0, MAX_PO_LINES),
-      reference: text(value.reference),
-      notes: text(value.notes),
+      reference: readText(value.reference),
+      notes: readText(value.notes),
     },
   };
 }

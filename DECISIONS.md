@@ -8,6 +8,42 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — The Ask bar does not stream, and its examples do not rotate
+
+Checklist §1 asks for "Streaming: inline result panel under the bar; Esc
+cancels" and "rotating placeholder examples (3, localized)". The inline result
+panel exists and the destructive-intent rule on the same line is what the
+routing enforces; the streaming does not. An answer is one database read that
+returns in milliseconds, so there is no stream to watch and no long-running
+request for Esc to abort. The three examples render under the bar and the first
+is the field's placeholder; rotation needs a client-side timer, which is the
+same reason as ⌘J below. Rejected: a streaming endpoint for a sub-second query,
+and rotating server-side per request (the examples would change under a
+merchant mid-sentence, on every unrelated post).
+
+## 2026-09-10 — Muting a briefing item asks first, and the list lives on Home
+
+"Not this again" is a link to `/app?confirm=<kind>`, which asks the question;
+only the "Stop showing it" button posts. So nothing is written by a click, a
+reload cannot re-mute, and the confirm needs no client JavaScript. The list of
+muted kinds — with an unmute beside each — renders under the briefing rather
+than in Settings, where checklist §1 puts it: Settings is 6.2, and a one-way
+door with no visible way back was the worse of the two. Both directions are
+audited. Rejected: a POST to open the confirm (a write for a question), and
+waiting for 6.2 (the mute shipped in 4.4; the way back has to ship with it).
+
+## 2026-09-10 — The buyer picker lists a hundred, and says so
+
+A `s-select` cannot paginate, so PO-to-order lists the hundred largest buyers.
+The bug that made this worth writing down: the chosen buyer was resolved out of
+that same capped list, so a shop with more buyers than the cap priced a
+purchase order as though nobody was buying it — silently, at list price. The
+selected buyer is now fetched by id whenever the list does not hold them, the
+page says the list is not everybody, and `?buyerId=` gives a way in from the
+customers list, which does paginate. Rejected: raising the cap (moves the
+cliff), and a search box (a JavaScript-free typeahead is a bigger feature than
+the one it would serve).
+
 ## 2026-09-10 — The briefing may not write a number, and the reader enforces it
 
 `readBriefing` refuses any reason containing a digit. The app renders its own

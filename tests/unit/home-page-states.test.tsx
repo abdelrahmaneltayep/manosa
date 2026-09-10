@@ -65,8 +65,10 @@ const briefing = (overrides: Partial<BriefingView> = {}): BriefingView => ({
     },
   ],
   writtenAt: "2026-06-01T09:00:00.000Z",
+  writtenAtLabel: "1 June 2026",
   stale: false,
   muted: [],
+  confirmingMute: null,
   ...overrides,
 });
 
@@ -141,7 +143,8 @@ describe("the briefing", () => {
     const html = render(
       <HomePage view={view({ briefing: briefing({ stale: true }) })} />,
     );
-    expect(html).toContain("Written 2026-06-01");
+    // A date a merchant reads, not a timestamp a database prints.
+    expect(html).toContain("Written 1 June 2026");
     capture("05-briefing-stale", html);
   });
 
@@ -179,6 +182,44 @@ describe("the briefing", () => {
 });
 
 /* -------------------------------------------------------------------------- */
+
+describe("muting a kind", () => {
+  it("asks before it mutes, and the ask writes nothing", () => {
+    const html = render(
+      <HomePage
+        view={view({ briefing: briefing({ confirmingMute: "invoices_overdue" }) })}
+      />,
+    );
+
+    expect(html).toContain("Stop showing");
+    expect(html).toContain("Overdue invoices");
+    expect(html).toContain("Keep showing it");
+    // The item's own control is a link: nothing is posted until the merchant
+    // answers the question.
+    expect(html).toContain("/app?confirm=invoices_overdue");
+    capture("13-briefing-confirm-mute", html);
+  });
+
+  it("lists what has been muted, each with a way back", () => {
+    const html = render(
+      <HomePage
+        view={view({
+          briefing: briefing({
+            muted: [
+              { kind: "invoices_overdue", label: "Overdue invoices" },
+              { kind: "rules_unused", label: "Rules nothing matches" },
+            ],
+          }),
+        })}
+      />,
+    );
+
+    expect(html).toContain("2 types you have muted");
+    expect(html).toContain("Show “Overdue invoices” again");
+    expect(html).toContain('value="unmute"');
+    capture("14-briefing-muted", html);
+  });
+});
 
 describe("the Ask bar", () => {
   it("offers three examples while idle", () => {

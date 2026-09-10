@@ -3,24 +3,14 @@ import { json, redirect } from "@remix-run/node";
 import { useActionData, useLoaderData } from "@remix-run/react";
 
 import { HomePage } from "~/components/home/HomePage";
-import type { BriefingItemView, HomeView } from "~/components/home/types";
-import { db } from "~/db.server";
+import type { HomeView } from "~/components/home/types";
 import { detectLocale, getFixedT } from "~/i18n.server";
-import { translate, type Translate } from "~/i18n/translate";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { translate } from "~/i18n/translate";
 import { routeAsk } from "~/lib/ai/prompts/ask.server";
 import { answerAsk } from "~/lib/agent/ask.server";
-import {
-  latestBriefing,
-  linesFor,
-  muteKind,
-  mutedKinds,
-  STALE_AFTER_MS,
-} from "~/lib/agent/briefing.server";
-import { briefingFacts, type AgentFact } from "~/lib/agent/facts.server";
-import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
-import { formatCurrency } from "~/lib/money";
-import { shopScope } from "~/lib/tenant/shop-context.server";
+import { muteKind, unmuteKind } from "~/lib/agent/briefing.server";
+import { buildView } from "~/lib/agent/home-view.server";
+import { ensureBriefingScheduled } from "~/lib/jobs/handlers/daily-briefing.server";
 import { withAdmin } from "~/shopify.server";
 
 /**
@@ -32,107 +22,14 @@ import { withAdmin } from "~/shopify.server";
  * back a link. The KPI cards, setup checklist and recent activity are 4.5.
  */
 
-const ASK_EXAMPLES = ["home.ask.example1", "home.ask.example2", "home.ask.example3"];
-const REFORMULATIONS = [
-  "home.ask.reformulation1",
-  "home.ask.reformulation2",
-  "home.ask.reformulation3",
-];
-
-/** The action button on each briefing item. One per kind, no default. */
-const ACTION_KEYS: Record<string, string> = {
-  applications_waiting: "home.briefing.action.review",
-  screening_flagged: "home.briefing.action.review",
-  invoices_overdue: "home.briefing.action.chase",
-  credit_exceeded: "home.briefing.action.review",
-  quotes_expiring: "home.briefing.action.chase",
-  orders_needing_resync: "home.briefing.action.open",
-  rules_unused: "home.briefing.action.open",
-  no_active_rules: "home.briefing.action.createRule",
-  buyers_gone_quiet: "home.briefing.action.open",
-  wholesale_week: "home.briefing.action.open",
-  form_never_opened: "home.briefing.action.share",
-  uploads_unscanned: "home.briefing.action.review",
-};
-
-/** The figure beside each line, in the merchant's own currency and language. */
-function figureFor(fact: AgentFact, t: Translate, locale: string): string {
-  if (fact.amount) {
-    return t(`home.briefing.figure.${fact.kind}Amount`, {
-      count: fact.count,
-      amount: formatCurrency(fact.amount, locale),
-    });
-  }
-  return t(`home.briefing.figure.${fact.kind}`, {
-    count: fact.count,
-    subject: fact.subject ?? "",
-  });
-}
-
-async function buildView(
-  request: Request,
-  overrides: Partial<HomeView["ask"]> = {},
-): Promise<HomeView> {
-  const locale = detectLocale(request);
-  const t = translate(await getFixedT(locale));
-  const now = new Date();
-
-  const shop = await db.shop.findUnique({
-    where: { shop: shopScope.require("home") },
-  });
-  const entitlements = await loadEntitlements(now);
-  const agentAvailable = isAiAvailable() && hasFeature(entitlements, "merchant_agent");
-
-  const [briefing, facts, muted] = await Promise.all([
-    latestBriefing(),
-    briefingFacts(now),
-    mutedKinds(),
-  ]);
-
-  const visible = facts.filter((fact) => !muted.includes(fact.kind));
-  const lines = linesFor(briefing, visible);
-
-  const items: BriefingItemView[] = lines.map((line) => ({
-    kind: line.item.kind,
-    reason: line.item.reason,
-    figure: figureFor(line.fact, t, locale),
-    href: line.fact.href,
-    actionKey: ACTION_KEYS[line.item.kind] ?? "home.briefing.action.open",
-  }));
-
-  const stale =
-    briefing !== null && now.getTime() - briefing.generatedAt.getTime() > STALE_AFTER_MS;
-
-  return {
-    shopName: shop?.name ?? shopScope.require("home"),
-    briefing: {
-      status: !agentAvailable
-        ? "off"
-        : briefing === null
-          ? "empty"
-          : items.length === 0
-            ? "quiet"
-            : "ready",
-      items,
-      writtenAt: briefing ? briefing.generatedAt.toISOString() : null,
-      stale,
-      muted,
-    },
-    ask: {
-      available: agentAvailable,
-      question: "",
-      examples: ASK_EXAMPLES.map((key) => t(key)),
-      result: null,
-      failure: null,
-      reformulations: REFORMULATIONS.map((key) => t(key)),
-      cooldownSeconds: null,
-      ...overrides,
-    },
-  };
-}
-
 export const loader = ({ request }: LoaderFunctionArgs) =>
-  withAdmin(request, async () => json({ view: await buildView(request) }));
+  withAdmin(request, async () => {
+    // Self-healing: a shop that installed before the briefing job existed, or
+    // whose schedule lapsed, gets one queued the first time anybody opens Home.
+    // Idempotent — it does nothing when one is already pending.
+    await ensureBriefingScheduled();
+    return json({ view: await buildView(request) });
+  });
 
 export const action = ({ request }: ActionFunctionArgs) =>
   withAdmin(request, async ({ session }) => {
@@ -143,6 +40,13 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     if (intent === "mute") {
       await muteKind((form.get("kind") ?? "").toString(), session.id);
+      // Back to the page without the `confirm` query string, so a reload does
+      // not re-ask a question the merchant has already answered.
+      return redirect("/app");
+    }
+
+    if (intent === "unmute") {
+      await unmuteKind((form.get("kind") ?? "").toString(), session.id);
       return redirect("/app");
     }
 
@@ -163,16 +67,17 @@ export const action = ({ request }: ActionFunctionArgs) =>
         view: await buildView(request, {
           question,
           failure: routed.reason,
-          // A cooldown the merchant can act on: the wrapper waited once
-          // already, so this is how long before it is worth trying again.
-          cooldownSeconds: routed.reason === "rate_limited" ? 30 : null,
+          // Null on purpose. Nothing in the wrapper reads a `Retry-After`, so
+          // any number here would be one the app made up and told the merchant.
+          // The copy says "in a moment" instead — see DECISIONS.md.
+          cooldownSeconds: null,
         }),
       });
     }
 
     // Everything from here is our own query, in this shop's scope. There is no
     // intent that writes — see docs/adr/0021.
-    const result = await answerAsk(routed.value, { locale });
+    const result = await answerAsk(routed.value, { locale, t });
 
     return json({
       view: await buildView(request, {

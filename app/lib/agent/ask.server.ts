@@ -2,6 +2,7 @@ import { formatCurrency } from "~/lib/money";
 import { money, type Money } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
+import type { Translate } from "~/i18n/translate";
 import type { AskAnswer, BuilderTarget } from "~/lib/ai/prompts/ask.server";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 
@@ -22,6 +23,15 @@ const DAY = 86_400_000;
 
 /** Rows shown inline. More than this and the answer is a link to the list. */
 export const ANSWER_ROWS = 5;
+
+/**
+ * The most rows any one answer reads.
+ *
+ * The bar shows five and links to the page for the rest, so loading the whole
+ * table to slice five off it is a scan with no reader. Counts come from
+ * `count()`, which the database answers without materialising anything.
+ */
+const SCAN_LIMIT = 200;
 
 export interface AskResultRow {
   label: string;
@@ -67,10 +77,16 @@ const fmt = (value: Money, locale: string) => formatCurrency(value, locale);
  */
 export async function answerAsk(
   answer: AskAnswer,
-  options: { locale: string; now?: Date },
+  options: { locale: string; t: Translate; now?: Date },
 ): Promise<AskResult> {
   const now = options.now ?? new Date();
-  const { locale } = options;
+  const { locale, t } = options;
+
+  // "in the next 1 days" is the tell that a number was dropped into a sentence
+  // without being counted. The window is its own pluralised phrase, so both
+  // halves of the headline agree with their own number — English has two
+  // categories here and Arabic six.
+  const dayWindow = (days: number) => t("ask.answer.window", { count: days });
 
   switch (answer.intent) {
     case "open_builder": {
@@ -107,9 +123,13 @@ export async function answerAsk(
 
     case "list_overdue": {
       const currencyCode = await shopCurrency();
+      const count = await db.order.count({
+        where: { paidAt: null, cancelledAt: null, netTermsDueAt: { lt: now } },
+      });
       const orders = await db.order.findMany({
         where: { paidAt: null, cancelledAt: null, netTermsDueAt: { lt: now } },
         orderBy: { netTermsDueAt: "asc" },
+        take: SCAN_LIMIT,
         select: {
           name: true,
           company: true,
@@ -132,7 +152,9 @@ export async function answerAsk(
         headline: {
           key: "ask.answer.list_overdue",
           params: {
-            count: orders.length,
+            // The true count, from the database. The sum is of what was read,
+            // so it only ever understates — never a figure bigger than its rows.
+            count,
             amount: fmt(money(owed, currencyCode), locale),
           },
         },
@@ -150,19 +172,24 @@ export async function answerAsk(
 
     case "list_expiring_quotes": {
       const days = answer.days ?? 7;
-      const quotes = await db.quote.findMany({
-        where: {
-          status: "SENT",
-          expiresAt: { gte: now, lte: new Date(now.getTime() + days * DAY) },
-        },
-        orderBy: { expiresAt: "asc" },
-        select: { number: true, company: true, email: true, expiresAt: true },
-      });
+      const expiring = {
+        status: "SENT" as const,
+        expiresAt: { gte: now, lte: new Date(now.getTime() + days * DAY) },
+      };
+      const [count, quotes] = await Promise.all([
+        db.quote.count({ where: expiring }),
+        db.quote.findMany({
+          where: expiring,
+          orderBy: { expiresAt: "asc" },
+          take: ANSWER_ROWS,
+          select: { number: true, company: true, email: true, expiresAt: true },
+        }),
+      ]);
 
       return {
         headline: {
           key: "ask.answer.list_expiring_quotes",
-          params: { count: quotes.length, days },
+          params: { count, window: dayWindow(days) },
         },
         rows: quotes.slice(0, ANSWER_ROWS).map((quote) => ({
           label: `${quote.number} · ${quote.company ?? quote.email ?? ""}`.trim(),
@@ -192,7 +219,7 @@ export async function answerAsk(
           key: "ask.answer.wholesale_sales",
           params: {
             count: totals._count,
-            days,
+            window: dayWindow(days),
             amount: fmt(money(totals._sum.totalPrice ?? 0, currencyCode), locale),
           },
         },
@@ -204,21 +231,26 @@ export async function answerAsk(
 
     case "list_quiet_buyers": {
       const days = answer.days ?? 60;
-      const buyers = await db.customer.findMany({
-        where: {
-          status: "APPROVED",
-          deletedInShopifyAt: null,
-          orderCount: { gte: 1 },
-          lastOrderAt: { lt: new Date(now.getTime() - days * DAY) },
-        },
-        orderBy: { lifetimeSpend: "desc" },
-        select: { id: true, company: true, email: true, lastOrderAt: true },
-      });
+      const quiet = {
+        status: "APPROVED" as const,
+        deletedInShopifyAt: null,
+        orderCount: { gte: 1 },
+        lastOrderAt: { lt: new Date(now.getTime() - days * DAY) },
+      };
+      const [count, buyers] = await Promise.all([
+        db.customer.count({ where: quiet }),
+        db.customer.findMany({
+          where: quiet,
+          orderBy: { lifetimeSpend: "desc" },
+          take: ANSWER_ROWS,
+          select: { id: true, company: true, email: true, lastOrderAt: true },
+        }),
+      ]);
 
       return {
         headline: {
           key: "ask.answer.list_quiet_buyers",
-          params: { count: buyers.length, days },
+          params: { count, window: dayWindow(days) },
         },
         rows: buyers.slice(0, ANSWER_ROWS).map((buyer) => ({
           label: named(buyer),
@@ -231,19 +263,24 @@ export async function answerAsk(
 
     case "find_rule": {
       const search = answer.search ?? "";
-      const rules = await db.pricingRule.findMany({
-        where: {
-          archivedAt: null,
-          ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
-        },
-        orderBy: { priority: "asc" },
-        select: { id: true, name: true, status: true, kind: true },
-      });
+      const where = {
+        archivedAt: null,
+        ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
+      };
+      const [count, rules] = await Promise.all([
+        db.pricingRule.count({ where }),
+        db.pricingRule.findMany({
+          where,
+          orderBy: { priority: "asc" },
+          take: ANSWER_ROWS,
+          select: { id: true, name: true, status: true, kind: true },
+        }),
+      ]);
 
       return {
         headline: {
           key: "ask.answer.find_rule",
-          params: { count: rules.length, search },
+          params: { count, search },
         },
         rows: rules.slice(0, ANSWER_ROWS).map((rule) => ({
           label: rule.name,
