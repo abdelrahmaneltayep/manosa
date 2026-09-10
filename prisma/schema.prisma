@@ -1317,3 +1317,127 @@ model MerchantBriefing {
 
   @@index([shop, generatedAt])
 }
+
+/// The merchant's standing instructions to the Buyer Agent.
+///
+/// One row per shop, created on first read. Everything here is a *limit* on
+/// what the agent may do, never a capability it gains: an agent with all four
+/// abilities switched off can still answer questions, because answering is not
+/// an ability the merchant grants — it is what a concierge is.
+///
+/// `customInstructions` is the one free-text field, and it is bounded and
+/// linted: it cannot switch an ability back on, because the abilities are
+/// checked in our code before a tool runs, not asked of the model.
+model AgentGuardrails {
+  shop String @id
+
+  /// Live on the storefront. The theme block is separate: this is the switch
+  /// the merchant controls from the admin, and it wins.
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+
+  /// May assemble a cart for the buyer to review.
+  canBuildCart    Boolean @default(true)
+  /// May file a quote request for the merchant to price.
+  canRequestQuote Boolean @default(true)
+  /// May answer "where is my order?" from mirrored orders.
+  canReadOrders   Boolean @default(true)
+  /// May state the buyer's net terms and what they owe.
+  canReadTerms    Boolean @default(true)
+
+  /// Answers a signed-out visitor at all. Off by default: this is a wholesale
+  /// concierge, and retail answers from it are a support ticket waiting.
+  guestMode Boolean @default(false)
+
+  /// "warm" | "plain" | "brief". Presets, so tone is not a prompt the merchant
+  /// has to write.
+  tone String @default("warm")
+
+  /// The merchant's own words, at most `MAX_INSTRUCTION_WORDS`. Advisory to
+  /// the model and never load-bearing: see `lintInstructions`.
+  customInstructions String?
+
+  /// Subjects the agent declines rather than answers, one per line.
+  offLimits String[]
+
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+/// One buyer's conversation with the agent.
+///
+/// Retained for `CONVERSATION_RETENTION_DAYS` and then deleted with its
+/// messages: a wholesale buyer's chat is their business, not ours to keep
+/// forever, and the mandatory GDPR topics have to be able to remove it.
+model AgentConversation {
+  id   String @id @default(cuid())
+  shop String
+
+  /// Shopify's customer GID, from the signed proxy request. Null in guest mode.
+  customerId String?
+  /// Denormalised for the log, so a deleted buyer's conversation still reads.
+  company    String?
+  /// The language the buyer was answered in.
+  locale     String  @default("en")
+
+  outcome AgentOutcome @default(ANSWERED)
+
+  /// Set when a merchant takes the conversation over. The agent stops
+  /// answering from this moment and says a person has joined.
+  takenOverAt DateTime?
+  takenOverBy String?
+
+  startedAt     DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  messages AgentMessage[]
+
+  @@index([shop, lastMessageAt])
+  @@index([shop, customerId])
+}
+
+/// One turn. The buyer's words, or the agent's, or a merchant who took over.
+model AgentMessage {
+  id             String            @id @default(cuid())
+  shop           String
+  conversationId String
+  conversation   AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role AgentRole
+  text String
+
+  /// Which tools ran for this turn and what they returned, for the transcript
+  /// and for "why did it say that?". Never shown to the buyer.
+  toolCalls Json?
+
+  /// Why a turn was refused, when it was: a guardrail, an off-limits subject,
+  /// or a reply that stated a figure we had not computed.
+  refusal String?
+
+  aiModel         String?
+  aiPromptVersion String?
+  aiRequestId     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([shop, conversationId, createdAt])
+}
+
+enum AgentOutcome {
+  /// The buyer asked and was answered.
+  ANSWERED
+  /// A cart was assembled for them to review.
+  CART
+  /// A quote request was filed for the merchant.
+  QUOTE
+  /// Handed to a person.
+  ESCALATED
+  /// A guardrail said no.
+  DECLINED
+}
+
+enum AgentRole {
+  BUYER
+  AGENT
+  MERCHANT
+}

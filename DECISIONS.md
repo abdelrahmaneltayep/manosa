@@ -8,6 +8,43 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — The Buyer Agent's reply may only repeat figures the engine computed
+
+Checklist §6 asks for it twice — "the agent can never invent a price", "prices
+only from published rules (test asserts this)". A prompt cannot enforce that, so
+the tool runs first, its computed figures are kept, and the reply is scanned for
+money and refused if it states any that is not in that list. The scanner reads
+symbols, ISO codes, bare decimals and percentages, and deliberately treats a
+bare integer as _not_ money — "100 units" and "boxes of 24" have to stay
+sayable, and a check that flagged them would be switched off within a week.
+Comparison is on the number, not the formatting. Rejected: asking the model
+nicely (the failure is silent and the merchant is liable), templated sentences
+(a concierge that cannot form a sentence is not one, and this ships in Arabic
+too), and re-pricing what the model said afterwards (it says things that are not
+prices). `docs/adr/0023`.
+
+## 2026-09-10 — Two model calls per turn, not one with tool definitions
+
+Route the question to a tool, run the tool ourselves, then write the reply. The
+obvious alternative — one call with tool definitions, letting the model drive —
+is fewer tokens and one fewer round trip, and it puts the model between the
+price and the buyer with nothing in between. Splitting it is what makes room for
+the figure check, and it means an unpublished agent or a switched-off ability
+costs nothing to refuse. Rejected: the single agentic call, and streaming (the
+answer is a database read; there is nothing to stream).
+
+## 2026-09-10 — A guardrail is a missing code path, not a sentence in the prompt
+
+Switching off "may file a quote request" removes the tool from the list the
+model is offered _and_ is re-checked inside `runTool` before the work. So the
+agent has no path to a quote, rather than an instruction not to take one. The
+merchant's own free-text instructions are advisory and bounded, and
+`lintInstructions` warns when they read as though they could grant something —
+"offer discounts freely", "negotiate", "place the order for them" — because a
+merchant who believes their agent is doing that is worse off than one who is
+told it will not. It warns rather than blocks: the text cannot do the thing
+anyway, so refusing to save it would be theatre.
+
 ## 2026-09-10 — Six setup steps, and the sixth is choosing a plan
 
 The spec names four (embed, first rule, form, first approved buyer); the

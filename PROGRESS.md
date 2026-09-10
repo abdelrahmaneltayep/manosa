@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T17:20:00Z
+Updated: 2026-09-10T18:20:00Z
 Current milestone: 4 — Claude
-Current task: 5.1 Storefront Buyer Agent [starting]
+Current task: 5.2 Buyer Agent chat widget (theme app block) [next]
 
 ## Done
 
@@ -24,11 +24,13 @@ Current task: 5.1 Storefront Buyer Agent [starting]
 - [x] 4.2 Rule-from-a-sentence, margin guard — commit `d45f02b` — QA: `qa/4.2/REPORT.md`
 - [x] 4.3 Screening, drafted emails, segments, CSV whisperer — commit `be3c6d0` — QA: `qa/4.3/REPORT.md`
 - [x] 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order — commits `b073b74` + `e05190b` — QA: `qa/4.4/REPORT.md` (cold read returned FAIL on 17 findings; all fixed, gate re-run clean)
-- [x] 4.5 Home assembled: KPI cards, setup checklist, activity log, ✦ Setup Wizard — commit `ef73ee3` — QA: `qa/4.5/REPORT.md`
+- [x] 4.5 Home assembled: KPI cards, setup checklist, activity log, ✦ Setup Wizard — commits `ef73ee3` + `5ca4e1d` — QA: `qa/4.5/REPORT.md` (cold read returned FAIL on 15 findings incl. 3 P0s; all fixed, gate re-run clean — `qa/4.5/COLD-READ.md`)
+- [x] 5.1 ✦ Buyer Agent server: guardrails, closed tool vocabulary, one turn — QA: `qa/5.1/REPORT.md` (no cold read yet)
 
 ## Next up
 
-- 5.1–5.3 Storefront Buyer Agent · 6.1–6.3 Analytics, Settings, polish · 7.1–7.3 Release
+- 5.2 Buyer Agent chat widget (theme app block) · 5.3 guardrails panel, conversation log, publish flow
+- 6.1–6.3 Analytics, Settings, polish · 7.1–7.3 Release
 
 ## Blocked
 
@@ -207,6 +209,15 @@ Neither is blocking; both would change product decisions if answered.
   (twice), a pluralised key called without `count`, and — new in 3.1 — a
   machine-readable code that ends in a plural suffix (`increment_below_two`),
   which i18next reads as Arabic `_two`.
+- **Run the `qa-engineer` cold read on every task, and run it before committing.**
+  4.4 and 4.5 both passed the author's own seven-step gate and both came back
+  FAIL — 4.5 with three P0s, including a headline feature that did not work for
+  three ordinary inputs. The gate finds what the author thought to check; the
+  cold read finds what they did not. 5.1 has not had one yet.
+- **A test fixture that sets a column the production writer never sets is a
+  test that cannot fail.** 4.5's KPI fixture hand-set `Order.createdAt`, which
+  `rowData()` leaves to its default — so a query reading the wrong column
+  passed. When a fixture sets a field, check that the real writer does too.
 - **The setup wizard is the widest write path in the app** — one model answer
   becomes groups, a live rule and a form. It is safe only because it goes
   through `createGroup`/`createRule`/`createForm`, the same functions the manual

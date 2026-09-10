@@ -275,7 +275,7 @@ function variantTitle(node: VariantNode): string {
  * 12500 fils in KWD and 1250 cents would be wrong. A price we cannot read
  * becomes zero, which is visible rather than silently ten times out.
  */
-function toMoney(price: string | null, currencyCode: string): Money {
+export function toMoney(price: string | null, currencyCode: string): Money {
   try {
     return parseMoney((price ?? "0").trim() || "0", currencyCode);
   } catch {

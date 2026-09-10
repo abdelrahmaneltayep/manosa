@@ -5,6 +5,7 @@ import { expireQuotes } from "~/lib/jobs/handlers/expire-quotes.server";
 import { decideApplications } from "~/lib/jobs/handlers/decide-applications.server";
 import { screenApplications } from "~/lib/jobs/handlers/screen-applications.server";
 import { purgeShopPii } from "~/lib/jobs/handlers/purge-shop-pii.server";
+import { purgeConversations } from "~/lib/jobs/handlers/purge-conversations.server";
 
 /**
  * Every background job kind, and what runs it.
@@ -21,6 +22,7 @@ export const JOB_HANDLERS = {
   "forms.decide_applications": decideApplications,
   "forms.screen_applications": screenApplications,
   "agent.daily_briefing": dailyBriefing,
+  "agent.purge_conversations": purgeConversations,
 } as const;
 
 export type JobKind = keyof typeof JOB_HANDLERS;
