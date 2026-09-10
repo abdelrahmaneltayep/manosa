@@ -175,6 +175,28 @@ describe("factsFromNode", () => {
     currentTotalPriceSet: { shopMoney: { amount: "1200.50", currencyCode: "USD" } },
     currentSubtotalPriceSet: { shopMoney: { amount: "1150.00", currencyCode: "USD" } },
     totalRefundedSet: { shopMoney: { amount: "0.00", currencyCode: "USD" } },
+    lineItems: {
+      nodes: [
+        {
+          id: "gid://shopify/LineItem/1",
+          title: "Blue Mug",
+          variantTitle: "Large",
+          sku: "MUG-BL-L",
+          quantity: 10,
+          product: { id: "gid://shopify/Product/1" },
+          variant: { id: "gid://shopify/ProductVariant/1" },
+          originalUnitPriceSet: { shopMoney: { amount: "10.00", currencyCode: "USD" } },
+          originalTotalSet: { shopMoney: { amount: "100.00", currencyCode: "USD" } },
+          discountedTotalSet: { shopMoney: { amount: "65.00", currencyCode: "USD" } },
+          discountAllocations: [
+            {
+              allocatedAmountSet: { shopMoney: { amount: "35.00", currencyCode: "USD" } },
+              discountApplication: { title: "Wholesale 35%" },
+            },
+          ],
+        },
+      ],
+    },
     ...overrides,
   });
 
@@ -213,6 +235,7 @@ describe("factsFromNode", () => {
       updatedAt: null,
       displayFinancialStatus: null,
       displayFulfillmentStatus: null,
+      lineItems: null,
       sourceName: null,
       tags: null,
       currentSubtotalLineItemsQuantity: null,

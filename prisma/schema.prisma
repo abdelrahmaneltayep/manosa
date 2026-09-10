@@ -990,6 +990,7 @@ model Order {
   remindedAt    DateTime?
 
   payments Payment[]
+  lines    OrderLine[]
 
   processedAt DateTime
   cancelledAt DateTime?
@@ -1001,6 +1002,14 @@ model Order {
   syncedAt         DateTime  @default(now())
   /// Set when an order was edited in Shopify after we mirrored it.
   needsResync      Boolean   @default(false)
+
+  /// True when Shopify returned fewer lines than this order actually has.
+  ///
+  /// Lines are fetched with a cap rather than paginated per order, so a very
+  /// large order can arrive short. Recorded rather than ignored: a chart built
+  /// on lines has to be able to say it is missing some, and the orders with the
+  /// most lines are the merchant's biggest.
+  linesTruncated Boolean @default(false)
 
   createdAt DateTime @default(now())
 
@@ -1052,6 +1061,57 @@ enum AiRunStatus {
 /// buyers' names, and this table is not the place for either. Token counts and
 /// a feature name are enough to answer "what has this been doing" and "what is
 /// it costing me".
+/// One line of a mirrored order.
+///
+/// Mirrored because four of the analytics charts cannot be answered without it
+/// — top products, rule performance, and anything per-SKU — and Shopify will
+/// not answer "which of my rules earned the most last quarter" in one call, at
+/// any price.
+///
+/// Shopify's numbers, in minor units of the order's currency. Nothing here is
+/// computed by this app: these are what the buyer was actually charged, which
+/// is the only thing an analytics page may report.
+model OrderLine {
+  id      String @id @default(cuid())
+  shop    String
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Shopify's line item GID.
+  lineItemId String
+
+  /// Denormalised, because a product deleted in Shopify still sold last March
+  /// and a chart that forgets it is a chart that under-reports the past.
+  title        String
+  variantTitle String?
+  sku          String?
+  productId    String?
+  variantId    String?
+
+  quantity Int @default(0)
+
+  /// Per unit, before any discount.
+  unitPrice       Int @default(0)
+  /// The line before discounts, and after them. Both, because the difference
+  /// is what a pricing rule earned or gave away.
+  originalTotal   Int @default(0)
+  discountedTotal Int @default(0)
+
+  /// What each discount took off this line: `[{ title, amount }]`.
+  ///
+  /// Our own rules arrive here under the name the buyer saw at checkout — the
+  /// Function sets the winning rule's name as the discount message. That is
+  /// how rule performance is measurable at all, and it is also why a renamed
+  /// rule does not rewrite its own history.
+  discounts Json
+
+  createdAt DateTime @default(now())
+
+  @@unique([shop, lineItemId])
+  @@index([shop, orderId])
+  @@index([shop, productId])
+}
+
 model AiRun {
   id      String @id @default(cuid())
   shop    String

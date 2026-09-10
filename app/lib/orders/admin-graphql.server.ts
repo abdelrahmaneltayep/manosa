@@ -12,6 +12,18 @@ import { runMutation, type AdminGraphql } from "~/lib/pricing/admin-graphql.serv
 /** Shopify's page cap for an orders query. */
 export const ORDER_PAGE_SIZE = 100;
 
+/**
+ * Lines fetched per order.
+ *
+ * Not paginated per order, deliberately. A wholesale order with more than a
+ * hundred distinct SKUs exists, but paging inside a page of a hundred orders
+ * turns one backfill into thousands of round trips. The lines we get are
+ * mirrored and the count is compared with the order's own quantity, so a
+ * truncated order is *known* to be truncated rather than quietly under-counted
+ * in a chart — see `linesTruncated` in `sync.server.ts`.
+ */
+export const LINE_PAGE_SIZE = 100;
+
 const ORDER_FIELDS = `
     id
     name
@@ -51,6 +63,61 @@ const ORDER_FIELDS = `
       shopMoney {
         amount
         currencyCode
+      }
+    }
+    lineItems(first: ${LINE_PAGE_SIZE}) {
+      nodes {
+        id
+        title
+        variantTitle
+        sku
+        quantity
+        product {
+          id
+        }
+        variant {
+          id
+        }
+        originalUnitPriceSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        originalTotalSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        discountedTotalSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        discountAllocations {
+          allocatedAmountSet {
+            shopMoney {
+              amount
+              currencyCode
+            }
+          }
+          discountApplication {
+            ... on AutomaticDiscountApplication {
+              title
+            }
+            ... on DiscountCodeApplication {
+              code
+            }
+            ... on ManualDiscountApplication {
+              title
+            }
+            ... on ScriptDiscountApplication {
+              title
+            }
+          }
+        }
       }
     }`;
 
@@ -99,6 +166,33 @@ export interface OrderNode {
   currentTotalPriceSet: ShopMoney | null;
   currentSubtotalPriceSet: ShopMoney | null;
   totalRefundedSet: ShopMoney | null;
+  lineItems: { nodes: OrderLineNode[] } | null;
+}
+
+/**
+ * One line of an order, as the Admin API reports it.
+ *
+ * `discountApplication` is a union; only some members carry a `title`, so the
+ * field is optional here and a missing one becomes an unnamed discount rather
+ * than a crash.
+ */
+export interface OrderLineNode {
+  id: string;
+  title: string | null;
+  variantTitle: string | null;
+  sku: string | null;
+  quantity: number | null;
+  product: { id: string } | null;
+  variant: { id: string } | null;
+  originalUnitPriceSet: ShopMoney | null;
+  originalTotalSet: ShopMoney | null;
+  discountedTotalSet: ShopMoney | null;
+  discountAllocations:
+    | {
+        allocatedAmountSet: ShopMoney | null;
+        discountApplication: { title?: string | null; code?: string | null } | null;
+      }[]
+    | null;
 }
 
 export interface OrderPage {

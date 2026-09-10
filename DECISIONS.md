@@ -8,12 +8,54 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — A merchant's reply is delivered, not just recorded
+
+5.3's cold read found that "Take over" wrote a reply the buyer could never see,
+under a widget string promising they would. Three options: deliver it by a
+signed proxy GET the widget polls, deliver it by email, or stop promising.
+Chose the first. Email is a worse fit for a live chat the buyer is sitting in
+front of, and telling the truth alone would leave the checklist's "hands live
+chat to merchant" unmet. Polling starts **only** after a person joins, so a
+conversation nobody took over still costs the storefront one request per turn —
+the rule the whole widget is built on, and now asserted by a test that counts
+GETs.
+
+## 2026-09-10 — The capture guard derives its catalogue roots
+
+`CATALOG_ROOTS` was a hand-written list, and forgetting an entry switches the
+raw-key guard off for a whole page family silently. That has now happened twice
+(4.2's `describe`, 5.3's `agent`). It is derived from the English catalogue's
+own top-level keys. Rejected: adding `agent` and moving on, which fixes this
+instance and leaves the third one waiting.
+
+## 2026-09-10 — Analytics is split in two, and Settings moves to 6.4
+
+`PROGRESS.md` had "6.1–6.3 Analytics, Settings, polish", which was my own
+shorthand and not a spec. Analytics as one task is six charts, their states,
+CSV per chart, **and** two ✦ AI features — and it turned out to need a data
+model that does not exist yet. So: **6.1** mirrors order lines (the foundation
+four of the six charts need), **6.2** is the Analytics page and its charts,
+**6.3** is ✦ ask-your-data and the ✦ monthly review, **6.4** is Settings, and
+**6.5** is polish. Nothing is dropped; the numbering moved.
+
+## 2026-09-10 — A rule's performance is read from the name the buyer saw
+
+There is one automatic discount per shop, so the discount cannot say which rule
+fired. The Function already sets the winning rule's name as the line's discount
+message, and Shopify reports it back on the order — so rule performance groups
+by that name. The consequence is deliberate: a renamed rule does not rewrite
+what it earned last quarter, because the name on the line is the name the buyer
+was actually shown. Rejected: adding a per-rule discount (Shopify caps automatic
+discounts, and a merchant with forty rules would hit it), and writing our own
+rule id into a note attribute at checkout (the Function cannot write one, and a
+cart attribute is buyer-editable). `docs/adr/0024`.
+
 ## 2026-09-10 — Test mode rehearses against a real buyer and writes nothing
 
 Checklist §6 asks for a merchant who "chats as a simulated buyer (pick any real
 buyer's context)". So a rehearsal is an ordinary conversation with `testMode`
 set: the same tools, the same rules, the same prices, and the two tools that
-write — `request_quote` and `escalate` — skipped and *said out loud* in the
+write — `request_quote` and `escalate` — skipped and _said out loud_ in the
 reply rather than silently no-oped. An unpublished agent answers in test mode,
 because rehearsing before publishing is the entire point of the fourth
 pre-publish item. Rejected: a simulated buyer built from made-up attributes (it

@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T19:45:00Z
-Current milestone: 5 — The Buyer Agent
-Current task: 5.3 Guardrails panel, conversation log, publish flow [in progress — own gate clean, cold read running]
+Updated: 2026-09-10T20:30:00Z
+Current milestone: 6 — Analytics
+Current task: 6.1 Mirroring order lines [done] · 6.2 the Analytics page [next]
 
 ## Done
 
@@ -27,14 +27,18 @@ Current task: 5.3 Guardrails panel, conversation log, publish flow [in progress 
 - [x] 4.5 Home assembled: KPI cards, setup checklist, activity log, ✦ Setup Wizard — commits `ef73ee3` + `5ca4e1d` — QA: `qa/4.5/REPORT.md` (cold read returned FAIL on 15 findings incl. 3 P0s; all fixed, gate re-run clean — `qa/4.5/COLD-READ.md`)
 - [x] 5.1 ✦ Buyer Agent server: guardrails, closed tool vocabulary, one turn — commits `47db22b` + `b86ea2b` — QA: `qa/5.1/REPORT.md` (cold read returned FAIL; the price guard was replaced, not patched — `qa/5.1/COLD-READ.md`)
 - [x] 5.2 Buyer Agent chat widget (theme app block), Arabic storefront locale — commit `d2b49f2` — QA: in `qa/3.4/` captures 40–50
-- [~] 5.3 Guardrails panel, test mode, conversation log, publish flow — QA: `qa/5.3/REPORT.md` (own gate clean: 1,823 unit+integration, 350 e2e; 3 bugs found and fixed). **Cold read pending.**
+- [x] 5.3 Guardrails panel, test mode, conversation log, publish flow — commits `baeb811` + fix round — QA: `qa/5.3/REPORT.md` (cold read returned FAIL on 17 findings; the worst was that "Take over" recorded a merchant's reply with no route to the buyer while both sides were told it arrived — `qa/5.3/COLD-READ.md`. All fixed, gate re-run clean.)
+- [x] 6.1 Order lines mirrored, with discount allocations — QA: `qa/6.1/REPORT.md` (the foundation four of §7's six charts need; `docs/adr/0024`)
 
 ## Next up
 
-- Fix whatever `qa/5.3/COLD-READ.md` returns, then commit the fix round
+- **Run the cold read on 6.1** — it has not had one
+- 6.2 the Analytics page: six charts, their states, CSV per chart, the
+  timezone/currency footer. Renumbered — see `DECISIONS.md`
+- 6.3 ✦ ask-your-data + ✦ monthly review · 6.4 Settings · 6.5 polish
 - 5.2 has one unfinished piece: the widget's greeting is personalised by name
   only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
-- 6.1–6.3 Analytics, Settings, polish · 7.1–7.3 Release
+- 7.1–7.3 Release
 
 ## Blocked
 
@@ -142,6 +146,32 @@ Neither is blocking; both would change product decisions if answered.
 2. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
 
 ## Notes for my next self
+
+- **Four cold reads in a row have returned FAIL** (4.4, 4.5, 5.1, 5.3), every
+  one of them after my own seven-step gate passed. The gate is not the problem;
+  what the gate cannot do is disbelieve the fixture it was handed. 5.3's worst
+  finding — a merchant's reply going nowhere — was invisible to every test I
+  wrote because I only ever tested the two halves that existed. **Ask "who reads
+  this row, and how does it get to them?" for every write.**
+- **A state capture built by flipping a flag on the happy-path fixture proves
+  nothing.** 5.3's taken-over capture did that, so the announcement row and the
+  merchant's own turn had never been rendered at all — and the announcement,
+  stored with empty text, read as "the agent couldn't answer". Build a capture
+  from the rows the production writer actually writes.
+- **`CATALOG_ROOTS` is now derived from `en.json`** rather than hand-listed. It
+  had silently stopped guarding a whole page family twice (4.2, 5.3).
+- **`.env` wins over a shell `DATABASE_URL`.** Pointing a vitest run at a
+  scratch database from the command line does not work — the setup loads `.env`
+  last. Two concurrent `npm test` runs still corrupt each other.
+- **The storefront blocks have a 16KB budget each** (`tests/unit/storefront-blocks.test.ts`).
+  The Buyer Agent widget is at 16.3KB of it. Comments in a shipped block reach
+  the wire: the reasoning belongs in `docs/adr/0023`, not in the Liquid.
+- **`Order` had no line items until 6.1.** `OrderLine` now mirrors them with
+  their discount allocations. Rule performance is read from the **discount
+  title** — the Function sets the winning rule's name as the message — so a
+  renamed rule keeps its history under the old name. `docs/adr/0024`.
+- **7.2's GDPR redaction has one more table to reach**: `OrderLine` hangs off
+  `Order` and is covered by the cascade, but check it when writing that handler.
 
 - **Read `CLAUDE.md` first, then this file.** The specs are checked in at
   `docs/spec/`; the architecture reasoning is in `docs/adr/` (thirteen so far).

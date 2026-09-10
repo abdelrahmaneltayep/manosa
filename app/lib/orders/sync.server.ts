@@ -1,9 +1,9 @@
-import { parseMoney, type Money } from "@mannon/pricing-engine";
+import { money, parseMoney, type Money } from "@mannon/pricing-engine";
 import { OrderSource, type Prisma } from "@prisma/client";
 
 import { db } from "~/db.server";
 import { normalizeTags } from "~/lib/customers/tagging";
-import type { OrderNode } from "~/lib/orders/admin-graphql.server";
+import type { OrderLineNode, OrderNode } from "~/lib/orders/admin-graphql.server";
 import { tenant } from "~/lib/tenant/shop-context.server";
 
 /**
@@ -21,6 +21,33 @@ import { tenant } from "~/lib/tenant/shop-context.server";
 
 /** The note attribute Mannon's own storefront surfaces write. */
 export const SOURCE_ATTRIBUTE = "_mannon_source";
+
+/**
+ * What one discount took off one line.
+ *
+ * `title` is the name the buyer saw at checkout. Mannon's own Function sets the
+ * winning rule's name as the discount message, which is the only reason rule
+ * performance is measurable — and also why renaming a rule does not rewrite
+ * what it earned last quarter.
+ */
+export interface LineDiscount {
+  title: string;
+  amount: Money;
+}
+
+export interface OrderLineFacts {
+  lineItemId: string;
+  title: string;
+  variantTitle: string | null;
+  sku: string | null;
+  productId: string | null;
+  variantId: string | null;
+  quantity: number;
+  unitPrice: Money;
+  originalTotal: Money;
+  discountedTotal: Money;
+  discounts: LineDiscount[];
+}
 
 export interface OrderFacts {
   orderId: string;
@@ -40,6 +67,14 @@ export interface OrderFacts {
   processedAt: Date;
   cancelledAt: Date | null;
   shopifyUpdatedAt: Date | null;
+  /**
+   * The order's lines, as far as Shopify gave them to us.
+   *
+   * Never partial silently: `linesTruncated` compares the quantity these add
+   * up to against the order's own, so a chart built on them can say it is
+   * missing something rather than quietly under-reporting.
+   */
+  lines: OrderLineFacts[];
 }
 
 const trimmed = (value: unknown): string | null => {
@@ -113,6 +148,78 @@ export function classifySource(
   }
 }
 
+/**
+ * The lines of one order, from a GraphQL node.
+ *
+ * Shopify gives the three money figures directly, so nothing here multiplies:
+ * a line total this app computed from a unit price would disagree with the
+ * order's own total the first time a line carried a fractional discount.
+ */
+export function linesFromNode(
+  nodes: readonly OrderLineNode[],
+  currencyCode: string,
+): OrderLineFacts[] {
+  return nodes.map((node) => {
+    const quantity = readQuantity(node.quantity);
+    const unitPrice = readMoney(
+      node.originalUnitPriceSet?.shopMoney?.amount,
+      currencyCode,
+    );
+    const originalTotal = readMoney(
+      node.originalTotalSet?.shopMoney?.amount,
+      currencyCode,
+    );
+
+    return {
+      lineItemId: node.id,
+      // A line always has a name on the merchant's screen, even when Shopify
+      // has forgotten the product it came from.
+      title: trimmed(node.title) ?? "Untitled item",
+      variantTitle: trimmed(node.variantTitle),
+      sku: trimmed(node.sku),
+      productId: trimmed(node.product?.id),
+      variantId: trimmed(node.variant?.id),
+      quantity,
+      unitPrice,
+      originalTotal,
+      discountedTotal: readMoney(
+        node.discountedTotalSet?.shopMoney?.amount,
+        currencyCode,
+      ),
+      discounts: (node.discountAllocations ?? []).map((allocation) => ({
+        title:
+          trimmed(allocation.discountApplication?.title) ??
+          trimmed(allocation.discountApplication?.code) ??
+          UNNAMED_DISCOUNT,
+        amount: readMoney(allocation.allocatedAmountSet?.shopMoney?.amount, currencyCode),
+      })),
+    };
+  });
+}
+
+/**
+ * A discount Shopify named neither by title nor by code.
+ *
+ * Kept as its own constant so the analytics page can say "an unnamed discount"
+ * rather than dropping the money out of the totals, which is the version of
+ * this that makes a chart wrong.
+ */
+export const UNNAMED_DISCOUNT = "(unnamed discount)";
+
+/**
+ * Did Shopify give us every line of this order?
+ *
+ * The lines are fetched with a cap rather than paginated per order. When the
+ * quantities they add up to fall short of the order's own, some are missing —
+ * and a chart that cannot know that would under-report a merchant's biggest
+ * orders, which are exactly the ones with the most lines.
+ */
+export function linesTruncated(facts: OrderFacts): boolean {
+  if (facts.lines.length === 0) return facts.totalQuantity > 0;
+  const counted = facts.lines.reduce((sum, line) => sum + line.quantity, 0);
+  return counted < facts.totalQuantity;
+}
+
 export function factsFromNode(node: OrderNode, fallbackCurrency = "USD"): OrderFacts {
   const currencyCode =
     node.currentTotalPriceSet?.shopMoney?.currencyCode ?? fallbackCurrency;
@@ -139,6 +246,7 @@ export function factsFromNode(node: OrderNode, fallbackCurrency = "USD"): OrderF
     processedAt: readDate(node.processedAt) ?? readDate(node.createdAt) ?? new Date(0),
     cancelledAt: readDate(node.cancelledAt),
     shopifyUpdatedAt: readDate(node.updatedAt),
+    lines: linesFromNode(node.lineItems?.nodes ?? [], currencyCode),
   };
 }
 
@@ -167,9 +275,94 @@ interface WebhookOrder {
     default_address?: { company?: string | null } | null;
   } | null;
   note_attributes?: { name?: string | null; value?: string | null }[] | null;
-  line_items?: { quantity?: number | null }[] | null;
+  line_items?: WebhookLine[] | null;
+  /// Order-level discount applications. A line's allocations point at these by
+  /// position, which is the only place their names live.
+  discount_applications?: { title?: string | null; code?: string | null }[] | null;
   refunds?:
     { transactions?: { amount?: string | null; kind?: string | null }[] | null }[] | null;
+}
+
+interface WebhookLine {
+  id?: number | string;
+  admin_graphql_api_id?: string;
+  title?: string | null;
+  name?: string | null;
+  variant_title?: string | null;
+  sku?: string | null;
+  product_id?: number | string | null;
+  variant_id?: number | string | null;
+  quantity?: number | null;
+  price?: string | null;
+  discount_allocations?:
+    { amount?: string | null; discount_application_index?: number | null }[] | null;
+}
+
+/**
+ * The lines of one order, from a webhook payload.
+ *
+ * Two differences from the GraphQL shape, both of them traps. The payload
+ * carries a *per-unit* price and no line totals, so the original total is
+ * `price × quantity` and the discounted total is that minus the allocations —
+ * there is no field to read either from. And a line's allocations name their
+ * discount by **index into the order's** `discount_applications`, so a name
+ * only exists if that array came through.
+ */
+export function linesFromWebhook(
+  order: WebhookOrder,
+  currencyCode: string,
+): OrderLineFacts[] {
+  const applications = order.discount_applications ?? [];
+
+  return (order.line_items ?? []).map((line) => {
+    const quantity = readQuantity(line.quantity);
+    const unitPrice = readMoney(line.price, currencyCode);
+    const originalTotal = money(unitPrice.amount * quantity, currencyCode);
+
+    const discounts: LineDiscount[] = (line.discount_allocations ?? []).map(
+      (allocation) => {
+        const index = allocation.discount_application_index;
+        const application = typeof index === "number" ? applications[index] : undefined;
+
+        return {
+          title:
+            trimmed(application?.title) ?? trimmed(application?.code) ?? UNNAMED_DISCOUNT,
+          amount: readMoney(allocation.amount, currencyCode),
+        };
+      },
+    );
+
+    const allocated = discounts.reduce(
+      (sum, discount) => sum + discount.amount.amount,
+      0,
+    );
+
+    return {
+      lineItemId:
+        line.admin_graphql_api_id ??
+        (line.id === undefined || line.id === null
+          ? ""
+          : `gid://shopify/LineItem/${line.id}`),
+      title: trimmed(line.title) ?? trimmed(line.name) ?? "Untitled item",
+      variantTitle: trimmed(line.variant_title),
+      sku: trimmed(line.sku),
+      productId: gid("Product", line.product_id),
+      variantId: gid("ProductVariant", line.variant_id),
+      quantity,
+      unitPrice,
+      originalTotal,
+      // Never below zero: a payload whose allocations exceed the line is a
+      // payload we have misread, and a negative line total would be reported
+      // as negative revenue on a chart.
+      discountedTotal: money(Math.max(0, originalTotal.amount - allocated), currencyCode),
+      discounts,
+    };
+  });
+}
+
+/** A numeric REST id as the GID everything else in this app speaks. */
+function gid(kind: string, id: number | string | null | undefined): string | null {
+  return id === undefined || id === null ? null : `gid://shopify/${kind}/${id}`;
 }
 
 /** The GID for a webhook payload, or null when it carries no id at all. */
@@ -257,6 +450,9 @@ export function factsFromWebhook(
       readDate(order.processed_at) ?? readDate(order.created_at) ?? new Date(0),
     cancelledAt: readDate(order.cancelled_at),
     shopifyUpdatedAt: readDate(order.updated_at),
+    // A line with no id at all cannot be written or de-duplicated, and one
+    // arrived is one we would otherwise silently mirror twice.
+    lines: linesFromWebhook(order, currencyCode).filter((line) => line.lineItemId !== ""),
   };
 }
 
@@ -330,10 +526,71 @@ export async function upsertOrder(
   const data = { ...rowData(facts, isWholesale), ...overrides };
   const { shop: _shop, orderId: _orderId, ...updatable } = data;
 
-  return db.order.upsert({
-    where: { shop_orderId: { shop: data.shop, orderId: facts.orderId } },
-    create: data,
-    update: updatable,
+  // A payload that carried no lines says nothing about the lines we already
+  // hold — some order webhooks (a fulfilment, a cancellation) arrive without
+  // `line_items`, and letting one of those set this flag would mark a
+  // perfectly mirrored order as incomplete. On a *new* order there is nothing
+  // to preserve, so what arrived is what we have.
+  const truncated = linesTruncated(facts);
+  const withLines =
+    facts.lines.length > 0 ? { ...updatable, linesTruncated: truncated } : updatable;
+
+  return db.$transaction(async (tx) => {
+    const order = await tx.order.upsert({
+      where: { shop_orderId: { shop: data.shop, orderId: facts.orderId } },
+      create: { ...data, linesTruncated: truncated },
+      update: withLines,
+    });
+
+    await replaceLines(tx, order.id, facts.lines);
+    return order;
+  });
+}
+
+/** Anything that can write lines — the client, or a transaction. */
+type LineWriter = Pick<typeof db, "orderLine">;
+
+/**
+ * The order's lines, as they are now.
+ *
+ * Deleted and rewritten rather than reconciled by id. An order edited in
+ * Shopify loses lines as well as gaining them, and an upsert-only pass leaves
+ * the removed ones behind — as revenue, on a chart, for a product the merchant
+ * never sold. Both halves are in the caller's transaction, so an order never
+ * exists with half its lines.
+ *
+ * A payload that carried no lines at all leaves the ones we have alone: some
+ * order webhooks (a fulfilment, a cancellation) arrive without `line_items`,
+ * and treating "not mentioned" as "deleted" would empty the table an event at
+ * a time.
+ */
+async function replaceLines(
+  tx: LineWriter,
+  orderRowId: string,
+  lines: readonly OrderLineFacts[],
+): Promise<void> {
+  if (lines.length === 0) return;
+
+  await tx.orderLine.deleteMany({ where: { orderId: orderRowId } });
+  await tx.orderLine.createMany({
+    data: lines.map((line) => ({
+      ...tenant(),
+      orderId: orderRowId,
+      lineItemId: line.lineItemId,
+      title: line.title,
+      variantTitle: line.variantTitle,
+      sku: line.sku,
+      productId: line.productId,
+      variantId: line.variantId,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice.amount,
+      originalTotal: line.originalTotal.amount,
+      discountedTotal: line.discountedTotal.amount,
+      discounts: line.discounts.map((discount) => ({
+        title: discount.title,
+        amount: discount.amount.amount,
+      })),
+    })),
   });
 }
 
