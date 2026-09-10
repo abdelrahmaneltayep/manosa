@@ -1,5 +1,21 @@
 import type { BriefingItemView, BriefingView, HomeView } from "~/components/home/types";
 import { db } from "~/db.server";
+import {
+  loadActivity,
+  RELATIVE_WINDOW_MS,
+  type ActivityRow,
+} from "~/lib/activity/feed.server";
+import {
+  deltaPercent,
+  loadKpis,
+  PERIODS,
+  DEFAULT_PERIOD,
+  isPeriod,
+  type KpiSet,
+  type KpiValue,
+  type Period,
+} from "~/lib/analytics/kpis.server";
+import { loadSetup } from "~/lib/setup/checklist.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate, type Translate } from "~/i18n/translate";
 import { isAiAvailable } from "~/lib/ai/client.server";
@@ -106,11 +122,20 @@ export async function buildView(
   const entitlements = await loadEntitlements(now);
   const agentAvailable = isAiAvailable() && hasFeature(entitlements, "merchant_agent");
 
-  const [briefing, facts, muted] = await Promise.all([
-    latestBriefing(),
-    briefingFacts(now),
-    mutedKinds(),
-  ]);
+  const url = new URL(request.url);
+  const requested = Number(url.searchParams.get("period"));
+  const period: Period = isPeriod(requested) ? requested : DEFAULT_PERIOD;
+
+  const [briefing, facts, muted, kpis, setup, activity, wholesaleOrders] =
+    await Promise.all([
+      latestBriefing(),
+      briefingFacts(now),
+      mutedKinds(),
+      loadKpis(period, { now }),
+      loadSetup(),
+      loadActivity(),
+      db.order.count({ where: { isWholesale: true } }),
+    ]);
   const failure = await briefingFailure(briefing);
 
   const visible = facts.filter((fact) => !muted.includes(fact.kind));
@@ -135,11 +160,25 @@ export async function buildView(
   // "Not this again" links here rather than posting, so that the question is
   // asked without anything having been written yet. An unknown kind in the
   // query string asks nothing — it does not render a raw string as a heading.
-  const asked = new URL(request.url).searchParams.get("confirm");
+  const asked = url.searchParams.get("confirm");
   const confirmingMute = asked !== null && isFactKind(asked) ? asked : null;
 
   return {
     shopName: shop?.name ?? shopScope.require("home"),
+    kpis: kpiView(kpis, { locale, empty: wholesaleOrders === 0 }),
+    setup: {
+      items: setup.items.map((item) => ({
+        step: item.step,
+        done: item.done,
+        href: item.href,
+        attested: item.attested ?? false,
+      })),
+      done: setup.done,
+      total: setup.total,
+      complete: setup.complete,
+      dismissed: setup.dismissed,
+    },
+    activity: activityView(activity, { now, locale, t }),
     briefing: {
       status: briefingStatus({
         agentAvailable,
@@ -174,3 +213,103 @@ export async function buildView(
     },
   };
 }
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Relative inside a week, absolute after it.
+ *
+ * The checklist's rule, and the right one: "3 days ago" is how a person thinks
+ * about this week and a useless way to describe last March.
+ */
+export function whenLabel(at: Date, now: Date, locale: string): string {
+  const elapsed = now.getTime() - at.getTime();
+
+  if (elapsed < RELATIVE_WINDOW_MS) {
+    const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    const minutes = Math.round(elapsed / 60_000);
+    if (minutes < 60) return relative.format(-minutes, "minute");
+    const hours = Math.round(elapsed / 3_600_000);
+    if (hours < 24) return relative.format(-hours, "hour");
+    return relative.format(-Math.round(elapsed / 86_400_000), "day");
+  }
+
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(at);
+}
+
+/** The kind chip: the family of thing this row is, in one word. */
+export function activityKindLabel(action: string, t: Translate): string {
+  const family = action.split(".")[0] ?? "other";
+  const known = [
+    "order",
+    "pricing_rule",
+    "pricing",
+    "form",
+    "customer",
+    "customer_group",
+    "customer_tag_rule",
+    "customer_segment",
+    "quote",
+    "draft_order",
+    "terms",
+    "billing",
+    "briefing",
+    "setup",
+    "app",
+    "shop",
+  ];
+  return t(
+    known.includes(family) ? `home.activity.kind.${family}` : "home.activity.kind.other",
+  );
+}
+
+export function activityView(
+  page: { rows: ActivityRow[] },
+  options: { now: Date; locale: string; t: Translate },
+): HomeView["activity"] {
+  return {
+    rows: page.rows.map((row) => ({
+      id: row.id,
+      summary: row.summary,
+      when: whenLabel(row.at, options.now, options.locale),
+      at: row.at.toISOString(),
+      href: row.href,
+      agent: row.agent,
+      kindLabel: activityKindLabel(row.action, options.t),
+    })),
+    href: "/app/activity",
+    empty: page.rows.length === 0,
+  };
+}
+
+/** The five cards, formatted. Nothing downstream does arithmetic. */
+export function kpiView(
+  set: KpiSet,
+  options: { locale: string; loading?: boolean; empty: boolean },
+): HomeView["kpis"] {
+  const format = (value: KpiValue["value"]) =>
+    typeof value === "number"
+      ? new Intl.NumberFormat(options.locale).format(value)
+      : formatCurrency(value, options.locale);
+
+  return {
+    period: set.period,
+    periods: [...PERIODS],
+    loading: options.loading ?? false,
+    empty: options.empty,
+    cards: set.kpis.map((kpi) => ({
+      key: kpi.key,
+      value: format(kpi.value.value),
+      previous: kpi.value.previous === null ? null : format(kpi.value.previous),
+      deltaPercent: deltaPercent(
+        amountOf(kpi.value.value),
+        kpi.value.previous === null ? null : amountOf(kpi.value.previous),
+      ),
+      partial: kpi.partial,
+      href: kpi.href,
+    })),
+  };
+}
+
+const amountOf = (value: KpiValue["value"]) =>
+  typeof value === "number" ? value : value.amount;

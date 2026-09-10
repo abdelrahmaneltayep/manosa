@@ -8,6 +8,38 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — Six setup steps, and the sixth is choosing a plan
+
+The spec names four (embed, first rule, form, first approved buyer); the
+checklist says the card persists until **6/6**. The two extra are the ones a
+merchant actually does next: taking a first wholesale order, and choosing a
+plan. Both are queries, like the other four, so neither can tick without having
+happened — and "choose a plan" links to the plans page rather than nagging,
+because staying free is a decision a merchant is allowed to make. Rejected:
+padding the list with steps that tick on a page visit, and shipping four of six
+with a card that never completes.
+
+## 2026-09-10 — The KPI period lives in the URL, and deltas hide rather than lie
+
+`/app?period=7|30|90`. A query parameter rather than a stored preference: it is
+shareable, it survives a reload, it needs no client JavaScript, and it is one
+fewer column on `Shop`. Two figures carry a comparison (revenue and order
+count); the other three are counts of what is true right now, and an arrow
+beside "4 live pricing rules" would be comparing today's count with one nobody
+took. A delta is hidden whenever the base period is zero — "▲ ∞%" is not a
+number, and "▲ 400%" off one order last week is a worse one. Under a week of
+history, the period cards read "—" with "Needs a week of data" rather than
+printing arithmetic on noise.
+
+## 2026-09-10 — The activity feed is a union of two tables, paged on time
+
+Everything a person or an agent did is in `AuditLog`; orders are mirrored from
+Shopify and are not audited, because nobody in this app did them. So the feed
+reads both and merges on time, and pages by timestamp cursor rather than by
+offset — an offset into a merge is not a position in either table. Rejected:
+writing audit rows for orders (a log of things this app did not do), and an
+orderless activity feed (the checklist names orders first).
+
 ## 2026-09-10 — The Ask bar does not stream, and its examples do not rotate
 
 Checklist §1 asks for "Streaming: inline result panel under the bar; Esc

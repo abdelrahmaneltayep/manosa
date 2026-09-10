@@ -3,12 +3,19 @@ import { resolve } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { HomePage } from "~/components/home/HomePage";
-import type { AskView, BriefingView, HomeView } from "~/components/home/types";
+import type {
+  ActivityView,
+  AskView,
+  BriefingView,
+  HomeView,
+  KpiView,
+  SetupView,
+} from "~/components/home/types";
 import type { Locale } from "~/i18n/config";
 import { createCaptureHarness, type CaptureHarness } from "../support/state-capture";
 
 /**
- * Home — every state in checklist §1's two ✦ surfaces.
+ * Home — every state in checklist §1.
  *
  * The states that matter most are the ones where the agent has nothing: day
  * one, all quiet, and the model being down. Each is a different sentence,
@@ -72,10 +79,105 @@ const briefing = (overrides: Partial<BriefingView> = {}): BriefingView => ({
   ...overrides,
 });
 
+const kpis = (overrides: Partial<KpiView> = {}): KpiView => ({
+  period: 30,
+  periods: [7, 30, 90],
+  loading: false,
+  empty: false,
+  cards: [
+    {
+      key: "wholesale_revenue",
+      value: "$12,400.00",
+      previous: "$9,300.00",
+      deltaPercent: 33,
+      partial: false,
+      href: "/app/orders",
+    },
+    {
+      key: "wholesale_orders",
+      value: "18",
+      previous: "14",
+      deltaPercent: 29,
+      partial: false,
+      href: "/app/orders",
+    },
+    {
+      key: "pending_approvals",
+      value: "6",
+      previous: null,
+      deltaPercent: null,
+      partial: false,
+      href: "/app/customers/applications",
+    },
+    {
+      key: "active_rules",
+      value: "4",
+      previous: null,
+      deltaPercent: null,
+      partial: false,
+      href: "/app/pricing",
+    },
+    {
+      key: "terms_outstanding",
+      value: "$1,200.00",
+      previous: null,
+      deltaPercent: null,
+      partial: false,
+      href: "/app/orders/terms",
+    },
+  ],
+  ...overrides,
+});
+
+const setup = (overrides: Partial<SetupView> = {}): SetupView => ({
+  items: [
+    { step: "embed", done: true, href: "/app/settings", attested: false },
+    { step: "rule", done: true, href: "/app/pricing/new", attested: false },
+    { step: "form", done: false, href: "/app/forms", attested: false },
+    { step: "buyer", done: false, href: "/app/customers/applications", attested: false },
+    { step: "order", done: false, href: "/app/orders", attested: false },
+    { step: "plan", done: true, href: "/app/plans", attested: false },
+  ],
+  done: 3,
+  total: 6,
+  complete: false,
+  dismissed: false,
+  ...overrides,
+});
+
+const activity = (overrides: Partial<ActivityView> = {}): ActivityView => ({
+  rows: [
+    {
+      id: "order:1",
+      summary: "#1001 — Acme Ltd",
+      when: "2 hours ago",
+      at: "2026-06-01T07:00:00.000Z",
+      href: "/app/orders",
+      agent: false,
+      kindLabel: "Order",
+    },
+    {
+      id: "audit:1",
+      summary: "Created the rule “Wholesale 35%”.",
+      when: "yesterday",
+      at: "2026-05-31T09:00:00.000Z",
+      href: "/app/pricing",
+      agent: true,
+      kindLabel: "Pricing",
+    },
+  ],
+  href: "/app/activity",
+  empty: false,
+  ...overrides,
+});
+
 const view = (overrides: Partial<HomeView> = {}): HomeView => ({
   shopName: "Acme Wholesale",
+  kpis: kpis(),
   briefing: briefing(),
   ask: ask(),
+  setup: setup(),
+  activity: activity(),
   ...overrides,
 });
 
@@ -298,5 +400,136 @@ describe("the Ask bar", () => {
 
     expect(html).toContain("Try again in 30 seconds");
     capture("12-ask-rate-limited", html);
+  });
+});
+
+describe("the KPI cards", () => {
+  it("shows five figures, the period, and a delta that has a base", () => {
+    const html = render(<HomePage view={view()} />);
+
+    expect(html).toContain("$12,400.00");
+    expect(html).toContain("Wholesale revenue");
+    expect(html).toContain("▲ 33%");
+    expect(html).toContain("/app?period=7");
+    capture("15-kpi-cards", html);
+  });
+
+  it("hides the delta rather than dividing by nothing", () => {
+    const html = render(
+      <HomePage
+        view={view({
+          kpis: kpis({
+            cards: kpis().cards.map((card) => ({
+              ...card,
+              deltaPercent: null,
+              previous: null,
+            })),
+          }),
+        })}
+      />,
+    );
+
+    expect(html).not.toContain("▲");
+    expect(html).not.toContain("▼");
+  });
+
+  it("says a metric needs a week rather than printing a number", () => {
+    const html = render(
+      <HomePage
+        view={view({
+          kpis: kpis({
+            cards: kpis().cards.map((card) => ({ ...card, partial: true })),
+          }),
+        })}
+      />,
+    );
+
+    expect(html).toContain("Needs a week of data");
+    expect(html).not.toContain("$12,400.00");
+    capture("16-kpi-partial", html);
+  });
+
+  it("explains the zeros before there is anything to count", () => {
+    const html = render(<HomePage view={view({ kpis: kpis({ empty: true }) })} />);
+    expect(html).toContain("Waiting for your first wholesale order");
+    capture("17-kpi-empty", html);
+  });
+
+  it("holds the layout while the numbers load", () => {
+    const html = render(<HomePage view={view({ kpis: kpis({ loading: true }) })} />);
+
+    // Fixed-height tiles, so nothing below them moves when the figures land.
+    expect(html).toContain('minBlockSize="120px"');
+    expect(html).not.toContain("$12,400.00");
+    capture("18-kpi-loading", html);
+  });
+});
+
+describe("the setup checklist", () => {
+  it("lists six steps, each a link, with what is done", () => {
+    const html = render(<HomePage view={view()} />);
+
+    expect(html).toContain("3 of 6 done");
+    expect(html).toContain("Publish a registration form");
+    expect(html).toContain("/app/pricing/new");
+    expect(html).toContain("Let Claude set this up for you");
+    capture("19-setup-checklist", html);
+  });
+
+  it("says when the embed is the merchant's word rather than something seen", () => {
+    const html = render(
+      <HomePage
+        view={view({
+          setup: setup({
+            items: setup().items.map((item) =>
+              item.step === "embed" ? { ...item, done: true, attested: true } : item,
+            ),
+          }),
+        })}
+      />,
+    );
+
+    expect(html).toContain("we haven&#x27;t seen your storefront call us yet");
+  });
+
+  it("collapses to a pill once it is finished, with a way back", () => {
+    const html = render(
+      <HomePage
+        view={view({
+          setup: setup({
+            items: setup().items.map((item) => ({ ...item, done: true })),
+            done: 6,
+            complete: true,
+            dismissed: true,
+          }),
+        })}
+      />,
+    );
+
+    expect(html).toContain("Setup complete");
+    expect(html).toContain("Show the checklist");
+    expect(html).not.toContain("Publish a registration form");
+    capture("20-setup-pill", html);
+  });
+});
+
+describe("recent activity", () => {
+  it("shows what happened, when, and chips the agent's rows", () => {
+    const html = render(<HomePage view={view()} />);
+
+    expect(html).toContain("#1001 — Acme Ltd");
+    expect(html).toContain("2 hours ago");
+    expect(html).toContain("✦");
+    expect(html).toContain("/app/activity");
+    capture("21-activity", html);
+  });
+
+  it("says what will appear here, before anything has", () => {
+    const html = render(
+      <HomePage view={view({ activity: activity({ rows: [], empty: true }) })} />,
+    );
+
+    expect(html).toContain("Activity will appear here");
+    capture("22-activity-empty", html);
   });
 });

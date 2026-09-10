@@ -1,7 +1,14 @@
 import { useTranslation } from "react-i18next";
 
 import { whenDisabled } from "~/components/boolean-attribute";
-import type { AskView, BriefingView, HomeView } from "~/components/home/types";
+import type {
+  ActivityView,
+  AskView,
+  BriefingView,
+  HomeView,
+  KpiView,
+  SetupView,
+} from "~/components/home/types";
 
 /**
  * Home — checklist §1's ✦ surfaces.
@@ -17,8 +24,11 @@ export function HomePage({ view }: { view: HomeView }) {
 
   return (
     <s-page heading={t("home.heading", { shop: view.shopName })}>
+      <Kpis view={view.kpis} />
       <Briefing view={view.briefing} />
       <Ask view={view.ask} />
+      <Setup view={view.setup} />
+      <Activity view={view.activity} />
     </s-page>
   );
 }
@@ -325,5 +335,184 @@ function AskResult({ view }: { view: AskView }) {
         ) : null}
       </s-stack>
     </s-box>
+  );
+}
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The five numbers, and the period they are over.
+ *
+ * Skeletons are the same shape and height as the cards they become, because a
+ * spinner that reflows the page is how you lose the CLS budget the checklist
+ * treats as an acceptance criterion.
+ */
+function Kpis({ view }: { view: KpiView }) {
+  const { t } = useTranslation();
+
+  return (
+    <s-section heading={t("home.kpi.heading")}>
+      <s-stack direction="block" gap="base">
+        <s-stack direction="inline" gap="small" alignItems="center">
+          {view.periods.map((days) => (
+            <s-link key={days} href={`/app?period=${days}`}>
+              {days === view.period
+                ? t("home.kpi.periodCurrent", { count: days })
+                : t("home.kpi.period", { count: days })}
+            </s-link>
+          ))}
+        </s-stack>
+
+        {view.empty ? <s-paragraph>{t("home.kpi.emptyBody")}</s-paragraph> : null}
+
+        <s-grid gridTemplateColumns="repeat(auto-fit, minmax(180px, 1fr))" gap="base">
+          {view.cards.map((card) => (
+            <s-box
+              key={card.key}
+              padding="base"
+              minBlockSize="120px"
+              borderWidth="base"
+              borderStyle="solid"
+              borderColor="base"
+              borderRadius="base"
+            >
+              <s-stack direction="block" gap="small-500">
+                <s-text color="subdued">{t(`home.kpi.card.${card.key}`)}</s-text>
+                {view.loading ? (
+                  <s-text color="subdued">···</s-text>
+                ) : card.partial ? (
+                  <s-stack direction="block" gap="small-500">
+                    <s-heading>—</s-heading>
+                    <s-text color="subdued">{t("home.kpi.needsAWeek")}</s-text>
+                  </s-stack>
+                ) : (
+                  <s-stack direction="block" gap="small-500">
+                    <s-heading>{card.value}</s-heading>
+                    {/* Hidden when the base period was zero: "▲ ∞%" is not a
+                        number, and "▲ 400%" off one order is a worse one. */}
+                    {card.deltaPercent === null ? null : (
+                      <s-badge tone={card.deltaPercent >= 0 ? "success" : "critical"}>
+                        {t(
+                          card.deltaPercent >= 0
+                            ? "home.kpi.deltaUp"
+                            : "home.kpi.deltaDown",
+                          { percent: Math.abs(card.deltaPercent) },
+                        )}
+                      </s-badge>
+                    )}
+                  </s-stack>
+                )}
+                <s-link href={card.href}>{t(`home.kpi.link.${card.key}`)}</s-link>
+              </s-stack>
+            </s-box>
+          ))}
+        </s-grid>
+      </s-stack>
+    </s-section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Six things, and a pill once they are done.
+ *
+ * The embed row is the only one that can be true on the merchant's word rather
+ * than on something observed, and it says which — see `docs/adr/0022`.
+ */
+function Setup({ view }: { view: SetupView }) {
+  const { t } = useTranslation();
+
+  if (view.dismissed) {
+    return (
+      <s-section>
+        <s-stack direction="inline" gap="small" alignItems="center">
+          <s-badge tone="success">
+            {t("home.setup.pill", { done: view.done, total: view.total })}
+          </s-badge>
+          <form method="post">
+            <input type="hidden" name="intent" value="reopenSetup" />
+            <s-button type="submit" variant="tertiary">
+              {t("home.setup.reopen")}
+            </s-button>
+          </form>
+        </s-stack>
+      </s-section>
+    );
+  }
+
+  return (
+    <s-section heading={t("home.setup.heading")}>
+      <s-stack direction="block" gap="base">
+        <s-text color="subdued">
+          {t("home.setup.progress", { done: view.done, total: view.total })}
+        </s-text>
+
+        <s-stack direction="block" gap="small">
+          {view.items.map((item) => (
+            <s-stack key={item.step} direction="inline" gap="small" alignItems="center">
+              <s-badge tone={item.done ? "success" : "neutral"}>
+                {t(item.done ? "home.setup.done" : "home.setup.todo")}
+              </s-badge>
+              <s-link href={item.href}>{t(`home.setup.step.${item.step}`)}</s-link>
+              {item.attested ? (
+                <s-text color="subdued">{t("home.setup.yourWord")}</s-text>
+              ) : null}
+            </s-stack>
+          ))}
+        </s-stack>
+
+        {/* The embed cannot be read without a protected scope, so the merchant
+            can say. Offered only while it is outstanding. */}
+        {view.items.some((item) => item.step === "embed" && !item.done) ? (
+          <form method="post">
+            <input type="hidden" name="intent" value="confirmEmbed" />
+            <s-button type="submit" variant="tertiary">
+              {t("home.setup.confirmEmbed")}
+            </s-button>
+          </form>
+        ) : null}
+
+        {view.complete ? (
+          <form method="post">
+            <input type="hidden" name="intent" value="dismissSetup" />
+            <s-button type="submit" variant="tertiary">
+              {t("home.setup.dismiss")}
+            </s-button>
+          </form>
+        ) : null}
+
+        <s-link href="/app/setup">{t("home.setup.wizard")}</s-link>
+      </s-stack>
+    </s-section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+function Activity({ view }: { view: ActivityView }) {
+  const { t } = useTranslation();
+
+  return (
+    <s-section heading={t("home.activity.heading")}>
+      {view.empty ? (
+        <s-paragraph>{t("home.activity.empty")}</s-paragraph>
+      ) : (
+        <s-stack direction="block" gap="small">
+          {view.rows.map((row) => (
+            <s-stack key={row.id} direction="inline" gap="small" alignItems="center">
+              {row.agent ? <s-badge tone="info">✦</s-badge> : null}
+              <s-text color="subdued">{row.kindLabel}</s-text>
+              {row.href ? (
+                <s-link href={row.href}>{row.summary}</s-link>
+              ) : (
+                <s-text>{row.summary}</s-text>
+              )}
+              <s-text color="subdued">{row.when}</s-text>
+            </s-stack>
+          ))}
+          <s-link href={view.href}>{t("home.activity.viewAll")}</s-link>
+        </s-stack>
+      )}
+    </s-section>
   );
 }

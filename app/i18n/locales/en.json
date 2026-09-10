@@ -881,7 +881,11 @@
       "businessType": "Type of business",
       "licence": "Trade licence",
       "licenceHelp": "PDF, JPG or PNG.",
-      "privacy": "I agree to the privacy policy"
+      "privacy": "I agree to the privacy policy",
+      "website": "Website",
+      "resaleCertificate": "Resale certificate",
+      "estimatedVolume": "Roughly how much do you expect to order?",
+      "howDidYouHear": "How did you hear about us?"
     },
     "fieldKind": {
       "text": "Text",
@@ -1880,6 +1884,75 @@
           "body": "A short question about your buyers, orders, quotes or rules."
         }
       }
+    },
+    "kpi": {
+      "heading": "This month at a glance",
+      "period_one": "{{count}} day",
+      "period_other": "{{count}} days",
+      "periodCurrent_one": "{{count}} day ✓",
+      "periodCurrent_other": "{{count}} days ✓",
+      "needsAWeek": "Needs a week of data",
+      "emptyBody": "Waiting for your first wholesale order. These fill in as buyers start ordering.",
+      "deltaUp": "▲ {{percent}}%",
+      "deltaDown": "▼ {{percent}}%",
+      "card": {
+        "wholesale_revenue": "Wholesale revenue",
+        "wholesale_orders": "Wholesale orders",
+        "pending_approvals": "Applications waiting",
+        "active_rules": "Live pricing rules",
+        "terms_outstanding": "Outstanding on terms"
+      },
+      "link": {
+        "wholesale_revenue": "See the orders",
+        "wholesale_orders": "See the orders",
+        "pending_approvals": "Review them",
+        "active_rules": "Open pricing",
+        "terms_outstanding": "Open the ledger"
+      }
+    },
+    "setup": {
+      "heading": "Get set up",
+      "progress": "{{done}} of {{total}} done",
+      "done": "Done",
+      "todo": "To do",
+      "pill": "Setup complete — {{done}} of {{total}}",
+      "reopen": "Show the checklist",
+      "dismiss": "Hide this checklist",
+      "confirmEmbed": "I've turned the app embed on",
+      "yourWord": "Your word — we haven't seen your storefront call us yet",
+      "wizard": "✦ Let Claude set this up for you",
+      "step": {
+        "embed": "Turn the Mannon app embed on in your theme",
+        "rule": "Create your first pricing rule",
+        "form": "Publish a registration form",
+        "buyer": "Approve your first wholesale buyer",
+        "order": "Take your first wholesale order",
+        "plan": "Choose a plan"
+      }
+    },
+    "activity": {
+      "heading": "Recent activity",
+      "empty": "Activity will appear here — orders, registrations, rule changes.",
+      "viewAll": "View all",
+      "kind": {
+        "order": "Order",
+        "pricing_rule": "Pricing",
+        "pricing": "Pricing",
+        "form": "Registration",
+        "customer": "Buyer",
+        "customer_group": "Groups",
+        "customer_tag_rule": "Tagging",
+        "customer_segment": "Segments",
+        "quote": "Quote",
+        "draft_order": "Order",
+        "terms": "Terms",
+        "billing": "Plan",
+        "briefing": "Agent",
+        "setup": "Setup",
+        "app": "App",
+        "shop": "Shop",
+        "other": "Activity"
+      }
     }
   },
   "ask": {
@@ -1992,5 +2065,107 @@
     },
     "unchecked": "Shopify did not answer when we looked this one up, so we cannot say whether you stock it. Try again in a moment.",
     "buyersTruncated": "Showing your 100 largest buyers. To price for anyone else, open them in Customers and start the purchase order from there."
+  },
+  "wizard": {
+    "heading": "✦ Set Mannon up",
+    "offHeading": "The setup wizard is off",
+    "off": {
+      "no_key": "It needs an Anthropic key. Everything on the checklist can be done by hand — the links take you to each one.",
+      "plan": "It needs the Merchant Agent on your plan. Everything on the checklist can be done by hand — the links take you to each one."
+    },
+    "offManual": "Back to the checklist",
+    "label": "Tell me about your wholesale business",
+    "help": "A few sentences is plenty. Who buys from you, roughly how many of them, and what sort of deal they get.",
+    "example": "For example: “We roast coffee and sell to about forty cafés. They order monthly and get 25% off, and the three biggest get 30%.”",
+    "action": "Draft my setup",
+    "previewHeading": "Here's what I'd set up",
+    "groupsHeading_one": "{{count}} customer group",
+    "groupsHeading_other": "{{count}} customer groups",
+    "ruleHeading": "A starter pricing rule",
+    "noRule": "You already have pricing rules, so I haven't proposed another.",
+    "formHeading": "A registration form",
+    "noForm": "You already have a registration form, so I haven't proposed another.",
+    "apply": "Set this up",
+    "startOver": "Start again",
+    "appliedHeading": "Done — here's what I made",
+    "formIsDraft": "The form is a draft. Look at it, then publish it when you're happy with what buyers will see.",
+    "failureManual": "Set it up by hand instead",
+    "rule": {
+      "percentage": "{{percent}}% off everything, for buyers tagged {{tag}}.",
+      "amount_off": "{{amount}} off each unit, for buyers tagged {{tag}}.",
+      "volume_tier_one": "{{count}} quantity break, for buyers tagged {{tag}}.",
+      "volume_tier_other": "{{count}} quantity breaks, for buyers tagged {{tag}}."
+    },
+    "field": {
+      "company": "Company",
+      "email": "Email",
+      "phone": "Phone",
+      "vat_number": "VAT number",
+      "website": "Website",
+      "business_type": "Type of business",
+      "years_trading": "Years trading",
+      "resale_certificate": "Resale certificate",
+      "estimated_volume": "Expected order size",
+      "how_did_you_hear": "How they heard about you"
+    },
+    "link": {
+      "groups": "Your customer groups",
+      "rule": "The pricing rule",
+      "form": "The registration form"
+    },
+    "failure": {
+      "empty": {
+        "heading": "Tell me something first",
+        "body": "A sentence or two about who buys from you is enough to start."
+      },
+      "no_key": {
+        "heading": "The wizard is off",
+        "body": "It needs an Anthropic key. Nothing else in Mannon is affected."
+      },
+      "timeout": {
+        "heading": "That took too long",
+        "body": "Claude didn't answer in time. Try again, or set things up by hand."
+      },
+      "rate_limited": {
+        "heading": "Too many requests just now",
+        "body": "Try again in a moment."
+      },
+      "refused": {
+        "heading": "I couldn't work with that",
+        "body": "Try describing your buyers and the discount they get."
+      },
+      "invalid_output": {
+        "heading": "I couldn't read that answer",
+        "body": "Nothing was created. Try again, or set things up by hand."
+      },
+      "error": {
+        "heading": "Something went wrong",
+        "body": "Nothing was created. Try again, or set things up by hand."
+      },
+      "limit": {
+        "heading": "Your plan is at its limit",
+        "body": "This plan allows fewer rules or forms than the setup needs. Change plan, or set up what fits by hand."
+      },
+      "duplicate": {
+        "heading": "One of those groups already exists",
+        "body": "A customer group with that handle is already in your shop. Open your groups and use it, or start again with different names."
+      }
+    }
+  },
+  "activity": {
+    "heading": "Activity",
+    "empty": "Activity will appear here — orders, registrations, rule changes.",
+    "emptyFiltered": "Nothing of this kind yet. Try another filter.",
+    "more": "Show older",
+    "filter": {
+      "all": "Everything",
+      "allCurrent": "Everything ✓",
+      "orders": "Orders",
+      "ordersCurrent": "Orders ✓",
+      "registrations": "Registrations",
+      "registrationsCurrent": "Registrations ✓",
+      "pricing": "Pricing",
+      "pricingCurrent": "Pricing ✓"
+    }
   }
 }

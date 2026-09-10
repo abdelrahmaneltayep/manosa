@@ -220,6 +220,26 @@ describe("withProxy", () => {
     ).rejects.toMatchObject({ status: 503 });
   });
 
+  it("records that this shop's storefront called us, at most hourly", async () => {
+    await installShop(ALPHA);
+
+    await withProxy(signedRequest({ shop: ALPHA }), async () => "ok");
+    const first = await shopScope.run(ALPHA, () =>
+      db.shop.findUniqueOrThrow({ where: { shop: ALPHA } }),
+    );
+    // This is the setup checklist's only honest evidence that the app embed is
+    // live: a proxy request can only come from a theme rendering our blocks.
+    expect(first.storefrontSeenAt).toBeInstanceOf(Date);
+
+    await withProxy(signedRequest({ shop: ALPHA }), async () => "ok");
+    const second = await shopScope.run(ALPHA, () =>
+      db.shop.findUniqueOrThrow({ where: { shop: ALPHA } }),
+    );
+    // Not rewritten on every storefront request: the checklist wants to know
+    // whether, not how often, and a write per page view has no reader.
+    expect(second.storefrontSeenAt?.getTime()).toBe(first.storefrontSeenAt?.getTime());
+  });
+
   it("401s before it looks up any shop at all", async () => {
     const request = new Request(`https://mannon.test/proxy/quick-order?shop=${ALPHA}`);
     await expect(withProxy(request, async () => "reached")).rejects.toMatchObject({

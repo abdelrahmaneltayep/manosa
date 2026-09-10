@@ -1,8 +1,10 @@
 /**
  * The home page, as plain serialisable data.
  *
- * Phase 4.4 fills in the two ✦ surfaces — the Merchant Agent's briefing and the
- * Ask Mannon bar. The KPI cards, setup checklist and recent activity are 4.5.
+ * Everything on this page has already been decided by the time it gets here:
+ * every figure formatted, every sentence chosen, every link resolved. The page
+ * is a pure function of this, which is the only reason its states can be
+ * exercised in an environment with no Polaris and no Shopify session.
  */
 
 export interface BriefingItemView {
@@ -74,8 +76,75 @@ export interface AskView {
   cooldownSeconds: number | null;
 }
 
+/** One KPI card. Nothing here is computed by the card. */
+export interface KpiCardView {
+  key: string;
+  /** Pre-formatted: money in the shop's currency, or a count. */
+  value: string;
+  /** The same figure for the period before. Null when there is no comparison. */
+  previous: string | null;
+  /** Whole percent, signed. Null hides the delta — including when it is ∞. */
+  deltaPercent: number | null;
+  /** True when this shop has less than a week of history: the card shows "—". */
+  partial: boolean;
+  href: string;
+}
+
+export interface KpiView {
+  period: number;
+  periods: number[];
+  cards: KpiCardView[];
+  /** Skeleton tiles, fixed height, so nothing on the page moves when they land. */
+  loading: boolean;
+  /** No wholesale order has ever been mirrored. The zeros get a sentence. */
+  empty: boolean;
+}
+
+export interface SetupItemView {
+  step: string;
+  done: boolean;
+  href: string;
+  /** The merchant said so; we did not see it. Only the embed can be this. */
+  attested: boolean;
+}
+
+export interface SetupView {
+  items: SetupItemView[];
+  done: number;
+  total: number;
+  complete: boolean;
+  /** Collapsed to a ✓ pill. Re-opens on its own if a step stops being true. */
+  dismissed: boolean;
+}
+
+export interface ActivityRowView {
+  id: string;
+  /** Already-translated sentence. */
+  summary: string;
+  /** Already-formatted: relative inside a week, absolute after it. */
+  when: string;
+  /** ISO, for the `datetime` attribute. */
+  at: string;
+  href: string | null;
+  /** An agent did it — the ✦ chip. */
+  agent: boolean;
+  /** Already-translated label for the kind of thing this was. */
+  kindLabel: string;
+}
+
+export interface ActivityView {
+  rows: ActivityRowView[];
+  /** Where "View all" goes. */
+  href: string;
+  /** Nothing has happened yet. */
+  empty: boolean;
+}
+
 export interface HomeView {
   shopName: string;
+  kpis: KpiView;
   briefing: BriefingView;
   ask: AskView;
+  setup: SetupView;
+  activity: ActivityView;
 }

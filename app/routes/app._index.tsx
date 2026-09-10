@@ -9,6 +9,7 @@ import { translate } from "~/i18n/translate";
 import { routeAsk } from "~/lib/ai/prompts/ask.server";
 import { answerAsk } from "~/lib/agent/ask.server";
 import { muteKind, unmuteKind } from "~/lib/agent/briefing.server";
+import { confirmEmbed, dismissSetup, reopenSetup } from "~/lib/setup/checklist.server";
 import { buildView } from "~/lib/agent/home-view.server";
 import { ensureBriefingScheduled } from "~/lib/jobs/handlers/daily-briefing.server";
 import { withAdmin } from "~/shopify.server";
@@ -47,6 +48,21 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     if (intent === "unmute") {
       await unmuteKind((form.get("kind") ?? "").toString(), session.id);
+      return redirect("/app");
+    }
+
+    if (intent === "dismissSetup") {
+      await dismissSetup();
+      return redirect("/app");
+    }
+
+    if (intent === "reopenSetup") {
+      await reopenSetup();
+      return redirect("/app");
+    }
+
+    if (intent === "confirmEmbed") {
+      await confirmEmbed();
       return redirect("/app");
     }
 

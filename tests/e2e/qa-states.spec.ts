@@ -157,6 +157,10 @@ test.describe("Screening, segments and column-mapping states", () => {
   captureSuite("4.3");
 });
 
+test.describe("Setup wizard and activity log states", () => {
+  captureSuite("4.5");
+});
+
 test.describe("Merchant Agent, Ask bar and PO-to-order states", () => {
   captureSuite("4.4");
 });
