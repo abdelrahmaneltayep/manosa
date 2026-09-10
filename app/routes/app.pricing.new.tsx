@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useActionData, useLoaderData } from "@remix-run/react";
 
 import { RuleBuilderPage } from "~/components/pricing/RuleBuilderPage";
 import type { RuleBuilderView } from "~/components/pricing/types";
@@ -87,7 +87,21 @@ export const action = ({ request }: ActionFunctionArgs) =>
       return redirect(`/app/pricing/${created.id}?saved=1`);
     } catch (error) {
       if (error instanceof RuleValidationError) {
-        return json({ view: { issues: error.issues } }, { status: 422 });
+        // The whole form back, errors beside the fields. A bare list of codes
+        // would render an empty builder and lose what they typed.
+        return json(
+          {
+            view: {
+              form: { ...emptyFormView(currencyCode), ...formEcho(form, currencyCode) },
+              issues: error.issues,
+              duplicateName: duplicate?.name ?? null,
+              preview: null,
+              conflict: null,
+              saving: false,
+            } satisfies RuleBuilderView,
+          },
+          { status: 422 },
+        );
       }
       if (isPlanGateError(error)) {
         return redirect("/app/plans?from=pricing");
@@ -132,6 +146,11 @@ function formEcho(form: FormData, currencyCode: string) {
 }
 
 export default function NewRule() {
-  const { view } = useLoaderData<typeof loader>();
+  // The action's view wins. A non-redirect action response re-runs the loader,
+  // so reading only the loader's copy throws away everything the action just
+  // computed — the validation errors, the report, the draft.
+  const actionData = useActionData<typeof action>();
+  const loaderData = useLoaderData<typeof loader>();
+  const { view } = actionData ?? loaderData;
   return <RuleBuilderPage view={view as RuleBuilderView} />;
 }

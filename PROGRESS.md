@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T14:05:00Z
+Updated: 2026-09-10T14:55:00Z
 Current milestone: 4 — Claude
-Current task: 4.3 Registration screening, drafted emails, segments, CSV whisperer [in progress]
+Current task: 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order [in progress]
 
 ## Done
 
@@ -22,10 +22,10 @@ Current task: 4.3 Registration screening, drafted emails, segments, CSV whispere
 - [x] 3.4 Quick order storefront blocks, signed App Proxy — commit `224e4a0` — QA: `qa/3.4/REPORT.md`
 - [x] 4.1 AI infrastructure: client, streaming, timeouts, audit hooks — commit `b8136b5` — QA: `qa/4.1/REPORT.md`
 - [x] 4.2 Rule-from-a-sentence, margin guard — commit `d45f02b` — QA: `qa/4.2/REPORT.md`
+- [x] 4.3 Screening, drafted emails, segments, CSV whisperer — commit `PENDING` — QA: `qa/4.3/REPORT.md`
 
 ## Next up
 
-- 4.3 Registration screening, drafted emails, segments, CSV whisperer
 - 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order
 - 4.5 Home page assembled, Setup Wizard
 - 5.1–5.3 Storefront Buyer Agent · 6.1–6.3 Analytics, Settings, polish · 7.1–7.3 Release
@@ -71,6 +71,9 @@ Current task: 4.3 Registration screening, drafted emails, segments, CSV whispere
   tested against an injected stub, and the product works without a key — but
   **no call has ever been made to Anthropic**, so no prompt in this app has
   ever been answered. Unblocker: that key. Blocks verification, not work.
+- **No application has ever been screened for real.** ✦ Screening needs both a
+  key and a dev store. The facts assembly, the closed signal vocabulary and the
+  three "we could not say" states are tested against an injected client.
 - **The model is `claude-sonnet-4-5`**, which the spec names and which is a
   previous generation (`claude-sonnet-5` is the current equivalent). One
   environment variable, `MANNON_AI_MODEL`. Flagged in `DECISIONS.md` rather
@@ -156,6 +159,21 @@ Neither is blocking; both would change product decisions if answered.
   only ever emit an id it was given, so a forged payload reads as an unanswered
   question rather than a leak. Reuse the pattern for every later feature that
   names a merchant's objects.
+- **A Remix action's `json({ view })` is NOT what the component renders.** A
+  non-redirect action response re-runs the loader, so a component reading only
+  `useLoaderData` throws away everything the action computed. Five routes had
+  this (shipped in 1.3, copied in 4.2): validation errors never appeared, the
+  CSV dry run never rendered, and 4.2's ✦ draft could not appear at all. Every
+  route whose action returns a view now does
+  `const { view } = useActionData() ?? useLoaderData()`. Check this on every new
+  route that answers a POST with a view.
+- **A Polaris `s-button` has no `name` or `value`** (checked against
+  `@shopify/polaris-types`), so one form is one intent. Two submits in a form
+  silently post the first one. Use a link the loader handles, or a second form.
+- **The honeypot owns the field key `website`** (`app/lib/forms/spam.ts`), which
+  is why it is in `RESERVED_KEYS`. A form keyed that way drops every real
+  applicant as spam. ✦ Screening therefore scans every answer for a URL rather
+  than reading one field.
 - **`vitest` does not typecheck.** 4.2 shipped a fixture that silently dropped
   its overrides (twenty assertions passing vacuously) and a helper typed as the
   wrong interface; `npm run typecheck` caught the second, the first only showed

@@ -101,7 +101,7 @@ approved.
 
 A rule that sells below cost needs the merchant to tick a box that says so. The
 guard is re-run inside the approve request rather than trusted from the page,
-because the tick refers to *this* request's finding.
+because the tick refers to _this_ request's finding.
 
 Every generated rule is logged with the prompt that made it, as the checklist
 asks — in the audit entry beside the rule, not in the run log, which stays a

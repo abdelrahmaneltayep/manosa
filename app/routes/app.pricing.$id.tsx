@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useActionData, useLoaderData } from "@remix-run/react";
 
 import { RuleBuilderPage } from "~/components/pricing/RuleBuilderPage";
 import type { RuleBuilderView } from "~/components/pricing/types";
@@ -121,7 +121,22 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
         );
       }
       if (error instanceof RuleValidationError) {
-        return json({ view: { issues: error.issues } }, { status: 422 });
+        // The whole form back, with the issues beside the fields that caused
+        // them. A bare list of issue codes would render an empty builder and
+        // lose everything the merchant typed.
+        return json(
+          {
+            view: {
+              form: { ...toFormView(existing, currencyCode), ...echo(form) },
+              issues: error.issues,
+              duplicateName: null,
+              preview: null,
+              conflict: null,
+              saving: false,
+            } satisfies RuleBuilderView,
+          },
+          { status: 422 },
+        );
       }
       if (error instanceof RulesetTooLargeError) {
         return redirect("/app/pricing?publishError=too_large");
@@ -143,6 +158,13 @@ function echo(form: FormData) {
 }
 
 export default function EditRule() {
-  const { view } = useLoaderData<typeof loader>();
+  // The action's view wins. A non-redirect action response re-runs the loader,
+  // so reading only the loader's copy throws away everything the action just
+  // computed — the validation errors, the conflict, the merchant's own typing.
+  const actionData = useActionData<typeof action>();
+  const loaderData = useLoaderData<typeof loader>();
+  // The delete guard answers with an error and no view; the loader's copy is
+  // still the right thing to render under it.
+  const view = actionData && "view" in actionData ? actionData.view : loaderData.view;
   return <RuleBuilderPage view={view as RuleBuilderView} />;
 }

@@ -208,6 +208,19 @@ export interface ApplicationRowView {
   sameDomainCount: number;
   /** They already have a Shopify customer account. */
   existingCustomer: boolean;
+  /** ✦ Claude's read on it. A recommendation — never a decision. */
+  screening: ScreeningRowView;
+}
+
+export interface ScreeningRowView {
+  /**
+   * `waiting` is genuinely "not looked at yet"; `unavailable` means it ran and
+   * could not answer; `off` means nothing was ever attempted. Three different
+   * sentences, because a merchant acts differently on each.
+   */
+  status: "waiting" | "recommend" | "look" | "unavailable" | "off";
+  /** Signal codes and their numbers. Sentences are ours, so they translate. */
+  reasons: { signal: string; detail: number | null }[];
 }
 
 export interface ApplicationsView {
@@ -234,11 +247,78 @@ export interface ApplicationsView {
     intent: "approve" | "reject";
     subject: string;
     body: string;
+    /** The reason a reject email was drafted around, carried back on send. */
+    reason: string;
+    note: string;
   } | null;
   /** Reasons offered in the reject flow. */
   rejectionReasons: RejectionReason[];
-  /** ✦ Screening needs the AI layer (phase 4.3). */
+  /** True when there is a key, so screening can say anything at all. */
   aiScreening: boolean;
+  /** ✦ Claude drafted the email in the panel; the merchant edits and sends. */
+  emailDraft: { drafted: boolean; failure: string | null };
   /** No mail provider is configured, so no applicant is being told anything. */
   emailUnavailable: boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/* ✦ Segment builder                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** One condition as a chip: pre-rendered label, plus what it takes to remove. */
+export interface SegmentChipView {
+  index: number;
+  /** Translated by the server — the label needs the group's name and money. */
+  label: string;
+  /** True when this is the chip the merchant should loosen first. */
+  loosen: boolean;
+}
+
+export interface SegmentClarificationView {
+  index: number;
+  term: string;
+  options: { id: string; label: string }[];
+}
+
+export interface SegmentDraftView {
+  name: string;
+  chips: SegmentChipView[];
+  /** Live count for the chips as they stand. Null before it has been run. */
+  count: number | null;
+  /** A few members, so the count is inspectable. */
+  samples: { id: string; name: string; email: string | null }[];
+  /** Carried back on every round trip; re-read and re-checked each time. */
+  payload: string;
+  notes: string | null;
+  clarifications: SegmentClarificationView[];
+}
+
+export interface SavedSegmentView {
+  id: string;
+  name: string;
+  conditionCount: number;
+  /** The last count and when it was taken — never presented as live truth. */
+  lastCount: number | null;
+  lastCountAt: string | null;
+  fromSentence: boolean;
+}
+
+export interface SegmentsView {
+  aiAvailable: boolean;
+  sentence: string;
+  examples: string[];
+  /** Why there is no draft. Each one leaves the saved list untouched. */
+  failure:
+    | "no_key"
+    | "timeout"
+    | "rate_limited"
+    | "refused"
+    | "invalid_output"
+    | "error"
+    | "empty"
+    | null;
+  draft: SegmentDraftView | null;
+  /** Set when saving was refused — a duplicate name, or nothing to save. */
+  saveError: "duplicate_name" | "invalid" | null;
+  saved: SavedSegmentView[];
 }

@@ -505,7 +505,32 @@
       "last_wins": "Quantity {{quantity}} appears twice; the later row (line {{previousLine}} was replaced) is used.",
       "ragged_row": "This row has a different number of columns from the header, so values may be in the wrong place."
     },
-    "problemsHeading": "Rows that need attention"
+    "problemsHeading": "Rows that need attention",
+    "map": {
+      "heading": "✦ Match your columns",
+      "body": "“{{file}}” does not use Mannon's column names, so nothing has been read from it yet. Claude has matched what it can — check each one, then continue.",
+      "samples": "In your file: {{values}}",
+      "noSamples": "This column is empty in every row we looked at.",
+      "ignore": "Ignore this column",
+      "continue": "Check the file",
+      "missingHeading_one": "{{count}} required column is not matched",
+      "missingHeading_other": "{{count}} required columns are not matched",
+      "missingBody": "Nothing can be imported without {{columns}}. Match a column to it, or start from the template instead.",
+      "confidence": {
+        "high": "Confident",
+        "medium": "Fairly sure",
+        "low": "Guess — check this"
+      },
+      "failureBody": "Match the columns yourself below. Every mapping was editable anyway.",
+      "failure": {
+        "no_keyHeading": "Column matching is switched off",
+        "timeoutHeading": "Claude did not answer in time",
+        "rate_limitedHeading": "Too many requests just now",
+        "refusedHeading": "Claude did not match this file",
+        "invalid_outputHeading": "The matching came back unusable",
+        "errorHeading": "Column matching failed"
+      }
+    }
   },
   "customers": {
     "terms": {
@@ -1120,7 +1145,50 @@
     "needsInfoLabel": "What do you need from them?",
     "needsInfoHelp": "Emails them and leaves the application here, waiting on their reply.",
     "reasonMet": "Met",
-    "reasonUnmet": "Not met"
+    "reasonUnmet": "Not met",
+    "draftEmail": "✦ Draft the email",
+    "draftedByClaude": "✦ Drafted by Claude · read it before it goes. You send it, not the AI.",
+    "draftFailed": {
+      "no_key": "This store has no Anthropic key, so there is no draft — your own template is below.",
+      "timeout": "Claude did not answer in time, so your own template is below. Nothing was sent.",
+      "rate_limited": "Too many requests just now, so your own template is below. Nothing was sent.",
+      "refused": "Claude did not draft this one. Your own template is below.",
+      "invalid_output": "The draft came back unusable, twice. Your own template is below.",
+      "error": "The draft failed on the way to Claude. Your own template is below."
+    },
+    "screening": {
+      "waiting": "✦ Checking their details — this usually takes a few seconds. You can decide without it.",
+      "recommend": "✦ Nothing here looks wrong",
+      "look": "✦ Worth reading before you approve",
+      "off": "✦ Screening is off — this store has no Anthropic key. Review this one yourself; it has never blocked approving anybody.",
+      "footnote": "Claude's read on the facts you already hold. You decide."
+    },
+    "signal": {
+      "vat_valid": "Their VAT id checked out.",
+      "vat_invalid": "Their VAT id came back invalid.",
+      "vat_unverified": "Their VAT id could not be checked — the service was unreachable, which is not their doing.",
+      "vat_missing": "No VAT id.",
+      "website_matches_email": "The website they gave is on the same domain as their email.",
+      "website_mismatch": "The website they gave is on a different domain from their email.",
+      "website_missing": "No website.",
+      "free_email_domain": "They applied from a free email address.",
+      "business_email_domain": "They applied from their own business domain.",
+      "years_established_one": "In business {{count}} year.",
+      "years_established_other": "In business {{count}} years.",
+      "years_new_one": "Only {{count}} year in business.",
+      "years_new_other": "Only {{count}} years in business.",
+      "years_unknown": "They did not say how long they have been trading.",
+      "documents_attached_one": "{{count}} document attached.",
+      "documents_attached_other": "{{count}} documents attached.",
+      "documents_missing": "No documents attached.",
+      "documents_unscanned_one": "{{count}} document has not been virus-scanned.",
+      "documents_unscanned_other": "{{count}} documents have not been virus-scanned.",
+      "existing_customer": "They already buy from this store.",
+      "duplicate_domain_one": "{{count}} other application is waiting from the same domain.",
+      "duplicate_domain_other": "{{count}} other applications are waiting from the same domain.",
+      "criteria_met": "They meet the criteria you set.",
+      "criteria_failed": "They do not meet the criteria you set."
+    }
   },
   "approval": {
     "heading": "Approve automatically",
@@ -1562,6 +1630,127 @@
       "belowCostRow": "{{sku}} at {{quantity}}+: sells for {{price}}, costs you {{cost}}.",
       "unavailableHeading": "Costs could not be checked",
       "unavailableBody": "Shopify did not answer, so Mannon cannot say whether this rule sells anything below cost. You can still approve it."
+    }
+  },
+  "segments": {
+    "heading": "✦ Segments",
+    "composerHeading": "Describe the customers you mean",
+    "sentenceLabel": "Who are you looking for?",
+    "sentenceHelp": "Claude turns it into filters you can see and change. Nothing is saved until you say so.",
+    "draftAction": "✦ Build the segment",
+    "examplesHeading": "For example:",
+    "example1": "Wholesale buyers who spent over 5,000 and have not ordered in 45 days.",
+    "example2": "Gold group in Saudi Arabia, tax-exempt.",
+    "example3": "Anyone approved who has never placed an order.",
+    "offHeading": "✦ Segments are switched off",
+    "offBody": "This store has no Anthropic API key, so Claude cannot read a sentence into filters. Nothing else on this page needs one.",
+    "draftHeading": "What Claude read",
+    "draftIntro": "✦ Read by Claude · check the filters before you save. Remove any that are wrong.",
+    "notesHeading": "What Claude assumed",
+    "noChips": "No filters left — every one has been removed.",
+    "removeChip": "Remove “{{condition}}”",
+    "count_one": "{{count}} customer matches",
+    "count_other": "{{count}} customers match",
+    "emptyHeading": "No one matches",
+    "emptyLoosen": "Loosen “{{condition}}” — it is the filter excluding the most people.",
+    "emptyNoHelp": "No single filter is doing it. Remove one and try again.",
+    "nameLabel": "Name this segment",
+    "saveAction": "Save segment",
+    "clarifyHeading": "One thing to confirm",
+    "clarifyBody": "Claude named a group this store does not have. Pick what you meant — saving is off until you do.",
+    "whichOne": "Which group did you mean by “{{term}}”?",
+    "noSuchGroup": "There is no group called “{{term}}”. Remove that filter, or create the group first.",
+    "savedHeading": "Saved segments",
+    "savedEmpty": "No segments yet. Describe one above, and it will be here to reuse.",
+    "colName": "Name",
+    "colConditions": "Filters",
+    "colMembers": "Members",
+    "colActions": "Actions",
+    "conditionCount_one": "{{count}} filter",
+    "conditionCount_other": "{{count}} filters",
+    "membersAsOf_one": "{{count}} as of {{when}}",
+    "membersAsOf_other": "{{count}} as of {{when}}",
+    "neverCounted": "Not counted yet",
+    "delete": "Delete",
+    "saveError": {
+      "duplicate_nameHeading": "That name is taken",
+      "duplicate_nameBody": "You already have a segment with this name. Give this one a different name.",
+      "invalidHeading": "This segment cannot be saved",
+      "invalidBody": "It needs a name and at least one filter."
+    },
+    "failure": {
+      "no_key": {
+        "heading": "Segments are switched off",
+        "body": "This store has no Anthropic API key."
+      },
+      "timeout": {
+        "heading": "Claude did not answer in time",
+        "body": "Try again. Nothing was saved."
+      },
+      "rate_limited": {
+        "heading": "Too many requests just now",
+        "body": "Wait a moment and try again."
+      },
+      "refused": {
+        "heading": "Claude did not build that one",
+        "body": "Try describing the customers differently."
+      },
+      "invalid_output": {
+        "heading": "That came back unusable",
+        "body": "Claude's answer was not a set of filters this app understands, twice. Try a simpler sentence."
+      },
+      "error": {
+        "heading": "It failed",
+        "body": "Something went wrong on the way to Claude. Try again."
+      },
+      "empty": {
+        "heading": "Say who you mean",
+        "body": "One sentence is enough — spend, tier, country, how long since they ordered."
+      }
+    },
+    "chip": {
+      "lifetime_spend": {
+        "gt": "Spent over {{amount}}",
+        "gte": "Spent {{amount}} or more",
+        "lt": "Spent under {{amount}}",
+        "lte": "Spent {{amount}} or less"
+      },
+      "order_count": {
+        "gt_one": "More than {{count}} order",
+        "gt_other": "More than {{count}} orders",
+        "gte_one": "{{count}} order or more",
+        "gte_other": "{{count}} orders or more",
+        "lt_one": "Fewer than {{count}} order",
+        "lt_other": "Fewer than {{count}} orders",
+        "lte_one": "{{count}} order or fewer",
+        "lte_other": "{{count}} orders or fewer"
+      },
+      "last_order_days": {
+        "gt_one": "No order in {{count}} day",
+        "gt_other": "No order in {{count}} days",
+        "gte_one": "No order for {{count}} day or more",
+        "gte_other": "No order for {{count}} days or more",
+        "lt_one": "Ordered in the last {{count}} day",
+        "lt_other": "Ordered in the last {{count}} days",
+        "lte_one": "Ordered within {{count}} day",
+        "lte_other": "Ordered within {{count}} days"
+      },
+      "never_ordered": "Never ordered",
+      "tag": {
+        "has": "Tagged {{tag}}",
+        "not_has": "Not tagged {{tag}}"
+      },
+      "group": {
+        "is": "In {{group}}",
+        "is_not": "Not in {{group}}"
+      },
+      "country": {
+        "is": "In {{country}}",
+        "is_not": "Not in {{country}}"
+      },
+      "tax_exempt": "Tax-exempt",
+      "tax_liable": "Not tax-exempt",
+      "status": "Status {{status}}"
     }
   }
 }

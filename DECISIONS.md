@@ -8,6 +8,45 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — Screening compares the website, and never fetches it
+
+Checklist §3 says "Checking website & VAT". The VAT half is real (VIES, from
+2.2). The website half compares the domain the applicant typed to the domain
+they email from, and makes no request: fetching an address a stranger supplied,
+from our server, is the shape of every SSRF, and this environment has no egress
+to arbitrary hosts anyway. The comparison is a real signal at no risk, and the
+copy says what was actually checked. Rejected: a fetch behind an allowlist
+(a list of what, exactly?) and a headless render (worse, and slower).
+
+## 2026-09-10 — A screening verdict is codes, not prose
+
+Claude picks up to three signals from a closed list of nineteen and a verdict;
+the sentence a merchant reads is ours, from the catalogue, in their language.
+Rejected: free-text reasons, which read better in English and cannot be
+translated, cannot be audited against a fact, and let a model write a sentence
+about a real business that the merchant then acts on. The cost is that Claude
+cannot say something we did not anticipate — which is the same thing as the
+benefit.
+
+## 2026-09-10 — A saved segment is a filter; a rule's audience is a snapshot
+
+Segments store conditions, not people, so they stay true as the customers
+change. But `Audience` in the pricing engine has no "segment" mode, and adding
+one would mean publishing each buyer's segment membership to checkout the way
+tags and groups are published — a phase of its own. So applying a segment to a
+rule fills the audience with the customer ids matching _now_, and the rule says
+when the snapshot was taken. Flagged as user-visible: a merchant may expect a
+segment-backed rule to follow the segment. Rejected: silently live-looking
+behaviour, and blocking the feature until membership publishing exists.
+
+## 2026-09-10 — Conditions are ANDed, with no nesting
+
+"Spend over $5k · quiet 45 days" is what a merchant means and what fits in a row
+of chips. An OR nested three deep is a query builder, and a query builder is the
+thing ✦ Segments exists to avoid. A merchant who needs one saves two segments.
+Rejected: a full boolean tree (unreadable as chips, and unbuildable without
+JavaScript on a props-only page).
+
 ## 2026-09-10 — The ✦ composer does not stream, and the margin guard is not AI
 
 Checklist §2 lists "streaming draft (tiers appear as chips one by one)" as a

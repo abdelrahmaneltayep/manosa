@@ -5,10 +5,36 @@ import { whenDisabled } from "~/components/boolean-attribute";
 import type { ImportIssue, ImportWarning } from "~/lib/pricing/csv/plan";
 import { TEMPLATE_KEYS, type TemplateKey } from "~/lib/pricing/csv/templates";
 
-export type CsvStep = "choose" | "review" | "imported" | "undone";
+export type CsvStep = "choose" | "map" | "review" | "imported" | "undone";
+
+export interface ColumnMapRowView {
+  header: string;
+  /** The template column it is mapped to, or "" for "ignore this column". */
+  column: string;
+  confidence: "high" | "medium" | "low";
+  /** A few values from the file, so a mapping can be checked rather than trusted. */
+  samples: string[];
+}
+
+export interface MappingView {
+  draftId: string;
+  fileName: string;
+  template: TemplateKey;
+  rows: ColumnMapRowView[];
+  /** The columns this template wants, and which of them are required. */
+  targets: { key: string; required: boolean }[];
+  /** What Claude said it was unsure about. Shown, never acted on. */
+  notes: string | null;
+  /** Set when Claude could not map it — the merchant maps it themselves. */
+  aiFailure: string | null;
+  /** Required columns nothing is mapped to. Importing would fail on them. */
+  missingRequired: string[];
+}
 
 export interface CsvView {
   step: CsvStep;
+  /** ✦ The mapping screen, for a file whose headers matched no template. */
+  mapping: MappingView | null;
   /** Set when the file could not even be read. */
   fileError:
     | { code: "too_large"; sizeMb: number }
@@ -41,7 +67,9 @@ export function CsvPage({ view }: { view: CsvView }) {
   return (
     <s-page heading={t("csv.heading")}>
       <Outcome view={view} />
-      {view.step === "review" && view.review ? (
+      {view.step === "map" && view.mapping ? (
+        <Mapping view={view} />
+      ) : view.step === "review" && view.review ? (
         <Review view={view} />
       ) : view.step === "choose" ? (
         <>
@@ -172,6 +200,106 @@ function Templates() {
       </s-stack>
     </s-section>
   );
+}
+
+/**
+ * ✦ The mapping screen.
+ *
+ * A file whose headers matched no template used to be refused. Now Claude
+ * proposes what each column is, with how sure it is, and the merchant fixes any
+ * of it before a single row is planned. Nothing is imported from this screen —
+ * confirming it produces the same dry-run report every other file gets.
+ */
+function Mapping({ view }: { view: CsvView }) {
+  const { t } = useTranslation();
+  const mapping = view.mapping!;
+
+  return (
+    <s-section heading={t("csv.map.heading")}>
+      <s-stack direction="block" gap="base">
+        <s-paragraph color="subdued">
+          {t("csv.map.body", { file: mapping.fileName })}
+        </s-paragraph>
+
+        {mapping.aiFailure ? (
+          <s-banner tone="warning">
+            <s-heading>{t(`csv.map.failure.${mapping.aiFailure}Heading`)}</s-heading>
+            <s-paragraph>{t("csv.map.failureBody")}</s-paragraph>
+          </s-banner>
+        ) : null}
+
+        {mapping.notes ? (
+          <s-banner tone="info">
+            <s-paragraph>{mapping.notes}</s-paragraph>
+          </s-banner>
+        ) : null}
+
+        {mapping.missingRequired.length > 0 ? (
+          <s-banner tone="critical">
+            <s-heading>
+              {t("csv.map.missingHeading", { count: mapping.missingRequired.length })}
+            </s-heading>
+            <s-paragraph>
+              {t("csv.map.missingBody", {
+                columns: mapping.missingRequired
+                  .map((key) => t(`csv.column.${camel(key)}`))
+                  .join(", "),
+              })}
+            </s-paragraph>
+          </s-banner>
+        ) : null}
+
+        <form method="post">
+          <input type="hidden" name="intent" value="map" />
+          <input type="hidden" name="draftId" value={mapping.draftId} />
+          <input type="hidden" name="template" value={mapping.template} />
+          <s-stack direction="block" gap="small">
+            {mapping.rows.map((row) => (
+              <s-stack key={row.header} direction="inline" gap="small" alignItems="end">
+                <s-select
+                  name={`column:${row.header}`}
+                  label={row.header}
+                  details={
+                    row.samples.length > 0
+                      ? t("csv.map.samples", { values: row.samples.join(", ") })
+                      : t("csv.map.noSamples")
+                  }
+                  value={row.column}
+                >
+                  <s-option value="">{t("csv.map.ignore")}</s-option>
+                  {mapping.targets.map((target) => (
+                    <s-option key={target.key} value={target.key}>
+                      {t(`csv.column.${camel(target.key)}`)}
+                    </s-option>
+                  ))}
+                </s-select>
+                {/* How sure Claude was, per column. A mapping the merchant is
+                    asked to trust without being told how firm it is, is a
+                    mapping they will not check. */}
+                <s-badge tone={CONFIDENCE_TONE[row.confidence]}>
+                  {t(`csv.map.confidence.${row.confidence}`)}
+                </s-badge>
+              </s-stack>
+            ))}
+            <s-button type="submit" variant="primary">
+              {t("csv.map.continue")}
+            </s-button>
+          </s-stack>
+        </form>
+      </s-stack>
+    </s-section>
+  );
+}
+
+const CONFIDENCE_TONE = {
+  high: "success",
+  medium: "warning",
+  low: "critical",
+} as const;
+
+/** `rule_name` → `ruleName`, which is how the column labels are keyed. */
+function camel(key: string): string {
+  return key.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
 }
 
 function Review({ view }: { view: CsvView }) {

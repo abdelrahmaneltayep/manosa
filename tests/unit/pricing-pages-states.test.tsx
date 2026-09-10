@@ -26,8 +26,11 @@ import { createCaptureHarness, type CaptureHarness } from "../support/state-capt
 
 const OUT_13 = resolve(process.cwd(), "qa/1.3");
 const OUT_14 = resolve(process.cwd(), "qa/1.4");
+/** ✦ The CSV whisperer's mapping screen is 4.3, on the same page. */
+const OUT_43 = resolve(process.cwd(), "qa/4.3");
 /** Captures numbered 24 and up belong to task 1.4 (CSV import/export). */
-const outFor = (name: string) => (Number(name.slice(0, 2)) >= 24 ? OUT_14 : OUT_13);
+const outFor = (name: string) =>
+  name.startsWith("ai-") ? OUT_43 : Number(name.slice(0, 2)) >= 24 ? OUT_14 : OUT_13;
 
 let harness: CaptureHarness;
 const render = (node: React.ReactNode, locale: Locale = "en") =>
@@ -39,7 +42,7 @@ beforeAll(async () => {
   harness = await createCaptureHarness({
     title: "Pricing",
     outFor,
-    dirs: [OUT_13, OUT_14],
+    dirs: [OUT_13, OUT_14, OUT_43],
   });
 });
 
@@ -554,6 +557,7 @@ describe("Arabic", () => {
 
 const csvView = (overrides: Partial<CsvView> = {}): CsvView => ({
   step: "choose",
+  mapping: null,
   fileError: null,
   review: null,
   imported: null,
@@ -731,5 +735,124 @@ describe("CSV import states", () => {
 
     expect(html).toContain("ما سيفعله هذا الملف");
     expect(html).not.toContain("will be created");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* ✦ The CSV whisperer's mapping screen — spec §2, phase 4.3                   */
+/* -------------------------------------------------------------------------- */
+
+describe("✦ column mapping", () => {
+  const mapping = (
+    overrides: Partial<NonNullable<CsvView["mapping"]>> = {},
+  ): NonNullable<CsvView["mapping"]> => ({
+    draftId: "draft-1",
+    fileName: "supplier-prices-march.csv",
+    template: "rules",
+    rows: [
+      {
+        header: "item_code",
+        column: "skus",
+        confidence: "high",
+        samples: ["SKU-1", "SKU-2"],
+      },
+      {
+        header: "discount_%",
+        column: "value",
+        confidence: "medium",
+        samples: ["15", "20"],
+      },
+      { header: "notes", column: "", confidence: "low", samples: ["spring list"] },
+    ],
+    targets: [
+      { key: "rule_name", required: true },
+      { key: "type", required: true },
+      { key: "value", required: true },
+      { key: "skus", required: false },
+    ],
+    notes: null,
+    aiFailure: null,
+    missingRequired: [],
+    ...overrides,
+  });
+
+  it("shows every column, what it was matched to, and how sure that is", () => {
+    const html = render(<CsvPage view={csvView({ step: "map", mapping: mapping() })} />);
+
+    expect(html).toContain("Match your columns");
+    expect(html).toContain("supplier-prices-march.csv");
+    expect(html).toContain("item_code");
+    // The samples are what makes a mapping checkable rather than trusted.
+    expect(html).toContain("SKU-1, SKU-2");
+    expect(html).toContain("Confident");
+    expect(html).toContain("Fairly sure");
+    expect(html).toContain("Guess — check this");
+    capture("ai-10-csv-mapping", html);
+  });
+
+  it("makes every mapping editable, including ignoring a column", () => {
+    const html = render(<CsvPage view={csvView({ step: "map", mapping: mapping() })} />);
+
+    expect(html.match(/name="column:/g)).toHaveLength(3);
+    expect(html).toContain("Ignore this column");
+  });
+
+  it("says which required column nothing fills", () => {
+    const html = render(
+      <CsvPage
+        view={csvView({
+          step: "map",
+          mapping: mapping({ missingRequired: ["rule_name", "type"] }),
+        })}
+      />,
+    );
+
+    expect(html).toContain("2 required columns are not matched");
+    expect(html).toContain("Rule name");
+    capture("ai-11-csv-mapping-missing", html);
+  });
+
+  it("shows what Claude said it was unsure about", () => {
+    const html = render(
+      <CsvPage
+        view={csvView({
+          step: "map",
+          mapping: mapping({
+            notes:
+              "Two columns could be the discount; I used the one holding percentages.",
+          }),
+        })}
+      />,
+    );
+    expect(html).toContain("Two columns could be the discount");
+  });
+
+  it("still lets the merchant map it when Claude could not", () => {
+    const html = render(
+      <CsvPage
+        view={csvView({
+          step: "map",
+          mapping: mapping({
+            aiFailure: "no_key",
+            rows: mapping().rows.map((row) => ({ ...row, column: "" })),
+          }),
+        })}
+      />,
+    );
+
+    expect(html).toContain("Column matching is switched off");
+    expect(html).toContain("Match the columns yourself");
+    // The screen is still fully usable: every select is there.
+    expect(html.match(/name="column:/g)).toHaveLength(3);
+    capture("ai-12-csv-mapping-no-key", html);
+  });
+
+  it("renders in Arabic", () => {
+    const html = render(
+      <CsvPage view={csvView({ step: "map", mapping: mapping() })} />,
+      "ar",
+    );
+    expect(html).toContain("طابِق أعمدتك");
+    capture("ai-13-csv-mapping-arabic", html, "ar");
   });
 });

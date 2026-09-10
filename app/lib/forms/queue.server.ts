@@ -1,10 +1,12 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, ScreeningVerdict } from "@prisma/client";
 
 import { db } from "~/db.server";
 import { readApproval, type ApprovalVerdict } from "~/lib/forms/approval";
 import { domainOf } from "~/lib/forms/approval";
 import { evaluateApproval } from "~/lib/forms/approval";
 import { factsFor } from "~/lib/forms/decisions.server";
+import { readReasons } from "~/lib/forms/screening.server";
+import type { ScreeningReason } from "~/lib/ai/prompts/screening.server";
 import { readDefinition, type Answers } from "~/lib/forms/schema";
 
 /**
@@ -35,6 +37,9 @@ export interface ApplicationRow {
   sameDomainCount: number;
   /** Shopify already has a customer with this email. */
   existingCustomer: boolean;
+  /** ✦ What Claude made of it, and why. `WAITING` means not screened yet. */
+  screening: ScreeningVerdict;
+  screeningReasons: ScreeningReason[];
   answers: Answers;
 }
 
@@ -142,6 +147,8 @@ export async function listApplications(
         // Minus this one: "3 others from acme.test" means three others.
         sameDomainCount: Math.max(0, (domain ? (domainCounts.get(domain) ?? 0) : 0) - 1),
         existingCustomer: customer !== null,
+        screening: row.screening,
+        screeningReasons: readReasons(row.screeningReasons),
         answers,
       };
     }),

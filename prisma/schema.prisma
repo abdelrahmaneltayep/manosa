@@ -108,40 +108,40 @@ model Shop {
   // --- Orders and limits (phase 3.1) --------------------------------------
   /// Tag put on an order placed by a wholesale buyer, so the merchant can find
   /// them in Shopify's own admin as well as here.
-  wholesaleOrderTag    String    @default("wholesale")
+  wholesaleOrderTag String    @default("wholesale")
   /// Orders placed in person bypass online order limits. On by default: a
   /// minimum written for a website is not a rule about a till.
-  posBypassesLimits    Boolean   @default(true)
+  posBypassesLimits Boolean   @default(true)
   /// Hash of the last published limits, so an unchanged set is not re-pushed.
-  limitsHash           String?
-  limitsPublishedAt    DateTime?
+  limitsHash        String?
+  limitsPublishedAt DateTime?
 
   // --- Net terms (phase 3.2) ---------------------------------------------
   /// The manual payment method a merchant set up for paying later. The Function
   /// hides it from everyone who is not eligible.
-  termsMethodName      String    @default("Net terms")
+  termsMethodName    String    @default("Net terms")
   /// Rename it at checkout to say the terms: "Pay later (Net 30)".
-  termsShowDays        Boolean   @default(true)
+  termsShowDays      Boolean   @default(true)
   /// An unpaid invoice past its due date stops further credit.
-  termsOverdueBlocks   Boolean   @default(true)
-  termsSettingsHash    String?
-  termsPublishedAt     DateTime?
+  termsOverdueBlocks Boolean   @default(true)
+  termsSettingsHash  String?
+  termsPublishedAt   DateTime?
 
   // --- Quotes (phase 3.3) -------------------------------------------------
   /// How long a sent quote stands. Copied onto the quote when it is sent, so
   /// changing this never moves a date a buyer has already been given.
-  quoteExpiryDays   Int @default(14)
+  quoteExpiryDays        Int       @default(14)
   /// How many days before expiry the buyer is warned. Once per quote.
-  quoteReminderDays Int @default(3)
+  quoteReminderDays      Int       @default(3)
   /// Sequence behind the "Q-1001" a merchant reads out.
-  quoteCounter      Int @default(1000)
+  quoteCounter           Int       @default(1000)
   /// The deployed payment customization Function, and the customization that
   /// points at it.
-  paymentFunctionId    String?
+  paymentFunctionId      String?
   paymentCustomizationId String?
   /// Progress of the one-off order backfill.
-  ordersBackfilledAt   DateTime?
-  ordersBackfillCursor String?
+  ordersBackfilledAt     DateTime?
+  ordersBackfillCursor   String?
 
   /// Progress of the one-off customer backfill. Null means never finished.
   customersBackfilledAt   DateTime?
@@ -410,10 +410,19 @@ model RuleImport {
 /// review step has to be able to import exactly the bytes that were checked,
 /// not ask for the file again. Deleted the moment it is used or abandoned.
 model RuleImportDraft {
-  id        String   @id @default(cuid())
-  shop      String
-  fileName  String
-  content   String
+  id       String @id @default(cuid())
+  shop     String
+  fileName String
+  content  String
+
+  /// ✦ CSV whisperer (phase 4.3): the merchant's confirmed header → column
+  /// mapping, so confirming imports exactly the file that was reviewed. Null
+  /// when the file's own headers already matched a template.
+  mapping  Json?
+  /// The template the mapping targets. Null means "detect it from the headers",
+  /// which is what a file that needed no mapping does.
+  template String?
+
   createdAt DateTime @default(now())
 
   @@index([shop, createdAt])
@@ -645,6 +654,22 @@ model RegistrationForm {
   @@index([shop, status, updatedAt])
 }
 
+/// What Claude made of an application. A recommendation, never a decision:
+/// only a merchant approves, and every state here leaves both buttons live.
+enum ScreeningVerdict {
+  /// Not screened yet.
+  WAITING
+  /// Nothing about it looks wrong.
+  RECOMMEND
+  /// Something is worth a person's attention before approving.
+  LOOK
+  /// Screening ran and could not answer — no key, a timeout, a refusal. Said
+  /// out loud rather than shown as a clean bill of health.
+  UNAVAILABLE
+  /// The merchant has no criteria and no key: nothing was ever attempted.
+  OFF
+}
+
 enum SubmissionStatus {
   /// Waiting on a merchant decision. The approval pipeline is phase 2.3.
   PENDING
@@ -716,6 +741,23 @@ model FormSubmission {
   /// When the auto-approval criteria last looked at this. Null means the
   /// evaluator has not seen it yet, which is what the job claims work by.
   autoEvaluatedAt      DateTime?
+
+  // --- ✦ Screening (phase 4.3) ---------------------------------------------
+  /// Claude's read on this application. WAITING means the screening job has
+  /// not reached it yet, which the queue shows as "checking"; UNAVAILABLE means
+  /// it ran and could not answer, which is not the same as "nothing found".
+  screening              ScreeningVerdict @default(WAITING)
+  /// Up to three plain-language reasons, each tied to a fact the app holds.
+  /// Never the applicant's own words — see docs/adr/0020.
+  screeningReasons       Json?
+  /// When the screening last ran. Null means never, and is what the job claims
+  /// work by. A screened application is never screened again.
+  screenedAt             DateTime?
+  /// Provenance, so a verdict a merchant disagrees with can be traced to the
+  /// prompt and model that produced it.
+  screeningModel         String?
+  screeningPromptVersion String?
+  screeningRequestId     String?
 
   createdAt DateTime @default(now())
 
@@ -988,8 +1030,8 @@ model AiRun {
   /// One of `AI_FEATURES`. Grouped by in the log and counted by the limiter.
   feature String
 
-  status AiRunStatus @default(OK)
-  model  String
+  status        AiRunStatus @default(OK)
+  model         String
   /// The prompt version that produced it, so an old answer stays explicable.
   promptVersion String
 
@@ -1049,8 +1091,8 @@ enum QuoteSource {
 /// changed in between. That is why `QuoteLine` stores what the pricing engine
 /// said rather than what it would say now.
 model Quote {
-  id   String @id @default(cuid())
-  shop String
+  id       String @id @default(cuid())
+  shop     String
   /// The unguessable token in the buyer's accept link. Globally unique, so the
   /// public page can find it without knowing the shop.
   publicId String @unique
@@ -1184,4 +1226,37 @@ model OrderLimit {
 
   @@unique([shop, groupId])
   @@index([shop, enabled])
+}
+
+/// A saved customer filter — "spend over $5k, no order in 45 days".
+///
+/// Stored as conditions, not as a list of people: the point of a segment is
+/// that it stays true as the customers change. Turning one into a pricing
+/// rule's audience takes a snapshot, and the rule says when it was taken —
+/// see DECISIONS.md, 2026-09-10.
+model CustomerSegment {
+  id   String @id @default(cuid())
+  shop String
+
+  name       String
+  /// `SegmentCondition[]` from app/lib/customers/segments.ts. Every condition
+  /// is checked before it is stored, and again before it is run.
+  conditions Json
+
+  /// What Claude was asked, when a sentence made this. Kept with the segment
+  /// it made, the way a drafted rule keeps its sentence.
+  sentence        String?
+  aiModel         String?
+  aiPromptVersion String?
+
+  /// The last count, and when. Shown as "as of", never as live truth.
+  lastCount   Int?
+  lastCountAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@unique([shop, name])
+  @@index([shop, updatedAt])
 }

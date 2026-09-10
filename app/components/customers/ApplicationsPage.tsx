@@ -250,25 +250,85 @@ function ApplicationCard({
 }
 
 /**
- * What the store's own criteria make of this application.
+ * ✦ What Claude made of this application, and what the store's own criteria
+ * make of it.
  *
- * The ✦ screening the checklist describes — checking the company's website,
- * scoring the email domain — needs the AI layer. Until then this says so and
- * never blocks approving, which is the behaviour the checklist asks for when
- * screening is unavailable.
+ * Two verdicts, deliberately kept apart. The criteria are the merchant's own
+ * rules and are the ones that can decide automatically; the screening is a
+ * recommendation and decides nothing. Every state here leaves both buttons
+ * live — including the two states that mean "we could not say".
  */
 function Screening({ row, view }: { row: ApplicationRowView; view: ApplicationsView }) {
-  const { t } = useTranslation();
+  return (
+    <s-stack direction="block" gap="small-100">
+      <AiScreening row={row} />
+      <Criteria row={row} view={view} />
+    </s-stack>
+  );
+}
 
-  if (!view.aiScreening && !row.criteria) {
+const SCREENING_TONE = {
+  recommend: "success",
+  look: "warning",
+  waiting: "info",
+  unavailable: "info",
+  off: "info",
+} as const;
+
+function AiScreening({ row }: { row: ApplicationRowView }) {
+  const { t } = useTranslation();
+  const { status, reasons } = row.screening;
+
+  if (status === "waiting") {
     return (
-      // Neutral on purpose: "screening unavailable" is not a warning about
-      // this applicant, and it never blocks approving them.
       <s-banner tone="info">
-        <s-paragraph>{t("applications.screeningUnavailable")}</s-paragraph>
+        {/* A real state, not a spinner over a verdict: nothing has been asked
+            yet, and the merchant can decide without waiting for it. */}
+        <s-paragraph>{t("applications.screening.waiting")}</s-paragraph>
       </s-banner>
     );
   }
+
+  if (status === "unavailable" || status === "off") {
+    return (
+      // Neutral on purpose: "could not screen" is not a warning about this
+      // applicant, and it has never blocked approving anybody.
+      <s-banner tone="info">
+        <s-paragraph>
+          {t(
+            status === "off"
+              ? "applications.screening.off"
+              : "applications.screeningUnavailable",
+          )}
+        </s-paragraph>
+      </s-banner>
+    );
+  }
+
+  return (
+    <s-banner tone={SCREENING_TONE[status]}>
+      <s-heading>{t(`applications.screening.${status}`)}</s-heading>
+      <s-unordered-list>
+        {reasons.map((reason) => (
+          <s-list-item key={reason.signal}>
+            {/* Signal codes, not the model's prose: every reason renders from
+                our own catalogue, in the merchant's language, and cannot be
+                something Claude made up about a real business. */}
+            {t(`applications.signal.${reason.signal}`, {
+              count: reason.detail ?? 0,
+              detail: reason.detail ?? "",
+            })}
+          </s-list-item>
+        ))}
+      </s-unordered-list>
+      <s-paragraph color="subdued">{t("applications.screening.footnote")}</s-paragraph>
+    </s-banner>
+  );
+}
+
+/** What the store's own criteria make of this application. */
+function Criteria({ row, view }: { row: ApplicationRowView; view: ApplicationsView }) {
+  const { t } = useTranslation();
 
   if (!row.criteria) return null;
 
@@ -346,6 +406,11 @@ function ApproveForm({ row, view }: { row: ApplicationRowView; view: Application
         <s-link href={`?edit=${row.id}&intent=approve`}>
           {t("applications.editEmail")}
         </s-link>
+        {view.aiScreening ? (
+          <s-link href={`?edit=${row.id}&intent=approve&draft=1`}>
+            {t("applications.draftEmail")}
+          </s-link>
+        ) : null}
       </s-stack>
     </form>
   );
@@ -413,6 +478,13 @@ function RejectForm({ row, view }: { row: ApplicationRowView; view: Applications
         <s-link href={`?edit=${row.id}&intent=reject`}>
           {t("applications.editEmail")}
         </s-link>
+        {/* A link, not a second submit: a Polaris button carries no name, so
+            one form is one intent. The draft opens the same panel, filled in. */}
+        {view.aiScreening ? (
+          <s-link href={`?edit=${row.id}&intent=reject&draft=1`}>
+            {t("applications.draftEmail")}
+          </s-link>
+        ) : null}
       </s-stack>
     </form>
   );
@@ -437,6 +509,20 @@ function EditEmail({ view }: { view: ApplicationsView }) {
         <input type="hidden" name="id" value={editing.id} />
         <input type="hidden" name="customEmail" value="yes" />
         <s-stack direction="block" gap="small">
+          {view.emailDraft.drafted ? (
+            // brand.md §5, near enough verbatim. The merchant is about to send
+            // this to a real person under their own name.
+            <s-banner tone="info">
+              <s-paragraph>{t("applications.draftedByClaude")}</s-paragraph>
+            </s-banner>
+          ) : null}
+          {view.emailDraft.failure ? (
+            <s-banner tone="warning">
+              <s-paragraph>
+                {t(`applications.draftFailed.${view.emailDraft.failure}`)}
+              </s-paragraph>
+            </s-banner>
+          ) : null}
           <s-text-field
             name="emailSubject"
             label={t("forms.emails.subject")}
@@ -460,7 +546,7 @@ function EditEmail({ view }: { view: ApplicationsView }) {
             <s-select
               name="reason"
               label={t("applications.reasonLabel")}
-              value={view.rejectionReasons[0]}
+              value={editing.reason || view.rejectionReasons[0]}
             >
               {view.rejectionReasons.map((reason) => (
                 <s-option key={reason} value={reason}>

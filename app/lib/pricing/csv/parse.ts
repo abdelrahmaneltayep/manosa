@@ -182,3 +182,42 @@ export function toCsv(headers: string[], rows: (string | number | null)[][]): st
   // A trailing newline: some tools drop the last row without one.
   return `${lines.join("\r\n")}\r\n`;
 }
+
+/**
+ * A column mapping: the file's header → the template's column, or null to
+ * ignore it.
+ *
+ * Applied by rewriting the document's keys, so everything downstream — the
+ * planner, the error report, the row numbers — works on the file the merchant
+ * uploaded and knows nothing about the mapping.
+ */
+export type ColumnMapping = Record<string, string | null>;
+
+export function applyMapping(doc: CsvDocument, mapping: ColumnMapping): CsvDocument {
+  const rename = (header: string) => {
+    const mapped = mapping[header];
+    // A header the mapping does not mention keeps its own name: an unmapped
+    // column is left as it was rather than silently dropped, so a template
+    // column that already matched still matches.
+    return mapped === undefined ? header : mapped;
+  };
+
+  const headers = doc.headers
+    .map(rename)
+    .filter((header): header is string => header !== null);
+
+  return {
+    headers,
+    raggedLines: doc.raggedLines,
+    rows: doc.rows.map((row) => {
+      const cells: Record<string, string> = {};
+      for (const [header, value] of Object.entries(row.cells)) {
+        const mapped = rename(header);
+        // Two headers mapped to one column would silently overwrite. First one
+        // wins, and `readMapping` refuses the duplicate before it gets here.
+        if (mapped !== null && !(mapped in cells)) cells[mapped] = value;
+      }
+      return { ...row, cells };
+    }),
+  };
+}

@@ -19,6 +19,9 @@ import { createCaptureHarness, type CaptureHarness } from "../support/state-capt
  */
 
 const OUT = resolve(process.cwd(), "qa/2.3");
+/** ✦ Screening and drafted emails are 4.3, on the same page. */
+const OUT_43 = resolve(process.cwd(), "qa/4.3");
+const outFor = (name: string) => (name.startsWith("ai-") ? OUT_43 : OUT);
 
 let harness: CaptureHarness;
 const render = (node: React.ReactNode, locale: Locale = "en") =>
@@ -29,8 +32,8 @@ const capture = (name: string, html: string, locale: Locale = "en") =>
 beforeAll(async () => {
   harness = await createCaptureHarness({
     title: "Applications",
-    outFor: () => OUT,
-    dirs: [OUT],
+    outFor,
+    dirs: [OUT, OUT_43],
   });
 });
 
@@ -50,6 +53,7 @@ const row = (overrides: Partial<ApplicationRowView> = {}): ApplicationRowView =>
   criteria: null,
   sameDomainCount: 0,
   existingCustomer: false,
+  screening: { status: "off", reasons: [] },
   ...overrides,
 });
 
@@ -71,6 +75,7 @@ const view = (overrides: Partial<ApplicationsView> = {}): ApplicationsView => ({
   editing: null,
   rejectionReasons: [...REJECTION_REASONS],
   aiScreening: false,
+  emailDraft: { drafted: false, failure: null },
   emailUnavailable: false,
   ...overrides,
 });
@@ -146,13 +151,13 @@ describe("queue states", () => {
     expect(html).toContain("Reject");
   });
 
-  it("screening is unavailable, and says so without blocking approval", () => {
+  it("screening is off, and says so without blocking approval", () => {
     const html = render(
       <ApplicationsPage view={view({ rows: [row()], total: 1, totalWaiting: 1 })} />,
     );
     capture("05-queue-screening-unavailable", html);
 
-    expect(html).toContain("Screening unavailable");
+    expect(html).toContain("Screening is off");
     // The checklist's rule: it has never blocked approving anybody.
     expect(html).toContain("Approve");
     expect(html).not.toContain("disabled");
@@ -302,6 +307,8 @@ describe("queue states", () => {
             intent: "approve",
             subject: "Welcome {{company}}",
             body: "You are in.",
+            reason: "",
+            note: "",
           },
         })}
       />,
@@ -396,5 +403,173 @@ describe("the auto-approval editor", () => {
   it("says what rejecting automatically means before it is chosen", () => {
     const html = render(<FormBuilderPage view={builderView()} />);
     expect(html).toContain("turns somebody away without a person reading it");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* ✦ Screening and drafted emails — checklist §3, phase 4.3                    */
+/* -------------------------------------------------------------------------- */
+
+describe("✦ screening", () => {
+  const screened = (
+    status: ApplicationRowView["screening"]["status"],
+    reasons: ApplicationRowView["screening"]["reasons"] = [],
+  ) =>
+    view({
+      rows: [row({ screening: { status, reasons } })],
+      total: 1,
+      totalWaiting: 1,
+      aiScreening: true,
+    });
+
+  it("says it is still checking, and lets the merchant decide anyway", () => {
+    const html = render(<ApplicationsPage view={screened("waiting")} />);
+
+    expect(html).toContain("Checking their details");
+    expect(html).toContain("You can decide without it");
+    expect(html).toContain("Approve");
+    capture("ai-01-screening-waiting", html);
+  });
+
+  it("recommends, with the reasons in our words", () => {
+    const html = render(
+      <ApplicationsPage
+        view={screened("recommend", [
+          { signal: "vat_valid", detail: null },
+          { signal: "years_established", detail: 12 },
+          { signal: "business_email_domain", detail: null },
+        ])}
+      />,
+    );
+
+    expect(html).toContain("Nothing here looks wrong");
+    expect(html).toContain("Their VAT id checked out");
+    expect(html).toContain("In business 12 years");
+    // Every reason is ours, translated from a code — never a model's sentence.
+    expect(html).not.toContain("vat_valid");
+    capture("ai-02-screening-recommend", html);
+  });
+
+  it("flags one worth reading, without deciding anything", () => {
+    const html = render(
+      <ApplicationsPage
+        view={screened("look", [
+          { signal: "free_email_domain", detail: null },
+          { signal: "website_mismatch", detail: null },
+          { signal: "duplicate_domain", detail: 2 },
+        ])}
+      />,
+    );
+
+    expect(html).toContain("Worth reading before you approve");
+    expect(html).toContain("free email address");
+    expect(html).toContain("2 other applications are waiting");
+    // Neither button is touched by a verdict.
+    expect(html).toContain("Approve");
+    expect(html).toContain("Reject");
+    capture("ai-03-screening-look", html);
+  });
+
+  it("says it could not screen, rather than showing a clean bill of health", () => {
+    const html = render(<ApplicationsPage view={screened("unavailable")} />);
+
+    expect(html).toContain("Screening unavailable");
+    expect(html).not.toContain("Nothing here looks wrong");
+    capture("ai-04-screening-unavailable", html);
+  });
+
+  it("renders a verdict in Arabic", () => {
+    const html = render(
+      <ApplicationsPage
+        view={screened("look", [{ signal: "free_email_domain", detail: null }])}
+      />,
+      "ar",
+    );
+
+    expect(html).toContain("يستحق القراءة قبل الموافقة");
+    expect(html).toContain("قدّموا الطلب من بريد مجاني");
+    capture("ai-05-screening-arabic", html, "ar");
+  });
+
+  it("pluralises a count-bearing reason rather than printing its key", () => {
+    const html = render(
+      <ApplicationsPage
+        view={screened("look", [{ signal: "documents_unscanned", detail: 1 }])}
+      />,
+    );
+    expect(html).toContain("1 document has not been virus-scanned");
+    expect(html).not.toContain("applications.signal");
+  });
+});
+
+describe("✦ drafted emails", () => {
+  it("offers a draft link only when there is a key", () => {
+    const withKey = render(
+      <ApplicationsPage
+        view={view({ rows: [row()], total: 1, totalWaiting: 1, aiScreening: true })}
+      />,
+    );
+    const withoutKey = render(
+      <ApplicationsPage view={view({ rows: [row()], total: 1, totalWaiting: 1 })} />,
+    );
+
+    expect(withKey).toContain("draft=1");
+    expect(withoutKey).not.toContain("draft=1");
+    // The manual path is there either way.
+    expect(withoutKey).toContain("Edit email");
+  });
+
+  it("says who wrote the draft, above the send box", () => {
+    const html = render(
+      <ApplicationsPage
+        view={view({
+          rows: [row()],
+          total: 1,
+          totalWaiting: 1,
+          aiScreening: true,
+          emailDraft: { drafted: true, failure: null },
+          editing: {
+            id: "s1",
+            intent: "reject",
+            subject: "About your trade account",
+            body: "Hi {{first_name}}, we are not able to open one just now. {{reason}}",
+            reason: "",
+            note: "",
+          },
+        })}
+      />,
+    );
+
+    expect(html).toContain("Drafted by Claude");
+    expect(html).toContain("You send it, not the AI");
+    expect(html).toContain("About your trade account");
+    capture("ai-06-email-drafted", html);
+  });
+
+  it("falls back to the merchant's own template, and says the draft failed", () => {
+    const html = render(
+      <ApplicationsPage
+        view={view({
+          rows: [row()],
+          total: 1,
+          totalWaiting: 1,
+          aiScreening: true,
+          emailDraft: { drafted: false, failure: "timeout" },
+          editing: {
+            id: "s1",
+            intent: "reject",
+            subject: "Sorry {{company}}",
+            body: "{{reason}}",
+            reason: "",
+            note: "",
+          },
+        })}
+      />,
+    );
+
+    expect(html).toContain("Claude did not answer in time");
+    expect(html).toContain("your own template is below");
+    expect(html).toContain("Sorry {{company}}");
+    capture("ai-07-email-draft-failed", html);
   });
 });

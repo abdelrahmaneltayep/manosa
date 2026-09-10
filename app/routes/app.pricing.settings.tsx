@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useActionData, useLoaderData } from "@remix-run/react";
 
 import { PricingSettingsPage } from "~/components/pricing/PricingSettingsPage";
 import type { PricingSettingsView } from "~/components/pricing/types";
@@ -98,6 +98,11 @@ export const action = ({ request }: ActionFunctionArgs) =>
   });
 
 export default function PricingSettings() {
-  const { view } = useLoaderData<typeof loader>();
+  // The action's view wins. A non-redirect action response re-runs the loader,
+  // so reading only the loader's copy throws away everything the action just
+  // computed — the validation errors, the report, the draft.
+  const actionData = useActionData<typeof action>();
+  const loaderData = useLoaderData<typeof loader>();
+  const { view } = actionData ?? loaderData;
   return <PricingSettingsPage view={view as PricingSettingsView} />;
 }

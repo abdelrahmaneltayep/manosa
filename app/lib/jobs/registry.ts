@@ -2,6 +2,7 @@ import { backfillCustomers } from "~/lib/jobs/handlers/backfill-customers.server
 import { backfillOrders } from "~/lib/jobs/handlers/backfill-orders.server";
 import { expireQuotes } from "~/lib/jobs/handlers/expire-quotes.server";
 import { decideApplications } from "~/lib/jobs/handlers/decide-applications.server";
+import { screenApplications } from "~/lib/jobs/handlers/screen-applications.server";
 import { purgeShopPii } from "~/lib/jobs/handlers/purge-shop-pii.server";
 
 /**
@@ -17,6 +18,7 @@ export const JOB_HANDLERS = {
   "orders.backfill": backfillOrders,
   "quotes.expire": expireQuotes,
   "forms.decide_applications": decideApplications,
+  "forms.screen_applications": screenApplications,
 } as const;
 
 export type JobKind = keyof typeof JOB_HANDLERS;

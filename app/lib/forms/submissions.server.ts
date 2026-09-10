@@ -250,6 +250,16 @@ export async function submitForm(input: SubmitInput): Promise<SubmitResult> {
     });
   }
 
+  // ✦ Screening, for the same reason and on the same terms: a recommendation
+  // waiting for the merchant when they open the queue, and nothing an applicant
+  // waits on. Enqueued whether or not there is a key — with none, the job marks
+  // the application "not screened" rather than leaving it saying "checking".
+  await enqueueJob({
+    kind: "forms.screen_applications",
+    runAt: now,
+    replacePending: true,
+  });
+
   // The confirmation. Sent after the application is stored, and a failure to
   // send never loses it — the merchant can still see and answer the
   // application, which is the thing that actually matters.

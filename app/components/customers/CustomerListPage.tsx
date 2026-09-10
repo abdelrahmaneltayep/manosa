@@ -160,11 +160,11 @@ function Toolbar({ view }: { view: CustomerListView }) {
         </s-link>
         <s-link href="/app/customers/groups">{t("customers.list.tabGroups")}</s-link>
         <s-link href="/app/customers/tagging">{t("customers.list.tabTagging")}</s-link>
-        {/* ✦ Segment builder needs the AI layer (4.3). Present but honest
-            about not being ready, rather than absent. */}
+        {/* Disabled rather than hidden with no key: the merchant should know
+            the capability exists and why it is quiet. */}
         <s-button
           variant="primary"
-          href="/app/customers?segment=1"
+          href="/app/customers/segments"
           {...whenDisabled(!view.aiAvailable)}
         >
           {t("customers.list.segmentBuilder")}

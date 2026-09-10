@@ -593,7 +593,36 @@
       "last_wins": "الكمية {{quantity}} مكرّرة؛ يُعتمَد الصف الأخير (استُبدل السطر {{previousLine}}).",
       "ragged_row": "عدد أعمدة هذا الصف يختلف عن الترويسة، فقد تكون القيم في غير مكانها."
     },
-    "problemsHeading": "صفوف تحتاج انتباهك"
+    "problemsHeading": "صفوف تحتاج انتباهك",
+    "map": {
+      "heading": "✦ طابِق أعمدتك",
+      "body": "لا يستخدم «{{file}}» أسماء أعمدة مانون، فلم يُقرأ منه شيء بعد. طابَق كلود ما استطاع — راجع كل عمود ثم تابع.",
+      "samples": "في ملفك: {{values}}",
+      "noSamples": "هذا العمود فارغ في كل الصفوف التي فحصناها.",
+      "ignore": "تجاهل هذا العمود",
+      "continue": "افحص الملف",
+      "missingHeading_zero": "كل الأعمدة المطلوبة مطابَقة",
+      "missingHeading_one": "عمود مطلوب واحد غير مطابَق",
+      "missingHeading_two": "عمودان مطلوبان غير مطابَقين",
+      "missingHeading_few": "{{count}} أعمدة مطلوبة غير مطابَقة",
+      "missingHeading_many": "{{count}} عمودًا مطلوبًا غير مطابَق",
+      "missingHeading_other": "{{count}} عمود مطلوب غير مطابَق",
+      "missingBody": "لا يمكن استيراد شيء بدون {{columns}}. طابِق عمودًا به، أو ابدأ من القالب بدلًا من ذلك.",
+      "confidence": {
+        "high": "واثق",
+        "medium": "شبه متأكد",
+        "low": "تخمين — راجعه"
+      },
+      "failureBody": "طابِق الأعمدة بنفسك أدناه. كانت كل مطابقة قابلة للتعديل على أي حال.",
+      "failure": {
+        "no_keyHeading": "مطابقة الأعمدة متوقفة",
+        "timeoutHeading": "لم يجب كلود في الوقت المحدد",
+        "rate_limitedHeading": "طلبات كثيرة في وقت واحد",
+        "refusedHeading": "لم يطابق كلود هذا الملف",
+        "invalid_outputHeading": "عادت المطابقة غير صالحة",
+        "errorHeading": "فشلت مطابقة الأعمدة"
+      }
+    }
   },
   "customers": {
     "terms": {
@@ -1339,7 +1368,70 @@
     "needsInfoLabel": "ما الذي تحتاجه منه؟",
     "needsInfoHelp": "تُرسل إليه رسالة ويبقى الطلب هنا في انتظار رده.",
     "reasonMet": "متحقق",
-    "reasonUnmet": "غير متحقق"
+    "reasonUnmet": "غير متحقق",
+    "draftEmail": "✦ اكتب مسودة الرسالة",
+    "draftedByClaude": "✦ كتبها كلود · اقرأها قبل إرسالها. أنت من يرسل، لا الذكاء الاصطناعي.",
+    "draftFailed": {
+      "no_key": "لا يوجد مفتاح Anthropic لهذا المتجر، فلا توجد مسودة — قالبك أدناه.",
+      "timeout": "لم يجب كلود في الوقت المحدد، فقالبك أدناه. لم يُرسل شيء.",
+      "rate_limited": "طلبات كثيرة في وقت واحد، فقالبك أدناه. لم يُرسل شيء.",
+      "refused": "لم يكتب كلود هذه المسودة. قالبك أدناه.",
+      "invalid_output": "عادت المسودة غير صالحة، مرتين. قالبك أدناه.",
+      "error": "فشلت المسودة في الطريق إلى كلود. قالبك أدناه."
+    },
+    "screening": {
+      "waiting": "✦ يجري فحص بياناتهم — عادةً ثوانٍ قليلة. يمكنك اتخاذ القرار دون انتظاره.",
+      "recommend": "✦ لا شيء هنا يبدو خاطئًا",
+      "look": "✦ يستحق القراءة قبل الموافقة",
+      "off": "✦ الفحص متوقف — لا يوجد مفتاح Anthropic لهذا المتجر. راجع هذا الطلب بنفسك؛ لم يمنع الفحص الموافقة على أحد قط.",
+      "footnote": "قراءة كلود للحقائق التي لديك أصلًا. القرار قرارك."
+    },
+    "signal": {
+      "vat_valid": "رقمهم الضريبي سليم.",
+      "vat_invalid": "رقمهم الضريبي غير صالح.",
+      "vat_unverified": "تعذّر التحقق من رقمهم الضريبي — الخدمة غير متاحة، وهذا ليس بسببهم.",
+      "vat_missing": "لا يوجد رقم ضريبي.",
+      "website_matches_email": "الموقع الذي ذكروه على النطاق نفسه لبريدهم.",
+      "website_mismatch": "الموقع الذي ذكروه على نطاق مختلف عن بريدهم.",
+      "website_missing": "لا يوجد موقع.",
+      "free_email_domain": "قدّموا الطلب من بريد مجاني.",
+      "business_email_domain": "قدّموا الطلب من نطاق شركتهم.",
+      "years_established_zero": "لا سنوات مسجّلة في العمل.",
+      "years_established_one": "في العمل منذ سنة.",
+      "years_established_two": "في العمل منذ سنتين.",
+      "years_established_few": "في العمل منذ {{count}} سنوات.",
+      "years_established_many": "في العمل منذ {{count}} سنة.",
+      "years_established_other": "في العمل منذ {{count}} سنة.",
+      "years_new_zero": "أقل من سنة في العمل.",
+      "years_new_one": "سنة واحدة فقط في العمل.",
+      "years_new_two": "سنتان فقط في العمل.",
+      "years_new_few": "{{count}} سنوات فقط في العمل.",
+      "years_new_many": "{{count}} سنة فقط في العمل.",
+      "years_new_other": "{{count}} سنة فقط في العمل.",
+      "years_unknown": "لم يذكروا منذ متى يعملون.",
+      "documents_attached_zero": "لا مستندات مرفقة.",
+      "documents_attached_one": "مستند واحد مرفق.",
+      "documents_attached_two": "مستندان مرفقان.",
+      "documents_attached_few": "{{count}} مستندات مرفقة.",
+      "documents_attached_many": "{{count}} مستندًا مرفقًا.",
+      "documents_attached_other": "{{count}} مستند مرفق.",
+      "documents_missing": "لا مستندات مرفقة.",
+      "documents_unscanned_zero": "لا مستندات دون فحص.",
+      "documents_unscanned_one": "مستند واحد لم يُفحص ضد الفيروسات.",
+      "documents_unscanned_two": "مستندان لم يُفحصا ضد الفيروسات.",
+      "documents_unscanned_few": "{{count}} مستندات لم تُفحص ضد الفيروسات.",
+      "documents_unscanned_many": "{{count}} مستندًا لم يُفحص ضد الفيروسات.",
+      "documents_unscanned_other": "{{count}} مستند لم يُفحص ضد الفيروسات.",
+      "existing_customer": "يشترون من هذا المتجر أصلًا.",
+      "duplicate_domain_zero": "لا طلبات أخرى من النطاق نفسه.",
+      "duplicate_domain_one": "طلب آخر واحد ينتظر من النطاق نفسه.",
+      "duplicate_domain_two": "طلبان آخران ينتظران من النطاق نفسه.",
+      "duplicate_domain_few": "{{count}} طلبات أخرى تنتظر من النطاق نفسه.",
+      "duplicate_domain_many": "{{count}} طلبًا آخر ينتظر من النطاق نفسه.",
+      "duplicate_domain_other": "{{count}} طلب آخر ينتظر من النطاق نفسه.",
+      "criteria_met": "يستوفون المعايير التي وضعتها.",
+      "criteria_failed": "لا يستوفون المعايير التي وضعتها."
+    }
   },
   "approval": {
     "heading": "الاعتماد التلقائي",
@@ -1871,6 +1963,171 @@
       "belowCostRow": "{{sku}} عند {{quantity}}+: يُباع بـ {{price}}، ويكلفك {{cost}}.",
       "unavailableHeading": "تعذّر فحص التكاليف",
       "unavailableBody": "لم يستجب Shopify، لذا لا يستطيع مانون تحديد ما إذا كانت هذه القاعدة تبيع شيئًا بأقل من التكلفة. لا يزال بإمكانك الموافقة عليها."
+    }
+  },
+  "segments": {
+    "heading": "✦ الشرائح",
+    "composerHeading": "صف العملاء الذين تقصدهم",
+    "sentenceLabel": "عمّن تبحث؟",
+    "sentenceHelp": "يحوّلها كلود إلى مرشّحات تراها وتغيّرها. لا يُحفظ شيء حتى تقول ذلك.",
+    "draftAction": "✦ ابنِ الشريحة",
+    "examplesHeading": "على سبيل المثال:",
+    "example1": "مشترو الجملة الذين أنفقوا أكثر من ٥٠٠٠ ولم يطلبوا منذ ٤٥ يومًا.",
+    "example2": "مجموعة الذهبي في السعودية، المعفون من الضريبة.",
+    "example3": "كل من تمت الموافقة عليه ولم يطلب قط.",
+    "offHeading": "✦ الشرائح متوقفة",
+    "offBody": "لا يوجد مفتاح Anthropic لهذا المتجر، فلا يستطيع كلود قراءة الجملة إلى مرشّحات. لا شيء آخر في هذه الصفحة يحتاجه.",
+    "draftHeading": "ما قرأه كلود",
+    "draftIntro": "✦ قرأها كلود · راجع المرشّحات قبل الحفظ. احذف أي مرشّح خاطئ.",
+    "notesHeading": "ما افترضه كلود",
+    "noChips": "لم يبقَ أي مرشّح — حُذفت كلها.",
+    "removeChip": "احذف «{{condition}}»",
+    "count_zero": "لا يطابق أحد",
+    "count_one": "يطابق عميل واحد",
+    "count_two": "يطابق عميلان",
+    "count_few": "يطابق {{count}} عملاء",
+    "count_many": "يطابق {{count}} عميلًا",
+    "count_other": "يطابق {{count}} عميل",
+    "emptyHeading": "لا يطابق أحد",
+    "emptyLoosen": "خفّف «{{condition}}» — فهو المرشّح الذي يستبعد أكبر عدد.",
+    "emptyNoHelp": "لا مرشّح واحد هو السبب. احذف أحدها وحاول مجددًا.",
+    "nameLabel": "سمِّ هذه الشريحة",
+    "saveAction": "احفظ الشريحة",
+    "clarifyHeading": "أمر واحد بحاجة إلى تأكيد",
+    "clarifyBody": "ذكر كلود مجموعة لا يملكها هذا المتجر. اختر ما تقصده — الحفظ متوقف حتى تفعل.",
+    "whichOne": "أي مجموعة تقصد بـ «{{term}}»؟",
+    "noSuchGroup": "لا توجد مجموعة اسمها «{{term}}». احذف هذا المرشّح، أو أنشئ المجموعة أولًا.",
+    "savedHeading": "الشرائح المحفوظة",
+    "savedEmpty": "لا شرائح بعد. صف واحدة أعلاه وستجدها هنا لإعادة استخدامها.",
+    "colName": "الاسم",
+    "colConditions": "المرشّحات",
+    "colMembers": "الأعضاء",
+    "colActions": "الإجراءات",
+    "conditionCount_zero": "لا مرشّحات",
+    "conditionCount_one": "مرشّح واحد",
+    "conditionCount_two": "مرشّحان",
+    "conditionCount_few": "{{count}} مرشّحات",
+    "conditionCount_many": "{{count}} مرشّحًا",
+    "conditionCount_other": "{{count}} مرشّح",
+    "membersAsOf_zero": "لا أحد حتى {{when}}",
+    "membersAsOf_one": "واحد حتى {{when}}",
+    "membersAsOf_two": "اثنان حتى {{when}}",
+    "membersAsOf_few": "{{count}} حتى {{when}}",
+    "membersAsOf_many": "{{count}} حتى {{when}}",
+    "membersAsOf_other": "{{count}} حتى {{when}}",
+    "neverCounted": "لم تُحسب بعد",
+    "delete": "حذف",
+    "saveError": {
+      "duplicate_nameHeading": "هذا الاسم مستخدم",
+      "duplicate_nameBody": "لديك شريحة بهذا الاسم. أعطِ هذه اسمًا مختلفًا.",
+      "invalidHeading": "لا يمكن حفظ هذه الشريحة",
+      "invalidBody": "تحتاج اسمًا ومرشّحًا واحدًا على الأقل."
+    },
+    "failure": {
+      "no_key": {
+        "heading": "الشرائح متوقفة",
+        "body": "لا يوجد مفتاح Anthropic لهذا المتجر."
+      },
+      "timeout": {
+        "heading": "لم يجب كلود في الوقت المحدد",
+        "body": "أعد المحاولة. لم يُحفظ شيء."
+      },
+      "rate_limited": {
+        "heading": "طلبات كثيرة في وقت واحد",
+        "body": "انتظر لحظة ثم أعد المحاولة."
+      },
+      "refused": {
+        "heading": "لم يبنِ كلود هذه",
+        "body": "جرّب وصف العملاء بصياغة أخرى."
+      },
+      "invalid_output": {
+        "heading": "عادت غير صالحة",
+        "body": "لم تكن إجابة كلود مرشّحات يفهمها التطبيق، مرتين. جرّب جملة أبسط."
+      },
+      "error": {
+        "heading": "فشلت العملية",
+        "body": "حدث خطأ في الطريق إلى كلود. أعد المحاولة."
+      },
+      "empty": {
+        "heading": "اكتب من تقصد",
+        "body": "جملة واحدة تكفي — الإنفاق، الفئة، الدولة، منذ متى لم يطلبوا."
+      }
+    },
+    "chip": {
+      "lifetime_spend": {
+        "gt": "أنفق أكثر من {{amount}}",
+        "gte": "أنفق {{amount}} أو أكثر",
+        "lt": "أنفق أقل من {{amount}}",
+        "lte": "أنفق {{amount}} أو أقل"
+      },
+      "order_count": {
+        "gt_zero": "أكثر من صفر طلب",
+        "gt_one": "أكثر من طلب واحد",
+        "gt_two": "أكثر من طلبين",
+        "gt_few": "أكثر من {{count}} طلبات",
+        "gt_many": "أكثر من {{count}} طلبًا",
+        "gt_other": "أكثر من {{count}} طلب",
+        "gte_zero": "بلا طلبات",
+        "gte_one": "طلب واحد أو أكثر",
+        "gte_two": "طلبان أو أكثر",
+        "gte_few": "{{count}} طلبات أو أكثر",
+        "gte_many": "{{count}} طلبًا أو أكثر",
+        "gte_other": "{{count}} طلب أو أكثر",
+        "lt_zero": "أقل من صفر طلب",
+        "lt_one": "أقل من طلب واحد",
+        "lt_two": "أقل من طلبين",
+        "lt_few": "أقل من {{count}} طلبات",
+        "lt_many": "أقل من {{count}} طلبًا",
+        "lt_other": "أقل من {{count}} طلب",
+        "lte_zero": "بلا طلبات",
+        "lte_one": "طلب واحد أو أقل",
+        "lte_two": "طلبان أو أقل",
+        "lte_few": "{{count}} طلبات أو أقل",
+        "lte_many": "{{count}} طلبًا أو أقل",
+        "lte_other": "{{count}} طلب أو أقل"
+      },
+      "last_order_days": {
+        "gt_zero": "بلا طلب اليوم",
+        "gt_one": "بلا طلب منذ يوم",
+        "gt_two": "بلا طلب منذ يومين",
+        "gt_few": "بلا طلب منذ {{count}} أيام",
+        "gt_many": "بلا طلب منذ {{count}} يومًا",
+        "gt_other": "بلا طلب منذ {{count}} يوم",
+        "gte_zero": "بلا طلب اليوم أو أكثر",
+        "gte_one": "بلا طلب منذ يوم أو أكثر",
+        "gte_two": "بلا طلب منذ يومين أو أكثر",
+        "gte_few": "بلا طلب منذ {{count}} أيام أو أكثر",
+        "gte_many": "بلا طلب منذ {{count}} يومًا أو أكثر",
+        "gte_other": "بلا طلب منذ {{count}} يوم أو أكثر",
+        "lt_zero": "طلب اليوم",
+        "lt_one": "طلب خلال اليوم الماضي",
+        "lt_two": "طلب خلال اليومين الماضيين",
+        "lt_few": "طلب خلال {{count}} أيام الماضية",
+        "lt_many": "طلب خلال {{count}} يومًا الماضية",
+        "lt_other": "طلب خلال {{count}} يوم الماضية",
+        "lte_zero": "طلب اليوم",
+        "lte_one": "طلب خلال يوم",
+        "lte_two": "طلب خلال يومين",
+        "lte_few": "طلب خلال {{count}} أيام",
+        "lte_many": "طلب خلال {{count}} يومًا",
+        "lte_other": "طلب خلال {{count}} يوم"
+      },
+      "never_ordered": "لم يطلب قط",
+      "tag": {
+        "has": "موسوم بـ {{tag}}",
+        "not_has": "غير موسوم بـ {{tag}}"
+      },
+      "group": {
+        "is": "في {{group}}",
+        "is_not": "ليس في {{group}}"
+      },
+      "country": {
+        "is": "في {{country}}",
+        "is_not": "ليس في {{country}}"
+      },
+      "tax_exempt": "معفى من الضريبة",
+      "tax_liable": "غير معفى من الضريبة",
+      "status": "الحالة {{status}}"
     }
   }
 }

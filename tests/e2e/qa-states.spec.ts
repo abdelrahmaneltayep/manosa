@@ -153,6 +153,10 @@ test.describe("Describe-a-rule states", () => {
   captureSuite("4.2");
 });
 
+test.describe("Screening, segments and column-mapping states", () => {
+  captureSuite("4.3");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)

@@ -613,9 +613,16 @@ describe("the evaluator, on arrival", () => {
       const form = await liveForm();
       const submission = await apply(form);
 
-      // Nothing was even queued: the form has no criteria, so there is nothing
-      // for the evaluator to do.
-      expect(await db.scheduledJob.count()).toBe(0);
+      // Nothing was queued for the evaluator: the form has no criteria, so
+      // there is nothing for it to do. ✦ Screening is queued regardless — it
+      // recommends, it never decides, and with no key it marks the application
+      // "not screened" rather than leaving the queue saying "checking".
+      expect(
+        await db.scheduledJob.count({ where: { kind: "forms.decide_applications" } }),
+      ).toBe(0);
+      expect(
+        await db.scheduledJob.count({ where: { kind: "forms.screen_applications" } }),
+      ).toBe(1);
 
       // And running it anyway decides nothing.
       const result = await decideApplications(async () => admin);

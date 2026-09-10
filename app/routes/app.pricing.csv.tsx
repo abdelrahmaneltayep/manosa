@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useActionData, useLoaderData } from "@remix-run/react";
 
 import { CsvPage, type CsvView } from "~/components/pricing/CsvPage";
 import { db } from "~/db.server";
@@ -17,11 +17,27 @@ import {
   undoImport,
   UndoExpiredError,
 } from "~/lib/pricing/csv/import.server";
-import { CsvParseError, parseCsv } from "~/lib/pricing/csv/parse";
+import { isAiAvailable } from "~/lib/ai/client.server";
+import {
+  mapColumns,
+  toColumnMapping,
+  type ColumnGuess,
+} from "~/lib/ai/prompts/csv-mapping.server";
+import {
+  applyMapping,
+  CsvParseError,
+  parseCsv,
+  type ColumnMapping,
+} from "~/lib/pricing/csv/parse";
 import { planImport, skusIn, type ImportPlan } from "~/lib/pricing/csv/plan";
 import { resolveSkus } from "~/lib/pricing/csv/skus.server";
 import { exportFor, templateCsv } from "~/lib/pricing/csv/export.server";
-import { detectTemplate, isTemplateKey, TEMPLATES } from "~/lib/pricing/csv/templates";
+import {
+  detectTemplate,
+  isTemplateKey,
+  TEMPLATES,
+  type TemplateKey,
+} from "~/lib/pricing/csv/templates";
 import { activeEngineRules, listRules } from "~/lib/pricing/rules.server";
 import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
 import { withAdmin } from "~/shopify.server";
@@ -33,6 +49,7 @@ import { withAdmin } from "~/shopify.server";
  */
 const EMPTY_VIEW: CsvView = {
   step: "choose",
+  mapping: null,
   fileError: null,
   review: null,
   imported: null,
@@ -86,7 +103,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
         const draft = await db.ruleImportDraft.findUnique({ where: { id: draftId } });
         if (!draft) return redirect("/app/pricing/csv");
 
-        const { plan } = await buildPlan(draft.content, admin);
+        const { plan } = await buildPlan(draft.content, admin, mappedDraft(draft));
 
         if (intent === "errors") {
           return csvResponse(
@@ -121,6 +138,43 @@ export const action = ({ request }: ActionFunctionArgs) =>
         } catch (error) {
           if (isPlanGateError(error)) return redirect("/app/plans?from=import");
           throw error;
+        }
+      }
+
+      if (intent === "map") {
+        const draftId = (form.get("draftId") ?? "").toString();
+        const draft = await db.ruleImportDraft.findUnique({ where: { id: draftId } });
+        if (!draft) return redirect("/app/pricing/csv");
+
+        const templateParam = (form.get("template") ?? "").toString();
+        const template: TemplateKey = isTemplateKey(templateParam)
+          ? templateParam
+          : "rules";
+
+        // The merchant's mapping, not the model's: whatever the selects say is
+        // what gets applied, whether Claude proposed it or they changed it.
+        const mapping: ColumnMapping = {};
+        for (const [key, value] of form.entries()) {
+          if (!key.startsWith("column:")) continue;
+          const column = value.toString();
+          mapping[key.slice("column:".length)] = column === "" ? null : column;
+        }
+
+        await db.ruleImportDraft.update({
+          where: { id: draftId },
+          data: { mapping, template },
+        });
+
+        try {
+          const { plan, headers } = await buildPlan(draft.content, admin, {
+            mapping,
+            template,
+          });
+          return json({
+            view: await reviewView(plan, headers, draft.id, draft.fileName),
+          });
+        } catch (error) {
+          return json({ view: fileErrorView(error) }, { status: 422 });
         }
       }
 
@@ -170,6 +224,12 @@ export const action = ({ request }: ActionFunctionArgs) =>
       plan = built.plan;
       headers = built.headers;
     } catch (error) {
+      // ✦ Headers that match no template used to end here. Now they go to the
+      // mapping screen, where Claude proposes what each column is and the
+      // merchant fixes it — spec §2, "no rigid template required".
+      if (error instanceof UnknownTemplateError) {
+        return json({ view: await mappingView(content, file.name, session.id) });
+      }
       return json({ view: fileErrorView(error) }, { status: 422 });
     }
 
@@ -180,15 +240,28 @@ export const action = ({ request }: ActionFunctionArgs) =>
       data: { ...tenant(), fileName: file.name, content },
     });
 
-    const { rules: existing } = await activeEngineRules();
-    const size = estimatePublishedSize(
-      existing,
-      plan.planned.map((item) => item.rule),
-    );
+    return json({ view: await reviewView(plan, headers, draft.id, file.name) });
+  });
 
-    const review: NonNullable<CsvView["review"]> = {
-      draftId: draft.id,
-      fileName: file.name,
+/** The dry-run report. Shared by a file that matched and one that was mapped. */
+async function reviewView(
+  plan: ImportPlan,
+  headers: string[],
+  draftId: string,
+  fileName: string,
+): Promise<CsvView> {
+  const { rules: existing } = await activeEngineRules();
+  const size = estimatePublishedSize(
+    existing,
+    plan.planned.map((item) => item.rule),
+  );
+
+  return {
+    ...EMPTY_VIEW,
+    step: "review",
+    review: {
+      draftId,
+      fileName,
       template: plan.template,
       columns: headers.map((header) => ({
         header,
@@ -199,16 +272,119 @@ export const action = ({ request }: ActionFunctionArgs) =>
       errors: plan.errors,
       warnings: plan.warnings,
       tooLarge: size.exceeds ? { bytes: size.bytes, limit: size.limit } : null,
-    };
+    },
+  };
+}
 
-    return json({ view: { ...EMPTY_VIEW, step: "review" as const, review } });
+/** A stored mapping, read back defensively — it is JSON on a row. */
+function mappedDraft(draft: {
+  mapping: unknown;
+  template: string | null;
+}): { mapping: ColumnMapping; template: TemplateKey } | null {
+  if (!draft.mapping || typeof draft.mapping !== "object") return null;
+  if (!isTemplateKey(draft.template)) return null;
+
+  const mapping: ColumnMapping = {};
+  for (const [header, column] of Object.entries(
+    draft.mapping as Record<string, unknown>,
+  )) {
+    mapping[header] = typeof column === "string" && column !== "" ? column : null;
+  }
+  return { mapping, template: draft.template };
+}
+
+/**
+ * ✦ Propose a mapping for a file whose headers matched nothing.
+ *
+ * The file is held first: the merchant is going to spend a minute on this
+ * screen, and losing their upload to a model timeout would be the worst
+ * possible moment for it. With no key — or a failed call — every column starts
+ * as "ignore" and the merchant maps it themselves, which is exactly what they
+ * would have had to do without this feature.
+ */
+async function mappingView(
+  content: string,
+  fileName: string,
+  actorId: string,
+): Promise<CsvView> {
+  const doc = parseCsv(content);
+  const template: TemplateKey = "rules";
+
+  const draft = await db.ruleImportDraft.create({
+    data: { ...tenant(), fileName, content, template },
   });
 
-async function buildPlan(content: string, admin: Parameters<typeof resolveSkus>[0]) {
-  const doc = parseCsv(content);
-  if (doc.rows.length > MAX_ROWS) throw new TooManyRowsError(doc.rows.length);
+  const proposed = isAiAvailable() ? await mapColumns(doc, template, { actorId }) : null;
 
-  const template = detectTemplate(doc.headers);
+  const guesses: ColumnGuess[] = proposed?.ok
+    ? proposed.value.mappings
+    : doc.headers.map((header) => ({
+        header,
+        // A header that happens to be a column key already is not a guess.
+        column: TEMPLATES[template].columns.some((column) => column.key === header)
+          ? header
+          : null,
+        confidence: "low" as const,
+      }));
+
+  // Stored as proposed, so the held draft matches what the merchant is looking
+  // at. Confirming re-reads the mapping from the form either way; this is what
+  // a reload or a second tab would otherwise lose.
+  await db.ruleImportDraft.update({
+    where: { id: draft.id },
+    data: { mapping: toColumnMapping(guesses) },
+  });
+
+  const byHeader = new Map(guesses.map((guess) => [guess.header, guess]));
+  const mapped = new Set(
+    guesses.map((guess) => guess.column).filter((key): key is string => key !== null),
+  );
+
+  return {
+    ...EMPTY_VIEW,
+    step: "map",
+    mapping: {
+      draftId: draft.id,
+      fileName,
+      template,
+      rows: doc.headers.map((header) => {
+        const guess = byHeader.get(header);
+        return {
+          header,
+          column: guess?.column ?? "",
+          confidence: guess?.confidence ?? "low",
+          samples: doc.rows
+            .slice(0, 3)
+            .map((row) => row.cells[header] ?? "")
+            .filter((value) => value !== ""),
+        };
+      }),
+      targets: TEMPLATES[template].columns.map((column) => ({
+        key: column.key,
+        required: column.required,
+      })),
+      notes: proposed?.ok ? proposed.value.notes : null,
+      aiFailure: proposed && !proposed.ok ? proposed.reason : null,
+      missingRequired: TEMPLATES[template].columns
+        .filter((column) => column.required && !mapped.has(column.key))
+        .map((column) => column.key),
+    },
+  };
+}
+
+async function buildPlan(
+  content: string,
+  admin: Parameters<typeof resolveSkus>[0],
+  mapped?: { mapping: ColumnMapping; template: TemplateKey } | null,
+) {
+  const parsed = parseCsv(content);
+  if (parsed.rows.length > MAX_ROWS) throw new TooManyRowsError(parsed.rows.length);
+
+  // ✦ A confirmed mapping is applied before anything else looks at the file, so
+  // the planner, the row numbers and the error report all work on the merchant's
+  // own file and know nothing about the mapping.
+  const doc = mapped ? applyMapping(parsed, mapped.mapping) : parsed;
+  const template = mapped?.template ?? detectTemplate(doc.headers);
   if (!template) throw new UnknownTemplateError();
 
   // Resolved before planning, so an unknown SKU is a listed error rather than
@@ -258,6 +434,11 @@ function fileErrorView(error: unknown): CsvView {
 }
 
 export default function PricingCsv() {
-  const { view } = useLoaderData<typeof loader>();
+  // The action's view wins. A non-redirect action response re-runs the loader,
+  // so reading only the loader's copy throws away everything the action just
+  // computed — the validation errors, the report, the draft.
+  const actionData = useActionData<typeof action>();
+  const loaderData = useLoaderData<typeof loader>();
+  const { view } = actionData ?? loaderData;
   return <CsvPage view={view as CsvView} />;
 }

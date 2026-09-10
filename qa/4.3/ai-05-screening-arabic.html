@@ -1,0 +1,69 @@
+<!doctype html><html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><title>Applications — ai-05-screening-arabic</title><style>
+ body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+   margin:0;padding:1.5rem;background:#f6f6f7;color:#1c1d2b}
+ .note{background:#fff4e4;border:1px solid #e0b252;border-radius:8px;padding:.75rem 1rem;
+   margin-bottom:1.25rem;font-size:12px;color:#5e4200}
+ s-page,s-section,s-box{display:block}
+ s-section,s-box{background:#fff;border:1px solid #e3e3e3;border-radius:10px;
+   padding:1rem;margin-bottom:1rem}
+ s-stack{display:flex;gap:.45rem}
+ s-stack[direction=block]{flex-direction:column;align-items:flex-start}
+ s-stack[direction=inline]{flex-direction:row;align-items:center;flex-wrap:wrap}
+ s-heading{display:block;font-weight:700;margin:.25rem 0}
+ s-page[heading]::before{content:attr(heading);display:block;font-size:20px;
+   font-weight:800;margin-bottom:1rem}
+ s-section[heading]::before{content:attr(heading);display:block;font-weight:700;
+   margin-bottom:.5rem}
+ s-banner[heading]::before{content:attr(heading);display:block;font-weight:700}
+ s-paragraph{display:block;margin:.35rem 0}
+ s-banner{display:block;border-inline-start:4px solid #8a8a8a;background:#fafafa;
+   padding:.75rem 1rem;margin:.5rem 0;border-radius:6px}
+ s-banner[tone=critical]{border-color:#d64545;background:#fdeaea}
+ s-banner[tone=warning]{border-color:#b7791f;background:#fff2dd}
+ s-banner[tone=info]{border-color:#2f6bd6;background:#eaf1ff}
+ s-banner[tone=success]{border-color:#1f8a53;background:#e7f7ee}
+ s-badge{display:inline-block;background:#eef0ff;color:#4f46e5;border-radius:999px;
+   padding:.1rem .55rem;font-size:12px;margin-inline-end:.4rem}
+ /* Tones, so a capture can show what the checklist asks for — "overdue rows
+    red" is not verifiable against a page where every badge looks the same. */
+ s-badge[tone=critical]{background:#fdeaea;color:#a11f1f}
+ s-badge[tone=warning]{background:#fff2dd;color:#7a5200}
+ s-badge[tone=success]{background:#e7f7ee;color:#166b41}
+ s-badge[tone=neutral]{background:#f0f0f0;color:#4a4a4a}
+ s-button{display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;
+   padding:.45rem .9rem;margin-inline-end:.5rem;font-weight:700}
+ s-button[variant=tertiary]{background:transparent;color:#4f46e5;font-weight:600}
+ s-button[disabled]{opacity:.45}
+ s-table{display:table;width:100%;border-collapse:collapse}
+ s-table-body{display:table-row-group}
+ s-table-header-row,s-table-row{display:table-row}
+ s-table-header,s-table-cell{display:table-cell;padding:.4rem .5rem;
+   border-bottom:1px solid #eee;text-align:start;vertical-align:top}
+ s-table-header{font-weight:700}
+ s-text-field,s-number-field,s-money-field,s-select,s-text-area,s-date-field,
+ s-search-field,s-checkbox{display:block;margin:.4rem 0}
+ s-text-field::before,s-number-field::before,s-money-field::before,
+ s-select::before,s-text-area::before,s-date-field::before,
+ s-search-field::before,s-checkbox::before{content:attr(label);display:block;
+   font-weight:600;font-size:12px;margin-bottom:.15rem}
+ s-text-field::after,s-number-field::after,s-money-field::after,
+ s-select::after,s-text-area::after,s-date-field::after{
+   content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
+   padding:.35rem .5rem;min-height:1.1em;background:#fff;color:#444}
+ s-ordered-list{display:block;padding-inline-start:1.2rem}
+ s-unordered-list{display:block;padding-inline-start:1.1rem}
+ s-list-item{display:list-item;margin:.3rem 0}
+ s-link{color:#4f46e5;text-decoration:underline;margin-inline-end:.6rem}
+ s-text[accessibilityvisibility=exclusive]{position:absolute;width:1px;height:1px;
+   overflow:hidden;clip-path:inset(50%)}
+ ui-save-bar{display:none}
+ /* A real s-select renders its own menu; here the options would otherwise
+    print as a run-on line of text next to the field. */
+ s-option{display:none}
+</style></head><body>
+<div class="note"><strong>QA capture — structure only.</strong> Polaris web components
+are not upgraded here: this build environment has no egress to Shopify's CDN, so the
+styling below is a plain stand-in and is <em>not</em> what a merchant sees. What this
+capture verifies is which content and which states render.</div>
+<s-page heading="الطلبات"><s-section><s-stack direction="inline" gap="small" alignItems="center"><s-link href="/app/customers/applications" aria-current="page">الطلبات</s-link><s-link href="/app/customers">المشترون</s-link><s-link href="/app/customers/groups">المجموعات</s-link><s-link href="/app/customers/tagging">الوسم التلقائي</s-link></s-stack></s-section><s-section><s-stack direction="block" gap="base"><form method="get"><s-search-field name="search" label="ابحث بالشركة أو البريد" value=""></s-search-field></form><s-box padding="base" border="base" borderRadius="base"><s-stack direction="block" gap="small"><s-stack direction="inline" gap="small" alignItems="center"><s-text type="strong">Acme Ltd</s-text><s-text color="subdued">sam@acme.test</s-text><s-text color="subdued">قبل يومين</s-text><s-badge tone="neutral">Wholesale application</s-badge></s-stack><s-stack direction="inline" gap="small-500" alignItems="center"><s-badge tone="success">الرقم الضريبي موثَّق</s-badge></s-stack><s-stack direction="block" gap="small-100"><s-banner tone="warning"><s-heading>✦ يستحق القراءة قبل الموافقة</s-heading><s-unordered-list><s-list-item>قدّموا الطلب من بريد مجاني.</s-list-item></s-unordered-list><s-paragraph color="subdued">قراءة كلود للحقائق التي لديك أصلًا. القرار قرارك.</s-paragraph></s-banner></s-stack><form method="post"><input type="hidden" name="intent" value="approve"/><input type="hidden" name="id" value="s1"/><s-stack direction="inline" gap="small" alignItems="end"><s-select name="groupId" label="المجموعة" details="الفئة هي ما يحدد أسعاره وشروط دفعه." value=""><s-option value="">بلا مجموعة</s-option><s-option value="g1">Gold · Net 30 days</s-option><s-option value="g2">Silver</s-option></s-select><s-button type="submit" variant="primary">اعتماد</s-button><s-link href="?edit=s1&amp;intent=approve">تعديل الرسالة</s-link><s-link href="?edit=s1&amp;intent=approve&amp;draft=1">✦ اكتب مسودة الرسالة</s-link></s-stack></form><form method="post"><input type="hidden" name="intent" value="needsInfo"/><input type="hidden" name="id" value="s1"/><s-stack direction="inline" gap="small" alignItems="end"><s-text-field name="note" label="ما الذي تحتاجه منه؟" details="تُرسل إليه رسالة ويبقى الطلب هنا في انتظار رده."></s-text-field><s-button type="submit" variant="tertiary">اطلب المزيد</s-button></s-stack></form><form method="post"><input type="hidden" name="intent" value="reject"/><input type="hidden" name="id" value="s1"/><s-stack direction="inline" gap="small" alignItems="end"><s-select name="reason" label="السبب" details="يُحفظ داخلياً. لا يُرسل إلا ما تكتبه بالأسفل." value=""><s-option value="not_a_business">ليس نشاطاً تجارياً</s-option><s-option value="no_verification">تعذّر التحقق منه</s-option><s-option value="outside_area">خارج نطاق بيعنا</s-option><s-option value="competitor">منافس</s-option><s-option value="duplicate">طلب مكرر</s-option><s-option value="other">سبب آخر</s-option></s-select><s-text-field name="note" label="ما تريد إخباره به"></s-text-field><s-checkbox name="blockDomain" value="yes" label="احجب أيضاً acme.test"></s-checkbox><s-button type="submit" tone="critical">رفض</s-button><s-link href="?edit=s1&amp;intent=reject">تعديل الرسالة</s-link><s-link href="?edit=s1&amp;intent=reject&amp;draft=1">✦ اكتب مسودة الرسالة</s-link></s-stack></form></s-stack></s-box></s-stack></s-section></s-page></body></html>
