@@ -1,7 +1,9 @@
 import {
+  currencyExponent,
   formatMoney,
   formatMoneyWithCode,
   money,
+  parseMoney,
   type Money,
 } from "@mannon/pricing-engine";
 
@@ -46,4 +48,44 @@ export function formatMinorUnits(
   locale = "en",
 ): string {
   return formatCurrency(money(amount, currencyCode), locale);
+}
+
+/**
+ * A money amount as Shopify sends it, which is not quite as we store it.
+ *
+ * `parseMoney` is strict on purpose — extra precision is a rounding decision
+ * and it refuses to make one silently — but that strictness is about *our*
+ * arithmetic, and Shopify is a boundary. It sends `"5000.00"` for a
+ * zero-decimal currency like JPY, which `parseMoney` rejects outright, and the
+ * caller then recorded a zero: a ¥5,000 line mirrored as ¥0, with no log.
+ *
+ * So insignificant trailing zeros are trimmed here and only here. Anything
+ * that would actually lose value still fails, loudly.
+ */
+export function parseShopifyMoney(
+  amount: unknown,
+  currencyCode: string,
+  context: string,
+): Money {
+  const text =
+    (typeof amount === "string" ? amount : String(amount ?? "0")).trim() || "0";
+  const exponent = currencyExponent(currencyCode);
+
+  // "5000.00" in JPY is five thousand yen written by a system that assumes two
+  // decimal places. "5000.25" in JPY is a number we do not understand, and it
+  // is not this function's job to guess.
+  const trimmed = exponent === 0 ? text.replace(/\.0+$/u, "") : text;
+
+  try {
+    return parseMoney(trimmed, currencyCode);
+  } catch (error) {
+    // Never a silent zero. A line mirrored at nothing is revenue the merchant
+    // never sees, on every chart, with nothing to explain it.
+    console.error(
+      `[mannon] could not read "${text}" as ${currencyCode} (${context}): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return money(0, currencyCode);
+  }
 }

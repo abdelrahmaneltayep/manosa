@@ -1,0 +1,239 @@
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+
+import { db, prismaBase } from "~/db.server";
+import { factsFromWebhook, upsertOrder } from "~/lib/orders/sync.server";
+import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
+import { resetDatabase } from "~/../tests/support/db";
+
+/** COLD READ PROBE — delete after review. */
+
+const ALPHA = "alpha.myshopify.com";
+const BETA = "beta.myshopify.com";
+const inAlpha = <T>(fn: () => Promise<T>) => shopScope.run(ALPHA, fn);
+const inBeta = <T>(fn: () => Promise<T>) => shopScope.run(BETA, fn);
+
+const line = (id: number, overrides: Record<string, unknown> = {}) => ({
+  admin_graphql_api_id: `gid://shopify/LineItem/${id}`,
+  title: `Item ${id}`,
+  sku: `SKU-${id}`,
+  quantity: 1,
+  price: "10.00",
+  ...overrides,
+});
+
+const payload = (overrides: Record<string, unknown> = {}) => ({
+  admin_graphql_api_id: "gid://shopify/Order/5001",
+  name: "#1001",
+  currency: "USD",
+  processed_at: "2026-09-01T10:00:00Z",
+  current_total_price: "20.00",
+  line_items: [line(1), line(2)],
+  ...overrides,
+});
+
+const facts = (overrides: Record<string, unknown> = {}) =>
+  factsFromWebhook(payload(overrides))!;
+
+const installShop = (shop: string) =>
+  shopScope.run(shop, () =>
+    db.shop.create({ data: { ...tenant(), currencyCode: "USD" } }),
+  );
+
+beforeEach(resetDatabase);
+afterAll(resetDatabase);
+
+describe("P6 — cross-tenant reach on OrderLine", () => {
+  it("cannot be read, updated or deleted from the other shop", async () => {
+    await installShop(ALPHA);
+    await installShop(BETA);
+
+    const betaLineIds = await inBeta(async () => {
+      await upsertOrder(facts(), true);
+      const rows = await db.orderLine.findMany();
+      return rows.map((row) => row.id);
+    });
+    expect(betaLineIds).toHaveLength(2);
+
+    await inAlpha(async () => {
+      expect(
+        await db.orderLine.findUnique({ where: { id: betaLineIds[0]! } }),
+      ).toBeNull();
+      expect(
+        await db.orderLine.findFirst({
+          where: { lineItemId: "gid://shopify/LineItem/1" },
+        }),
+      ).toBeNull();
+      const updated = await db.orderLine.updateMany({
+        where: { id: betaLineIds[0]! },
+        data: { title: "pwned" },
+      });
+      expect(updated.count).toBe(0);
+      const deleted = await db.orderLine.deleteMany({ where: { id: betaLineIds[0]! } });
+      expect(deleted.count).toBe(0);
+    });
+
+    await inBeta(async () => {
+      expect(await db.orderLine.count()).toBe(2);
+    });
+  });
+
+  it("refuses a createMany whose data names another shop", async () => {
+    await installShop(ALPHA);
+    await installShop(BETA);
+    const order = await inBeta(() => upsertOrder(facts(), true));
+
+    await expect(
+      inAlpha(() =>
+        db.orderLine.createMany({
+          data: [
+            {
+              shop: BETA,
+              orderId: order.id,
+              lineItemId: "gid://shopify/LineItem/99",
+              title: "x",
+              discounts: [],
+            },
+          ],
+        }),
+      ),
+    ).rejects.toThrow(/Cross-tenant/);
+  });
+
+  it("refuses to run at all outside a shop context", async () => {
+    await installShop(ALPHA);
+    await expect(upsertOrder(facts(), true)).rejects.toThrow(/No shop context/);
+  });
+});
+
+describe("P7 — the shop stamp inside the interactive transaction", () => {
+  it("is the active tenant even though the extension runs inside $transaction", async () => {
+    await installShop(ALPHA);
+    await inAlpha(() => upsertOrder(facts(), true));
+
+    const raw = await prismaBase.orderLine.findMany();
+    expect(raw.map((row) => row.shop)).toEqual([ALPHA, ALPHA]);
+  });
+});
+
+describe("P8 — a 100-line order", () => {
+  it("writes inside the interactive transaction budget", async () => {
+    await installShop(ALPHA);
+    const lines = Array.from({ length: 100 }, (_, i) => line(i + 1));
+
+    const started = Date.now();
+    await inAlpha(() => upsertOrder(facts({ line_items: lines }), true));
+    const first = Date.now() - started;
+
+    const again = Date.now();
+    await inAlpha(() => upsertOrder(facts({ line_items: lines }), true));
+    const second = Date.now() - again;
+
+    console.info(`[probe] 100-line insert ${first}ms, replace ${second}ms`);
+    expect(await inAlpha(() => db.orderLine.count())).toBe(100);
+  });
+});
+
+describe("P9 — replaceLines throwing", () => {
+  it("rolls the order back when two lines share an id", async () => {
+    await installShop(ALPHA);
+
+    await expect(
+      inAlpha(() =>
+        upsertOrder(facts({ line_items: [line(1), line(1, { sku: "SKU-dup" })] }), true),
+      ),
+    ).rejects.toThrow();
+
+    await inAlpha(async () => {
+      expect(await db.order.count()).toBe(0);
+      expect(await db.orderLine.count()).toBe(0);
+    });
+  });
+
+  it("rolls the order back when a line collides with another order's line", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await upsertOrder(facts(), true);
+      // A second order in the same shop carrying a line id we already hold.
+      await expect(
+        upsertOrder(
+          facts({
+            admin_graphql_api_id: "gid://shopify/Order/5002",
+            line_items: [line(1)],
+          }),
+          true,
+        ),
+      ).rejects.toThrow();
+      expect(await db.order.count()).toBe(1);
+    });
+  });
+});
+
+describe("P10 — two deliveries of the same order at once", () => {
+  it("survives concurrent upserts", async () => {
+    await installShop(ALPHA);
+
+    const results = await Promise.allSettled([
+      inAlpha(() => upsertOrder(facts(), true)),
+      inAlpha(() => upsertOrder(facts(), true)),
+    ]);
+
+    console.info(
+      `[probe] concurrent: ${results
+        .map((r) =>
+          r.status === "fulfilled"
+            ? "ok"
+            : `rejected(${String((r.reason as Error).message).slice(0, 120)})`,
+        )
+        .join(" | ")}`,
+    );
+
+    const count = await inAlpha(() => db.orderLine.count());
+    console.info(`[probe] lines after concurrent delivery: ${count}`);
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+    expect(count).toBe(2);
+  });
+});
+
+describe("P11 — a truncated order is later declared complete", () => {
+  it("clears linesTruncated on the next webhook", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // Backfill door: Shopify said 150 units, the capped page gave us 2 lines.
+      await upsertOrder({ ...facts(), totalQuantity: 150 }, true);
+      expect((await db.order.findFirst())?.linesTruncated).toBe(true);
+
+      // orders/updated for the same 150-line order. Shopify caps webhook
+      // payloads at 100 line items; here even 2, and the flag is cleared.
+      await upsertOrder(facts(), true);
+      expect((await db.order.findFirst())?.linesTruncated).toBe(false);
+    });
+  });
+});
+
+describe("P12 — five deliveries at once", () => {
+  it("ends consistent", async () => {
+    await installShop(ALPHA);
+    await inAlpha(() => upsertOrder(facts(), true));
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, (_, i) =>
+        inAlpha(() =>
+          upsertOrder(facts({ line_items: [line(1), line(2), line(100 + i)] }), true),
+        ),
+      ),
+    );
+    const failed = results.filter((r) => r.status === "rejected");
+    console.info(
+      `[probe] 5-way: ${failed.length} rejected${
+        failed[0] && failed[0].status === "rejected"
+          ? ` — ${String((failed[0].reason as Error).message).slice(0, 160)}`
+          : ""
+      }`,
+    );
+    console.info(
+      `[probe] lines after 5-way: ${await inAlpha(() => db.orderLine.count())}`,
+    );
+  });
+});

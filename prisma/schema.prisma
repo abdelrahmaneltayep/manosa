@@ -1058,14 +1058,6 @@ enum AiRunStatus {
   NO_KEY
 }
 
-/// One call to Claude.
-///
-/// Operational, not evidential: the audit log records what a merchant decided,
-/// this records what the app asked and what it cost. **No prompt and no
-/// completion are stored** — those carry a merchant's product data and their
-/// buyers' names, and this table is not the place for either. Token counts and
-/// a feature name are enough to answer "what has this been doing" and "what is
-/// it costing me".
 /// One line of a mirrored order.
 ///
 /// Mirrored because four of the analytics charts cannot be answered without it
@@ -1093,14 +1085,28 @@ model OrderLine {
   productId    String?
   variantId    String?
 
-  quantity Int @default(0)
+  /// As ordered. Shopify's `quantity` is *before* returns and removals, so
+  /// this is what was bought, not what the merchant kept.
+  quantity        Int @default(0)
+  /// After returns and order edits — Shopify's `currentQuantity`. This is the
+  /// one revenue is attributed on; `quantity` alone reported a refunded line
+  /// as money the merchant still had.
+  currentQuantity Int @default(0)
 
   /// Per unit, before any discount.
   unitPrice       Int @default(0)
-  /// The line before discounts, and after them. Both, because the difference
-  /// is what a pricing rule earned or gave away.
+  /// The line before discounts, and after them, both as ordered. The
+  /// difference between them is what a pricing rule earned or gave away.
   originalTotal   Int @default(0)
   discountedTotal Int @default(0)
+
+  /// What is left of `discountedTotal` after returns and removals.
+  ///
+  /// Shopify exposes no post-refund line total, so this is apportioned:
+  /// `discountedTotal × currentQuantity / quantity`, rounded. Computed once at
+  /// write time rather than in every chart, so there is one place it can be
+  /// wrong and one place to test. **This is the figure the charts read.**
+  currentTotal Int @default(0)
 
   /// What each discount took off this line: `[{ title, amount }]`.
   ///
@@ -1117,6 +1123,14 @@ model OrderLine {
   @@index([shop, productId])
 }
 
+/// One call to Claude.
+///
+/// Operational, not evidential: the audit log records what a merchant decided,
+/// this records what the app asked and what it cost. **No prompt and no
+/// completion are stored** — those carry a merchant's product data and their
+/// buyers' names, and this table is not the place for either. Token counts and
+/// a feature name are enough to answer "what has this been doing" and "what is
+/// it costing me".
 model AiRun {
   id      String @id @default(cuid())
   shop    String

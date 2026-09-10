@@ -9,20 +9,32 @@ import { runMutation, type AdminGraphql } from "~/lib/pricing/admin-graphql.serv
  * orders in Shopify's own admin.
  */
 
-/** Shopify's page cap for an orders query. */
-export const ORDER_PAGE_SIZE = 100;
+/**
+ * Orders per page.
+ *
+ * Small, because of what hangs off each one. Shopify's calculated query cost
+ * multiplies a connection by its `first`, so nesting `lineItems(first: M)`
+ * inside `orders(first: N)` costs on the order of N × M object points against
+ * a **1,000-point single-query maximum**. At the old 100 × 100 that was tens
+ * of thousands: every page of the backfill would have been rejected outright,
+ * every retry with it, and the merchant would have seen an empty Orders page
+ * and empty charts with nothing to explain them.
+ *
+ * 10 × 50 keeps one page well inside the ceiling. The backfill re-queues
+ * itself per page, so the only cost of a smaller page is more runs.
+ */
+export const ORDER_PAGE_SIZE = 10;
 
 /**
  * Lines fetched per order.
  *
- * Not paginated per order, deliberately. A wholesale order with more than a
- * hundred distinct SKUs exists, but paging inside a page of a hundred orders
- * turns one backfill into thousands of round trips. The lines we get are
- * mirrored and the count is compared with the order's own quantity, so a
- * truncated order is *known* to be truncated rather than quietly under-counted
- * in a chart — see `linesTruncated` in `sync.server.ts`.
+ * Not paginated per order: paging inside a page of orders turns one backfill
+ * into thousands of round trips. A wholesale order with more lines than this
+ * does exist, and `pageInfo.hasNextPage` says so — which is Shopify's own
+ * answer to "is that all of them", rather than a quantity comparison this app
+ * infers. See `linesTruncated` in `sync.server.ts`.
  */
-export const LINE_PAGE_SIZE = 100;
+export const LINE_PAGE_SIZE = 50;
 
 const ORDER_FIELDS = `
     id
@@ -66,12 +78,16 @@ const ORDER_FIELDS = `
       }
     }
     lineItems(first: ${LINE_PAGE_SIZE}) {
+      pageInfo {
+        hasNextPage
+      }
       nodes {
         id
         title
         variantTitle
         sku
         quantity
+        currentQuantity
         product {
           id
         }
@@ -166,7 +182,11 @@ export interface OrderNode {
   currentTotalPriceSet: ShopMoney | null;
   currentSubtotalPriceSet: ShopMoney | null;
   totalRefundedSet: ShopMoney | null;
-  lineItems: { nodes: OrderLineNode[] } | null;
+  lineItems: {
+    /** Shopify's own answer to "is that all of them". */
+    pageInfo?: { hasNextPage?: boolean | null } | null;
+    nodes: OrderLineNode[];
+  } | null;
 }
 
 /**
@@ -181,7 +201,10 @@ export interface OrderLineNode {
   title: string | null;
   variantTitle: string | null;
   sku: string | null;
+  /** As ordered. */
   quantity: number | null;
+  /** After returns and removals. Null on an API version that lacks it. */
+  currentQuantity?: number | null;
   product: { id: string } | null;
   variant: { id: string } | null;
   originalUnitPriceSet: ShopMoney | null;

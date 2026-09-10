@@ -1,7 +1,8 @@
-import { money, parseMoney, type Money } from "@mannon/pricing-engine";
+import { money, type Money } from "@mannon/pricing-engine";
 import { OrderSource, type Prisma } from "@prisma/client";
 
 import { db } from "~/db.server";
+import { parseShopifyMoney } from "~/lib/money";
 import { normalizeTags } from "~/lib/customers/tagging";
 import type { OrderLineNode, OrderNode } from "~/lib/orders/admin-graphql.server";
 import { tenant } from "~/lib/tenant/shop-context.server";
@@ -42,11 +43,45 @@ export interface OrderLineFacts {
   sku: string | null;
   productId: string | null;
   variantId: string | null;
+  /** As ordered — Shopify's `quantity`, which is before returns. */
   quantity: number;
+  /** After returns and order edits. What revenue is attributed on. */
+  currentQuantity: number;
   unitPrice: Money;
   originalTotal: Money;
   discountedTotal: Money;
+  /** `discountedTotal` apportioned to `currentQuantity`. See `currentTotal`. */
+  currentTotal: Money;
   discounts: LineDiscount[];
+}
+
+/**
+ * What is left of a line after returns and removals.
+ *
+ * Shopify exposes no post-refund line total, so this is the only honest thing
+ * available: the discounted total apportioned by how much of the line the
+ * merchant still has. Rounded down to whole minor units, so an apportioned
+ * total can never exceed the real one.
+ *
+ * Without it, a five-unit line the merchant refunded in full was still five
+ * units of revenue on every product and rule chart — the parent order row is
+ * written from Shopify's `current_*` fields, so the lines and the order
+ * disagreed.
+ */
+export function currentTotalOf(
+  discountedTotal: Money,
+  quantity: number,
+  currentQuantity: number,
+): Money {
+  if (quantity <= 0 || currentQuantity <= 0) {
+    return money(0, discountedTotal.currencyCode);
+  }
+  if (currentQuantity >= quantity) return discountedTotal;
+
+  return money(
+    Math.floor((discountedTotal.amount * currentQuantity) / quantity),
+    discountedTotal.currencyCode,
+  );
 }
 
 export interface OrderFacts {
@@ -67,14 +102,18 @@ export interface OrderFacts {
   processedAt: Date;
   cancelledAt: Date | null;
   shopifyUpdatedAt: Date | null;
-  /**
-   * The order's lines, as far as Shopify gave them to us.
-   *
-   * Never partial silently: `linesTruncated` compares the quantity these add
-   * up to against the order's own, so a chart built on them can say it is
-   * missing something rather than quietly under-reporting.
-   */
+  /** The order's lines, as far as Shopify gave them to us. */
   lines: OrderLineFacts[];
+  /**
+   * True when these are not all of them.
+   *
+   * From Shopify's `pageInfo.hasNextPage` through the GraphQL door, and from
+   * the payload sitting at the webhook's own line cap through the other. Never
+   * inferred from quantities: the order's total quantity is post-refund and
+   * the lines' is not, so comparing them was wrong in both doors and
+   * structurally impossible in one.
+   */
+  linesTruncated: boolean;
 }
 
 const trimmed = (value: unknown): string | null => {
@@ -89,15 +128,17 @@ function readDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** Money on the wire is a decimal string; a bad one must not lose the order. */
-function readMoney(amount: unknown, currencyCode: string): Money {
-  const text = typeof amount === "string" ? amount : String(amount ?? "0");
-  try {
-    return parseMoney(text.trim() || "0", currencyCode);
-  } catch {
-    return parseMoney("0", currencyCode);
-  }
-}
+/**
+ * Money on the wire is a decimal string; a bad one must not lose the order.
+ *
+ * Through the shared Shopify boundary, which trims the insignificant trailing
+ * zeros Shopify sends for zero-decimal currencies — `"5000.00"` for JPY, which
+ * the strict parser rejects — and **logs** anything it still cannot read. The
+ * version of this that swallowed the error mirrored a ¥5,000 line as ¥0, on
+ * every chart, with nothing to explain it.
+ */
+const readMoney = (amount: unknown, currencyCode: string): Money =>
+  parseShopifyMoney(amount, currencyCode, "order sync");
 
 function readQuantity(value: unknown): number {
   const count = Number(value ?? 0);
@@ -169,6 +210,18 @@ export function linesFromNode(
       node.originalTotalSet?.shopMoney?.amount,
       currencyCode,
     );
+    const discountedTotal = readMoney(
+      node.discountedTotalSet?.shopMoney?.amount,
+      currencyCode,
+    );
+
+    // `currentQuantity` is absent on older API versions; falling back to
+    // `quantity` reads as "nothing was returned", which is the state of the
+    // large majority of lines and the only safe assumption when unsaid.
+    const currentQuantity =
+      node.currentQuantity === undefined || node.currentQuantity === null
+        ? quantity
+        : readQuantity(node.currentQuantity);
 
     return {
       lineItemId: node.id,
@@ -180,12 +233,11 @@ export function linesFromNode(
       productId: trimmed(node.product?.id),
       variantId: trimmed(node.variant?.id),
       quantity,
+      currentQuantity,
       unitPrice,
       originalTotal,
-      discountedTotal: readMoney(
-        node.discountedTotalSet?.shopMoney?.amount,
-        currencyCode,
-      ),
+      discountedTotal,
+      currentTotal: currentTotalOf(discountedTotal, quantity, currentQuantity),
       discounts: (node.discountAllocations ?? []).map((allocation) => ({
         title:
           trimmed(allocation.discountApplication?.title) ??
@@ -207,18 +259,13 @@ export function linesFromNode(
 export const UNNAMED_DISCOUNT = "(unnamed discount)";
 
 /**
- * Did Shopify give us every line of this order?
+ * How many line items a Shopify order webhook carries before it stops.
  *
- * The lines are fetched with a cap rather than paginated per order. When the
- * quantities they add up to fall short of the order's own, some are missing —
- * and a chart that cannot know that would under-report a merchant's biggest
- * orders, which are exactly the ones with the most lines.
+ * A payload at exactly the cap may or may not be the whole order — Shopify
+ * does not say — so it is treated as "we do not know", which is the honest
+ * reading and the one that cannot clear a flag the backfill set correctly.
  */
-export function linesTruncated(facts: OrderFacts): boolean {
-  if (facts.lines.length === 0) return facts.totalQuantity > 0;
-  const counted = facts.lines.reduce((sum, line) => sum + line.quantity, 0);
-  return counted < facts.totalQuantity;
-}
+export const WEBHOOK_LINE_CAP = 100;
 
 export function factsFromNode(node: OrderNode, fallbackCurrency = "USD"): OrderFacts {
   const currencyCode =
@@ -247,6 +294,12 @@ export function factsFromNode(node: OrderNode, fallbackCurrency = "USD"): OrderF
     cancelledAt: readDate(node.cancelledAt),
     shopifyUpdatedAt: readDate(node.updatedAt),
     lines: linesFromNode(node.lineItems?.nodes ?? [], currencyCode),
+    // Shopify's own answer to "is that all of them". The version of this that
+    // compared summed quantities against the order's own could never be true
+    // through the webhook door — both sides were derived from the same array —
+    // and was wrong through the GraphQL door too, because the order's quantity
+    // is post-refund while the lines' is not.
+    linesTruncated: node.lineItems?.pageInfo?.hasNextPage === true,
   };
 }
 
@@ -293,7 +346,12 @@ interface WebhookLine {
   product_id?: number | string | null;
   variant_id?: number | string | null;
   quantity?: number | null;
+  /// After returns and order edits. Shopify sends this alongside `quantity`.
+  current_quantity?: number | null;
   price?: string | null;
+  /// What came off this line in total. The only signal when a discount was
+  /// applied without an allocation entry — a draft order's, most often.
+  total_discount?: string | null;
   discount_allocations?:
     { amount?: string | null; discount_application_index?: number | null }[] | null;
 }
@@ -316,6 +374,10 @@ export function linesFromWebhook(
 
   return (order.line_items ?? []).map((line) => {
     const quantity = readQuantity(line.quantity);
+    const currentQuantity =
+      line.current_quantity === undefined || line.current_quantity === null
+        ? quantity
+        : readQuantity(line.current_quantity);
     const unitPrice = readMoney(line.price, currencyCode);
     const originalTotal = money(unitPrice.amount * quantity, currencyCode);
 
@@ -332,9 +394,27 @@ export function linesFromWebhook(
       },
     );
 
-    const allocated = discounts.reduce(
-      (sum, discount) => sum + discount.amount.amount,
-      0,
+    let allocated = discounts.reduce((sum, discount) => sum + discount.amount.amount, 0);
+
+    // A line can carry a discount with no allocation entry — a draft order's,
+    // which is how an accepted quote arrives. Without this the line mirrored
+    // at full price with no discount on it, so a quote's own discount showed
+    // as revenue the merchant never took.
+    const totalDiscount = readMoney(line.total_discount ?? "0", currencyCode).amount;
+    if (allocated === 0 && totalDiscount > 0) {
+      discounts.push({
+        title: UNNAMED_DISCOUNT,
+        amount: money(totalDiscount, currencyCode),
+      });
+      allocated = totalDiscount;
+    }
+
+    // Never below zero: a payload whose allocations exceed the line is a
+    // payload we have misread, and a negative line total would be reported as
+    // negative revenue on a chart.
+    const discountedTotal = money(
+      Math.max(0, originalTotal.amount - allocated),
+      currencyCode,
     );
 
     return {
@@ -349,12 +429,11 @@ export function linesFromWebhook(
       productId: gid("Product", line.product_id),
       variantId: gid("ProductVariant", line.variant_id),
       quantity,
+      currentQuantity,
       unitPrice,
       originalTotal,
-      // Never below zero: a payload whose allocations exceed the line is a
-      // payload we have misread, and a negative line total would be reported
-      // as negative revenue on a chart.
-      discountedTotal: money(Math.max(0, originalTotal.amount - allocated), currencyCode),
+      discountedTotal,
+      currentTotal: currentTotalOf(discountedTotal, quantity, currentQuantity),
       discounts,
     };
   });
@@ -439,8 +518,17 @@ export function factsFromWebhook(
       currencyCode,
     ),
     refunded: refundedFromWebhook(order, currencyCode),
+    // `current_quantity`, to match the `current_*` totals beside it and the
+    // node door's `currentSubtotalLineItemsQuantity`. Summing the ordered
+    // quantity here made the order's own quantity disagree with its own money.
     totalQuantity: (order.line_items ?? []).reduce(
-      (sum, line) => sum + readQuantity(line.quantity),
+      (sum, line) =>
+        sum +
+        readQuantity(
+          line.current_quantity === undefined || line.current_quantity === null
+            ? line.quantity
+            : line.current_quantity,
+        ),
       0,
     ),
     source: classifySource(order.source_name ?? null, attribute),
@@ -453,6 +541,8 @@ export function factsFromWebhook(
     // A line with no id at all cannot be written or de-duplicated, and one
     // arrived is one we would otherwise silently mirror twice.
     lines: linesFromWebhook(order, currencyCode).filter((line) => line.lineItemId !== ""),
+    // A webhook cannot be paginated, so the only signal is the cap itself.
+    linesTruncated: (order.line_items ?? []).length >= WEBHOOK_LINE_CAP,
   };
 }
 
@@ -531,7 +621,7 @@ export async function upsertOrder(
   // `line_items`, and letting one of those set this flag would mark a
   // perfectly mirrored order as incomplete. On a *new* order there is nothing
   // to preserve, so what arrived is what we have.
-  const truncated = linesTruncated(facts);
+  const truncated = facts.linesTruncated;
   const withLines =
     facts.lines.length > 0 ? { ...updatable, linesTruncated: truncated } : updatable;
 
@@ -573,6 +663,11 @@ async function replaceLines(
 
   await tx.orderLine.deleteMany({ where: { orderId: orderRowId } });
   await tx.orderLine.createMany({
+    // A payload that repeats a line item id would otherwise hit the unique
+    // index, roll the whole order back, and 500 the webhook — which Shopify
+    // then redelivers, to fail the same way. A duplicate is a line we already
+    // have.
+    skipDuplicates: true,
     data: lines.map((line) => ({
       ...tenant(),
       orderId: orderRowId,
@@ -583,9 +678,11 @@ async function replaceLines(
       productId: line.productId,
       variantId: line.variantId,
       quantity: line.quantity,
+      currentQuantity: line.currentQuantity,
       unitPrice: line.unitPrice.amount,
       originalTotal: line.originalTotal.amount,
       discountedTotal: line.discountedTotal.amount,
+      currentTotal: line.currentTotal.amount,
       discounts: line.discounts.map((discount) => ({
         title: discount.title,
         amount: discount.amount.amount,

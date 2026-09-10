@@ -291,7 +291,7 @@ async function topProducts(
 
   const lines = await db.orderLine.findMany({
     where: { orderId: { in: [...orderIds] } },
-    select: { productId: true, title: true, discountedTotal: true },
+    select: { productId: true, title: true, currentTotal: true },
   });
 
   const rows: Record<string, RankedRow> = {};
@@ -300,7 +300,9 @@ async function topProducts(
     // gone, so it stays on the chart instead of merging into one blank row.
     const key = line.productId ?? `title:${line.title}`;
     rows[key] ??= { key, label: line.title, value: 0 };
-    rows[key]!.value += line.discountedTotal;
+    // `currentTotal`, not `discountedTotal`: the second is what was ordered,
+    // which counts a fully refunded line as money the merchant still has.
+    rows[key]!.value += line.currentTotal;
   }
 
   return topWithRest(Object.values(rows), {
@@ -325,7 +327,7 @@ async function rulePerformance(orderIds: readonly string[]): Promise<RuleRow[]> 
   const [lines, rules] = await Promise.all([
     db.orderLine.findMany({
       where: { orderId: { in: [...orderIds] } },
-      select: { discounts: true, discountedTotal: true },
+      select: { discounts: true, currentTotal: true, currentQuantity: true },
     }),
     db.pricingRule.findMany({ where: { archivedAt: null }, select: { name: true } }),
   ]);
@@ -334,6 +336,10 @@ async function rulePerformance(orderIds: readonly string[]): Promise<RuleRow[]> 
   const rows: Record<string, RuleRow> = {};
 
   for (const line of lines) {
+    // A line that went back entirely earned its rule nothing, and counting it
+    // would credit a rule for revenue the merchant refunded.
+    if (line.currentQuantity <= 0) continue;
+
     for (const discount of readDiscounts(line.discounts)) {
       rows[discount.title] ??= {
         key: discount.title,
@@ -346,7 +352,7 @@ async function rulePerformance(orderIds: readonly string[]): Promise<RuleRow[]> 
       const row = rows[discount.title]!;
       row.lines += 1;
       row.discounted += discount.amount;
-      row.value += line.discountedTotal;
+      row.value += line.currentTotal;
     }
   }
 

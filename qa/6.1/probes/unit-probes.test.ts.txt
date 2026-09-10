@@ -1,0 +1,113 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  factsFromWebhook,
+  linesFromNode,
+  linesFromWebhook,
+  linesTruncated,
+} from "~/lib/orders/sync.server";
+
+/** COLD READ PROBE — delete after review. */
+
+const webhookLine = (id: number, overrides: Record<string, unknown> = {}) => ({
+  admin_graphql_api_id: `gid://shopify/LineItem/${id}`,
+  title: `Item ${id}`,
+  quantity: 1,
+  price: "10.00",
+  ...overrides,
+});
+
+describe("P1 — a webhook can never report itself truncated", () => {
+  it("100 lines (Shopify's webhook cap) reads as complete", () => {
+    const lines = Array.from({ length: 100 }, (_, i) => webhookLine(i + 1));
+    const facts = factsFromWebhook({
+      admin_graphql_api_id: "gid://shopify/Order/1",
+      currency: "USD",
+      line_items: lines,
+    })!;
+
+    expect(facts.lines).toHaveLength(100);
+    expect(facts.totalQuantity).toBe(100);
+    // The order really had 150 lines; Shopify sent 100.
+    expect(linesTruncated(facts)).toBe(false);
+  });
+});
+
+describe("P2 — an edited-away line still carries full revenue", () => {
+  it("webhook door: current_quantity 0, quantity 5", () => {
+    const facts = factsFromWebhook({
+      admin_graphql_api_id: "gid://shopify/Order/1",
+      currency: "USD",
+      current_total_price: "0.00",
+      line_items: [webhookLine(1, { quantity: 5, current_quantity: 0, price: "10.00" })],
+    })!;
+    expect(facts.lines[0]!.quantity).toBe(5);
+    expect(facts.lines[0]!.discountedTotal.amount).toBe(5000);
+  });
+
+  it("node door: originalTotalSet is 'before returns'", () => {
+    const [line] = linesFromNode(
+      [
+        {
+          id: "gid://shopify/LineItem/1",
+          title: "Item",
+          variantTitle: null,
+          sku: null,
+          quantity: 5,
+          product: null,
+          variant: null,
+          originalUnitPriceSet: { shopMoney: { amount: "10.00", currencyCode: "USD" } },
+          originalTotalSet: { shopMoney: { amount: "50.00", currencyCode: "USD" } },
+          discountedTotalSet: { shopMoney: { amount: "50.00", currencyCode: "USD" } },
+          discountAllocations: null,
+        },
+      ],
+      "USD",
+    );
+    expect(line!.quantity).toBe(5);
+    expect(line!.discountedTotal.amount).toBe(5000);
+  });
+});
+
+describe("P3 — the one multiplication is unguarded", () => {
+  it("throws MoneyError on an absurd quantity", () => {
+    expect(() =>
+      linesFromWebhook(
+        { line_items: [webhookLine(1, { quantity: 1e15, price: "10.00" })] },
+        "USD",
+      ),
+    ).toThrow();
+  });
+});
+
+describe("P4 — a zero-decimal currency", () => {
+  it("turns every JPY amount Shopify formats with decimals into 0", () => {
+    const [line] = linesFromWebhook(
+      { line_items: [webhookLine(1, { quantity: 2, price: "5000.00" })] },
+      "JPY",
+    );
+    expect(line!.unitPrice.amount).toBe(0);
+    expect(line!.originalTotal.amount).toBe(0);
+  });
+});
+
+describe("P5 — order-level discount with no line allocation", () => {
+  it("webhook door keeps the full line total when total_discount carries it", () => {
+    const [line] = linesFromWebhook(
+      {
+        discount_applications: [{ title: "Quote discount" }],
+        line_items: [
+          webhookLine(1, {
+            quantity: 2,
+            price: "10.00",
+            total_discount: "5.00",
+            discount_allocations: [],
+          }),
+        ],
+      },
+      "USD",
+    );
+    expect(line!.discountedTotal.amount).toBe(2000);
+    expect(line!.discounts).toEqual([]);
+  });
+});

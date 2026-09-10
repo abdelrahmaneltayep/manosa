@@ -28,13 +28,15 @@ Current task: 6.1 Mirroring order lines [done] · 6.2 the Analytics page [next]
 - [x] 5.1 ✦ Buyer Agent server: guardrails, closed tool vocabulary, one turn — commits `47db22b` + `b86ea2b` — QA: `qa/5.1/REPORT.md` (cold read returned FAIL; the price guard was replaced, not patched — `qa/5.1/COLD-READ.md`)
 - [x] 5.2 Buyer Agent chat widget (theme app block), Arabic storefront locale — commit `d2b49f2` — QA: in `qa/3.4/` captures 40–50
 - [x] 5.3 Guardrails panel, test mode, conversation log, publish flow — commits `baeb811` + fix round — QA: `qa/5.3/REPORT.md` (cold read returned FAIL on 17 findings; the worst was that "Take over" recorded a merchant's reply with no route to the buyer while both sides were told it arrived — `qa/5.3/COLD-READ.md`. All fixed, gate re-run clean.)
-- [x] 6.1 Order lines mirrored, with discount allocations — QA: `qa/6.1/REPORT.md` (the foundation four of §7's six charts need; `docs/adr/0024`)
+- [x] 6.1 Order lines mirrored, with discount allocations — commits `1c2cafb` + fix round — QA: `qa/6.1/REPORT.md` (cold read returned FAIL on 7 findings: revenue over-reported after any refund, a truncation flag that could never be true, and a query ~100× over Shopify's cost ceiling. All fixed — `qa/6.1/COLD-READ.md`.)
+- [x] shop facts — the store's own currency and timezone are finally read from Shopify — commit `0dbc09a` (they never had been; every money figure fell back to USD)
+- [~] 6.2 the Analytics page — data layer committed (`3d34fa8`); the page, its states, CSV per chart and the footer are next
 
 ## Next up
 
-- **Run the cold read on 6.1** — it has not had one
-- 6.2 the Analytics page: six charts, their states, CSV per chart, the
-  timezone/currency footer. Renumbered — see `DECISIONS.md`
+- 6.2, the rest: SVG chart geometry, the page and its states (empty with a
+  watermarked example, partial under 7 days, annotations, gating), CSV per
+  chart, the timezone/currency footer. Renumbered — see `DECISIONS.md`
 - 6.3 ✦ ask-your-data + ✦ monthly review · 6.4 Settings · 6.5 polish
 - 5.2 has one unfinished piece: the widget's greeting is personalised by name
   only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
@@ -147,7 +149,17 @@ Neither is blocking; both would change product decisions if answered.
 
 ## Notes for my next self
 
-- **Four cold reads in a row have returned FAIL** (4.4, 4.5, 5.1, 5.3), every
+- **A "validated" GraphQL query is not a query that runs.** 6.1's shipped with
+  `lineItems(first: 100)` nested inside `orders(first: 100)` — schema-valid,
+  and about a hundred times over Shopify's 1,000-point *calculated cost*
+  ceiling, so every page of the backfill would have been rejected. Cost is
+  roughly the product of the `first` values. Check it whenever a connection
+  goes inside another one.
+- **Shopify's `quantity` and line totals are *before* returns.** `Order` is
+  written from the `current_*` fields, so anything read off a line has to use
+  `currentQuantity` / `currentTotal` or it will disagree with the order it
+  belongs to. Charts read `currentTotal`.
+- **Five cold reads in a row have returned FAIL** (4.4, 4.5, 5.1, 5.3, 6.1), every
   one of them after my own seven-step gate passed. The gate is not the problem;
   what the gate cannot do is disbelieve the fixture it was handed. 5.3's worst
   finding — a merchant's reply going nowhere — was invisible to every test I

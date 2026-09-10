@@ -3,6 +3,19 @@
 Hat: senior QA engineer who did not write this code and does not trust it.
 Date: 2026-09-10 · Branch: `claude/mannon-b2b-wholesale-oc5b18`
 
+> **Status: clean pass, after a FAIL and a full fix round.** The independent
+> cold read returned **FAIL** on seven findings, three of them serious: the
+> mirror over-reported revenue after any refund, the truncation flag could
+> never be true through the webhook door, and the orders query was roughly a
+> hundred times over Shopify's 1,000-point cost ceiling — schema-valid and
+> rejected at runtime every time. All seven are fixed; the evidence is in
+> `qa/6.1/COLD-READ.md` and §8 below. This is the second run.
+>
+> One claim in the first version of this report was **misleading** and is
+> corrected in §8: "validated against Shopify's own schema" is a statement
+> about schema validity, not about whether the query will execute. It would
+> not have.
+
 ## 1. Scope, and why this task exists at all
 
 Checklist §7 asks for six charts. Two of them — **top products** and **rule
@@ -132,22 +145,74 @@ Properties worth naming:
    fixture let a field migration change every synced buyer's email to null with
    no test failing.
 
+## 8. What the cold read found, and what changed
+
+Seven findings, all fixed. The three that changed the design are in
+`docs/adr/0024` (addendum); the evidence and 16 reproducible probes are in
+`qa/6.1/COLD-READ.md` and `qa/6.1/probes/`.
+
+1. **Revenue was over-reported after any refund or order edit.** `quantity`
+   and both line totals are Shopify's *pre-return* figures, while the parent
+   `Order` row is written from `current_*` — so lines and order disagreed, and
+   a fully refunded line stayed on every product and rule chart. `OrderLine`
+   now carries `currentQuantity` and an apportioned `currentTotal` (rounded
+   down), and the charts read the latter.
+2. **`linesTruncated` could never be true through the webhook door** — both
+   sides of the comparison were summed from the same array — and a webhook
+   cleared a flag the backfill had set correctly on a 150-line order. Now
+   `pageInfo.hasNextPage` through the GraphQL door and the payload sitting on
+   the webhook's own line cap through the other. Every previous test for it
+   passed by hand-injecting a `totalQuantity` neither door can produce.
+3. **The query was ~100× over Shopify's 1,000-point cost ceiling.** Every page
+   of the backfill would have been rejected, and every retry, leaving an empty
+   Orders page. Now 10 orders × 50 lines, with the arithmetic written beside
+   the constants.
+4. **A money string that would not parse became zero, silently.** Shopify sends
+   `"5000.00"` for JPY, which the strict parser rejects; a ¥5,000 line was
+   mirrored as ¥0 with no log. `parseShopifyMoney` trims insignificant trailing
+   zeros at the boundary and logs anything it still cannot read.
+5. `line_items[].total_discount` was ignored, so an accepted quote's own
+   discount mirrored as full-price revenue.
+6. The "both doors agree" test used `10.00 × 10` — the one fixture shape where
+   a multiplying reader and a reading one cannot disagree. Now `3.33 × 7`.
+7. `createMany` had no `skipDuplicates`, so a repeated line item id rolled the
+   whole order back and 500'd a webhook Shopify then redelivers.
+
+Plus one the review noted last: `model AiRun`'s doc comment — including its
+"no prompt or completion is stored" privacy note — had been left attached to
+`OrderLine` in the DMMF by where the new model was inserted. Reattached.
+
+**Confirmed sound by the review, not merely claimed:** tenant isolation fails
+closed on read, update and delete by raw id; `createMany` is stamped by the
+extension itself and rejects cross-tenant data; the scope survives into the
+interactive transaction; DMMF pickup needs no registration for either
+`resetDatabase` or the scope extension; invariant 1 holds; and there is no
+concurrency or transaction-timeout problem — 2-way and 5-way concurrent
+deliveries all succeed, and a 100-line write takes about 20ms.
+
 ## 7. Open, not passed
 
-- **No cold read yet.**
-- **The query is schema-valid but has never run.** Validated against Shopify's
-  own schema through the AI Toolkit's validator (VALID; scopes `read_orders`,
-  `read_products`, both already granted). No real order has ever been mirrored
-  from a real store — the same limitation every Admin API call in this app has
-  carried since 1.2.
+- **The query is schema-valid and now within the cost ceiling, but has never
+  run.** Validated against Shopify's own schema (VALID; scopes `read_orders`,
+  `read_products`, both already granted), and the cost arithmetic is done by
+  hand from Shopify's documented model rather than measured — the response
+  carries the real `throttleStatus`, and nothing here has ever seen one. No
+  real order has ever been mirrored from a real store, the same limitation
+  every Admin API call in this app has carried since 1.2.
 - **The Function's discount message has never been read back off a real
   order.** Rule performance rests on Shopify reporting `message` as the
   discount application's title. That is documented behaviour and the query for
   it validates, but the round trip — Function writes a name, checkout applies
   it, webhook returns it — needs a real checkout, which this environment
   cannot do.
-- **The hundred-line cap has never been hit.** `linesTruncated` is asserted
-  from constructed facts, not from an order with 101 SKUs.
+- **The line cap has never been hit for real.** `linesTruncated` is asserted
+  from `hasNextPage` and from a payload built at the webhook cap, not from an
+  order with 51 SKUs on a real store.
+- **`currentTotal` is an apportionment, not a figure Shopify gives.** Shopify
+  exposes no post-refund line total. A line refunded in part is therefore
+  attributed pro-rata across its products and rules, which is a choice; the
+  order-level revenue chart uses the order's own `totalPrice - refundedAmount`
+  and needs no apportionment.
 - **An install predating this change keeps line-less orders** until its
   backfill is re-run. No such install exists — this app has never been deployed
   to a real store — which is the only reason that is a note in `docs/adr/0024`

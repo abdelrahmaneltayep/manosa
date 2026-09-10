@@ -2,7 +2,11 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "~/db.server";
 import type { OrderFacts } from "~/lib/orders/sync.server";
-import { factsFromWebhook, upsertOrder } from "~/lib/orders/sync.server";
+import {
+  factsFromWebhook,
+  upsertOrder,
+  WEBHOOK_LINE_CAP,
+} from "~/lib/orders/sync.server";
 import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
 import { resetDatabase } from "../support/db";
 
@@ -42,8 +46,10 @@ const payload = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const facts = (overrides: Record<string, unknown> = {}): OrderFacts =>
-  factsFromWebhook(payload(overrides))!;
+const facts = (
+  overrides: Record<string, unknown> = {},
+  factOverrides: Partial<OrderFacts> = {},
+): OrderFacts => ({ ...factsFromWebhook(payload(overrides))!, ...factOverrides });
 
 const installShop = (shop: string) =>
   shopScope.run(shop, () =>
@@ -119,25 +125,74 @@ describe("mirroring an order's lines", () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
-      // Shopify says 400 units; two lines of ten arrived.
-      await upsertOrder({ ...facts(), totalQuantity: 400 }, true);
+      // A payload sitting on the webhook's own line cap: this may or may not
+      // be the whole order, and Shopify does not say.
+      await upsertOrder(
+        facts({
+          line_items: Array.from({ length: WEBHOOK_LINE_CAP }, (_, index) =>
+            line(index + 1),
+          ),
+        }),
+        true,
+      );
 
-      const order = await db.order.findFirst();
-      expect(order?.linesTruncated).toBe(true);
+      expect((await db.order.findFirst())?.linesTruncated).toBe(true);
     });
   });
 
-  it("does not flag a complete order, and a line-less payload cannot flag one", async () => {
+  it("does not let a later webhook clear a flag the backfill set correctly", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // The backfill saw a 150-line order and said so.
+      await upsertOrder(facts({}, { linesTruncated: true }), true);
+      expect((await db.order.findFirst())?.linesTruncated).toBe(true);
+
+      // A payload with no lines says nothing about the lines already mirrored,
+      // so it must not answer the question either way.
+      await upsertOrder(facts({ line_items: [] }), true);
+      expect((await db.order.findFirst())?.linesTruncated).toBe(true);
+    });
+  });
+
+  it("keeps what is left of a line the buyer sent back", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await upsertOrder(
+        facts({
+          line_items: [line(1, { quantity: 10, current_quantity: 4, price: "10.00" })],
+        }),
+        true,
+      );
+
+      const [row] = await db.orderLine.findMany();
+      expect(row?.quantity).toBe(10);
+      expect(row?.currentQuantity).toBe(4);
+      // The charts read `currentTotal`. Reading `discountedTotal` reported a
+      // refunded line as money the merchant still had.
+      expect(row?.currentTotal).toBeLessThan(row!.discountedTotal);
+    });
+  });
+
+  it("survives a payload that repeats a line item id", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // The unique index would otherwise roll the whole order back and 500 the
+      // webhook — which Shopify then redelivers, to fail the same way.
+      await upsertOrder(facts({ line_items: [line(1), line(1)] }), true);
+
+      expect(await db.order.count()).toBe(1);
+      expect(await db.orderLine.count()).toBe(1);
+    });
+  });
+
+  it("does not flag a complete order", async () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
       await upsertOrder(facts(), true);
-      expect((await db.order.findFirst())?.linesTruncated).toBe(false);
-
-      // The trap: this payload has no lines and a non-zero quantity, which
-      // read naively is "incomplete" — but it says nothing about the lines
-      // already mirrored.
-      await upsertOrder({ ...facts({ line_items: [] }), totalQuantity: 20 }, true);
       expect((await db.order.findFirst())?.linesTruncated).toBe(false);
     });
   });

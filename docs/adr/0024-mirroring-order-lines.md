@@ -80,11 +80,25 @@ at a time.
 
 ### An incomplete line set says so
 
-Lines are fetched with a cap of a hundred per order rather than paginated
-inside a page of a hundred orders — the alternative turns one backfill into
-thousands of round trips. A wholesale order with more than a hundred distinct
-SKUs therefore arrives short, and `Order.linesTruncated` records it, so a chart
-built on lines can say it is missing some.
+Lines are fetched with a cap per order rather than paginated inside a page of
+orders — the alternative turns one backfill into thousands of round trips. A
+wholesale order with more distinct SKUs than the cap therefore arrives short,
+and `Order.linesTruncated` records it, so a chart built on lines can say it is
+missing some.
+
+**The signal is Shopify's, not ours.** Through the GraphQL door it is
+`lineItems.pageInfo.hasNextPage`; through the webhook door, where there is no
+pagination at all, it is the payload sitting exactly on the webhook's own line
+cap, which means "we cannot tell" rather than "that is all of them".
+
+The first version compared the quantity the lines added up to against the
+order's own, and that was wrong twice over. Through the webhook door both sides
+were summed from the _same_ array, so the comparison was structurally incapable
+of ever being true. Through the GraphQL door the order's quantity is
+post-refund while the lines' is pre-refund, so a refunded order flagged itself
+as truncated. Every test for it passed because every test hand-injected a
+`totalQuantity` neither door can produce — a fixture that sets a value the
+production writer never sets is a test that cannot fail.
 
 That flag is only ever set from a payload that actually carried lines. Letting
 a line-less fulfilment webhook set it would mark a perfectly mirrored order as
@@ -107,3 +121,60 @@ incomplete — the same trap as the paragraph above, one column along.
 - Phase 7.2's GDPR redaction has one more table to reach. Lines hold no personal
   data themselves, but they hang off an order that does, and the cascade is what
   covers them.
+
+---
+
+## Addendum (6.1 fix round): what the cold read found
+
+An independent review returned **FAIL** with seven findings, three of them
+serious enough to change the design.
+
+### The mirror over-reported revenue after a refund
+
+`quantity`, `originalTotalSet` and `discountedTotalSet` are all defined by
+Shopify as **before returns and removals**. The parent `Order` row is written
+from the `current_*` fields, so the lines and the order they belong to
+disagreed: a five-unit line the merchant refunded in full was still five units
+of revenue on every product and rule chart while the order said the money had
+gone back.
+
+Shopify exposes no post-refund line total, so `OrderLine` now carries
+`currentQuantity` (which it does expose) and a `currentTotal` apportioned from
+it — `discountedTotal × currentQuantity / quantity`, rounded **down** so an
+apportioned total can never exceed what the merchant actually kept. Computed
+once at write time rather than in every chart, so there is one place it can be
+wrong and one place to test it. The charts read `currentTotal`; a line whose
+whole quantity went back earns its rule nothing.
+
+### The query was about a hundred times over Shopify's cost ceiling
+
+Shopify's calculated query cost multiplies a connection by its `first`, so
+`lineItems(first: 100)` nested inside `orders(first: 100)` costs on the order
+of tens of thousands of points against a **1,000-point single-query maximum**.
+Schema-valid, and rejected at runtime every time: every page of the backfill,
+every retry, leaving the merchant with an empty Orders page and empty charts
+and nothing to explain them.
+
+"Validated against the schema" is a different property from "will execute", and
+the first report conflated them. The page is now 10 orders × 50 lines, with the
+arithmetic written down beside the constants; the backfill re-queues per page,
+so the only cost of a smaller page is more runs.
+
+### Money that could not be parsed became zero, silently
+
+`readMoney` swallowed every `parseMoney` failure and returned zero with no log.
+The parser is strict about precision on purpose — it guards our own arithmetic
+— but Shopify is a boundary, and it sends `"5000.00"` for a zero-decimal
+currency like JPY. That parsed as a failure, and a ¥5,000 line was mirrored as
+¥0 on every chart. `parseShopifyMoney` now trims the insignificant trailing
+zeros at that boundary and **logs** anything it still cannot read.
+
+### The rest
+
+A discount carried in `total_discount` with no allocation entry — which is how
+an accepted quote's own discount arrives — was ignored, so the line mirrored at
+full price. `createMany` had no `skipDuplicates`, so a payload repeating a line
+item id rolled the entire order back and 500'd a webhook Shopify then
+redelivers, to fail the same way. And the "both doors agree" test used
+`10.00 × 10`, the one fixture shape where a multiplying reader and a reading
+one cannot possibly disagree; it now uses `3.33 × 7`.
