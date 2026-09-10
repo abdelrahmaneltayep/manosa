@@ -84,6 +84,8 @@ export interface GroupInput {
   color?: string | null;
   description?: string | null;
   netTermsDays?: number | null;
+  /** Minor units. Null means no ceiling on what members may owe at once. */
+  creditLimit?: number | null;
   freeShippingOver?: number | null;
   visibleCollectionIds?: string[];
   template?: string | null;
@@ -129,6 +131,7 @@ function groupData(
     color: input.color ?? null,
     description: input.description ?? null,
     netTermsDays: input.netTermsDays ?? null,
+    creditLimit: input.creditLimit ?? null,
     freeShippingOver: input.freeShippingOver ?? null,
     visibleCollectionIds: input.visibleCollectionIds ?? [],
     template: input.template ?? null,

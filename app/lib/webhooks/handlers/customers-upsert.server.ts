@@ -1,7 +1,7 @@
 import { db } from "~/db.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { factsFromWebhook, upsertCustomer } from "~/lib/customers/sync.server";
-import { publishBuyerFacts } from "~/lib/pricing/buyer-facts.server";
+import { publishBuyerTerms } from "~/lib/terms/ledger.server";
 import type { WebhookContext } from "~/lib/webhooks/registry";
 import { unauthenticated } from "~/shopify.server";
 
@@ -39,11 +39,16 @@ export async function handleCustomersUpsert(
     return;
   }
 
-  const saved = await upsertCustomer(facts);
+  await upsertCustomer(facts);
   const admin = await adminFor(shop);
 
-  await publishBuyerFacts(admin, saved.customerId, {
-    tags: saved.tags,
-    groupIds: saved.groupId ? [saved.groupId] : [],
+  // Re-read with the group attached: the buyer's terms come from their own
+  // fields or their group's, and publishing without the group would tell
+  // checkout a tiered buyer has no terms.
+  const saved = await db.customer.findFirstOrThrow({
+    where: { customerId: facts.customerId },
+    include: { group: true },
   });
+
+  await publishBuyerTerms(admin, saved);
 }

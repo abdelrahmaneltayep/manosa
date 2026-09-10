@@ -45,6 +45,12 @@ const STYLES = `
  s-banner[tone=success]{border-color:#1f8a53;background:#e7f7ee}
  s-badge{display:inline-block;background:#eef0ff;color:#4f46e5;border-radius:999px;
    padding:.1rem .55rem;font-size:12px;margin-inline-end:.4rem}
+ /* Tones, so a capture can show what the checklist asks for — "overdue rows
+    red" is not verifiable against a page where every badge looks the same. */
+ s-badge[tone=critical]{background:#fdeaea;color:#a11f1f}
+ s-badge[tone=warning]{background:#fff2dd;color:#7a5200}
+ s-badge[tone=success]{background:#e7f7ee;color:#166b41}
+ s-badge[tone=neutral]{background:#f0f0f0;color:#4a4a4a}
  s-button{display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;
    padding:.45rem .9rem;margin-inline-end:.5rem;font-weight:700}
  s-button[variant=tertiary]{background:transparent;color:#4f46e5;font-weight:600}
@@ -92,6 +98,7 @@ const CATALOG_ROOTS = [
   "forms",
   "orders",
   "limits",
+  "terms",
   "pricing",
   "plans",
   "csv",

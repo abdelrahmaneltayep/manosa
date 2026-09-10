@@ -22,6 +22,7 @@ export function LimitsPage({ view }: { view: LimitsView }) {
           <s-link href="/app/orders/limits" aria-current="page">
             {t("orders.list.tabLimits")}
           </s-link>
+          <s-link href="/app/orders/terms">{t("orders.list.tabTerms")}</s-link>
         </s-stack>
       </s-section>
 

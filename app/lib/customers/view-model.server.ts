@@ -126,12 +126,12 @@ export function bundleSections(
     },
     {
       key: "terms",
-      href: null,
+      href: "/app/orders/terms",
       summary:
         group.netTermsDays == null
           ? t("customers.group.summary.noTerms")
           : t("customers.group.summary.terms", { count: group.netTermsDays }),
-      comingIn: "3.2",
+      comingIn: null,
     },
     {
       key: "shipping",
@@ -140,7 +140,7 @@ export function bundleSections(
         group.freeShippingOver == null
           ? t("customers.group.summary.noShipping")
           : t("customers.group.summary.shipping"),
-      comingIn: "3.2",
+      comingIn: "3.4",
     },
     {
       key: "visibility",

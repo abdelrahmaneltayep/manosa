@@ -1,3 +1,5 @@
+import type { SerializedBuyerTerms } from "@mannon/net-terms";
+
 import { runMutation, type AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { MANNON_NAMESPACE } from "~/lib/pricing/ruleset.server";
 
@@ -14,6 +16,17 @@ export interface BuyerFacts {
   tags: string[];
   /** Mannon customer groups. Empty until groups exist (phase 2.1). */
   groupIds: string[];
+  /**
+   * Net payment terms, when this buyer has any (phase 3.2).
+   *
+   * It rides on the same metafield rather than a second one: two metafields
+   * would be two things to keep in step, and a buyer whose tags published but
+   * whose terms did not is a buyer priced correctly and refused credit.
+   *
+   * Null means no terms, which is what every Function reading it treats as
+   * "do not offer to pay later".
+   */
+  terms: SerializedBuyerTerms | null;
 }
 
 const SET_METAFIELDS = `#graphql
@@ -33,6 +46,7 @@ const SET_METAFIELDS = `#graphql
 export function normalizeBuyerFacts(facts: {
   tags?: string[] | string | null;
   groupIds?: string[] | null;
+  terms?: SerializedBuyerTerms | null;
 }): BuyerFacts {
   const raw =
     typeof facts.tags === "string"
@@ -44,7 +58,7 @@ export function normalizeBuyerFacts(facts: {
   const tags = [...new Set(raw.map((tag) => tag.trim()).filter(Boolean))].sort();
   const groupIds = [...new Set(facts.groupIds ?? [])].sort();
 
-  return { tags, groupIds };
+  return { tags, groupIds, terms: facts.terms ?? null };
 }
 
 /**
@@ -58,7 +72,17 @@ export function normalizeBuyerFacts(facts: {
 export async function publishBuyerFacts(
   admin: AdminGraphql,
   customerId: string,
-  facts: { tags?: string[] | string | null; groupIds?: string[] | null },
+  facts: {
+    tags?: string[] | string | null;
+    groupIds?: string[] | null;
+    /**
+     * Required, not optional, on purpose. Omitting it publishes `null`, which
+     * tells checkout the buyer has no terms — so a caller that forgot would
+     * quietly withdraw credit a merchant had granted. Making it explicit turns
+     * that into a compile error instead. `publishBuyerTerms` computes it.
+     */
+    terms: SerializedBuyerTerms | null;
+  },
 ): Promise<BuyerFacts> {
   const normalized = normalizeBuyerFacts(facts);
 

@@ -141,6 +141,10 @@ test.describe("Order and limit states", () => {
   captureSuite("3.1");
 });
 
+test.describe("Net terms states", () => {
+  captureSuite("3.2");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)

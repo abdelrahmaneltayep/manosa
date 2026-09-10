@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T10:25:00Z
+Updated: 2026-09-10T11:05:00Z
 Current milestone: 3 — Orders
-Current task: 3.2 Net terms: eligibility, pay-later, ledger with aging, reminders [in progress]
+Current task: 3.3 Quotes and draft orders: request pipeline, expiry, accept link, price locking [in progress]
 
 ## Done
 
@@ -17,10 +17,10 @@ Current task: 3.2 Net terms: eligibility, pay-later, ledger with aging, reminder
 - [x] 2.2 Registration form builder, theme block, VIES, spam protection — commit `1206e68` — QA: `qa/2.2/REPORT.md`
 - [x] 2.3 Approval pipeline: queue, decisions, emails, evaluator — commit `3e0c403` — QA: `qa/2.3/REPORT.md`
 - [x] 3.1 Wholesale order list, order limits, quantity increments — commit `1722590` — QA: `qa/3.1/REPORT.md`
+- [x] 3.2 Net terms: eligibility, pay later, ledger with aging, reminders — commit `PENDING` — QA: `qa/3.2/REPORT.md`
 
 ## Next up
 
-- 3.2 Net terms: eligibility, pay-later via draft orders, ledger with aging, reminders
 - 3.3 Quotes and draft orders: request pipeline, expiry, accept link, price locking
 - 3.4 Quick order storefront blocks, inside the ≤10-point Lighthouse budget
 - 4.1 AI infrastructure: client, streaming, timeouts, audit hooks
@@ -71,8 +71,14 @@ Current task: 3.2 Net terms: eligibility, pay-later, ledger with aging, reminder
   withheld, so the admin cannot show a rule applying that checkout ignores.
   Order limits sidestep this: the validation Function is handed a country code
   directly, so limits are scoped by country (`docs/adr/0014`).
-- **Editable limit messages** → 6.2, Settings → Limit display. `DEFAULT_MESSAGES`
-  ships English only and already carries the gap number.
+- **Editable limit and terms messages** → 6.2, Settings → Limit display.
+  `DEFAULT_MESSAGES` and the reminder template ship English only; both already
+  carry the numbers that make them useful. The pay-later button's name is built
+  by the Function itself, which has no ICU, so it is English there too.
+- **✦ Net-terms risk signal** → 4.3. No chip is shown until the model exists.
+- **Automatic payment reminders** → the `autoRemind` opt-in is stored per buyer
+  and read by nothing; every reminder is sent by a merchant clicking a button,
+  which is the checklist's default anyway.
 - **Orders older than 60 days** → `read_orders` reaches no further without
   `read_all_orders`, a review-time grant. The list states its window on the page.
 - **Plans page: discount-code field, ✦ Plan Advisor, export-on-downgrade** →
@@ -116,6 +122,11 @@ Neither is blocking; both would change product decisions if answered.
   (twice), a pluralised key called without `count`, and — new in 3.1 — a
   machine-readable code that ends in a plural suffix (`increment_below_two`),
   which i18next reads as Arabic `_two`.
+- **Adding an optional field to a published payload is a silent-removal bug.**
+  3.2 added `terms` to the buyer metafield; five existing callers would have
+  published `null` and withdrawn a merchant's credit without a trace. Making
+  the field _required_ turned it into a compile error that found all five. Do
+  the same for anything else that reaches checkout.
 - **`NOT: { a, b, c }` in Prisma is a trap when any column is nullable.** SQL
   three-valued logic makes the whole `NOT` unknown, and the row matches neither
   branch. 3.1 lost every order without net terms from page 2 this way; the fix

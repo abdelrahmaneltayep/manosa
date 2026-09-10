@@ -656,7 +656,11 @@
         "visibility_other": "{{count}} collections are visible to this tier.",
         "noVisibility": "This tier sees your whole catalogue."
       },
-      "backToGroups": "← All groups"
+      "backToGroups": "← All groups",
+      "termsDaysLabel": "Days to pay",
+      "termsDaysHelp": "Net terms for everyone in this group. Leave empty and they pay up front. A buyer's own terms replace these.",
+      "creditLimitLabel": "Credit limit ({{currency}})",
+      "creditLimitHelp": "The most a member may owe at once. Leave empty for no ceiling."
     },
     "detail": {
       "aboutHeading": "About",
@@ -684,7 +688,24 @@
       "noteHelp": "Only your staff sees this. It is never sent to the buyer.",
       "saveNote": "Save note",
       "deletedHeading": "This customer was deleted in Shopify",
-      "deletedBody": "We keep the record so your history stays readable, but nothing here can be changed and no price applies to them."
+      "deletedBody": "We keep the record so your history stays readable, but nothing here can be changed and no price applies to them.",
+      "termsHeading": "Payment terms",
+      "termsSummary_one": "Net 1 day · {{limit}}",
+      "termsSummary_other": "Net {{count}} days · {{limit}}",
+      "termsNoLimit": "no credit limit",
+      "termsNone": "Pays up front — no terms set",
+      "termsOverridden": "Overridden",
+      "termsGroupWas": "Their group's terms are {{terms}}. This buyer's own terms replace them.",
+      "termsLedger_zero": "{{amount}} outstanding, none overdue",
+      "termsLedger_one": "{{amount}} outstanding, 1 overdue",
+      "termsLedger_other": "{{amount}} outstanding, {{count}} overdue",
+      "termsLedgerLink": "Open the ledger",
+      "termsDaysLabel": "Days to pay",
+      "termsDaysHelp": "Leave empty to use their group's terms. 15, 30, 60 and 90 are the usual ones.",
+      "creditLimitLabel": "Credit limit ({{currency}})",
+      "creditLimitHelp": "The most they may owe at once. Leave empty for no ceiling.",
+      "termsNewOrdersOnly": "Changing these applies to new orders only. Invoices already raised keep the terms the buyer was given.",
+      "saveTerms": "Save terms"
     },
     "tagging": {
       "heading": "Auto-tagging",
@@ -1183,7 +1204,8 @@
       "daysAgo_other": "{{count}} days ago",
       "previous": "Previous",
       "next": "Next",
-      "pageOf": "Page {{page}} of {{pageCount}}"
+      "pageOf": "Page {{page}} of {{pageCount}}",
+      "tabTerms": "Payment terms"
     },
     "source": {
       "STOREFRONT": "Storefront",
@@ -1276,6 +1298,66 @@
       "increment_too_small": "A case size of 1 doesn't restrict anything. Leave it empty instead.",
       "increment_conflicts_with_minimum": "The minimum isn't a whole number of cases — the next one up is {{detail}}.",
       "increment_conflicts_with_maximum": "The maximum is below one full case, so no cart could ever qualify."
+    }
+  },
+  "terms": {
+    "net_one": "Net 1 day",
+    "net_other": "Net {{count}} days",
+    "lockedHeading": "Net payment terms are on a paid plan",
+    "lockedBody": "Invoices already on terms keep working and are still shown — nothing is deleted. Upgrade to {{plan}} to change them.",
+    "lockedAction": "See plans",
+    "notPublishedHeading": "Checkout has not been told about these settings",
+    "notPublishedBody": "Until they reach Shopify, checkout falls back to its defaults — which can mean your pay-later method is shown to everybody. Save the settings below to publish them.",
+    "bucket": {
+      "current": "Not yet due",
+      "days_1_15": "1–15 days late",
+      "days_16_30": "16–30 days late",
+      "days_30_plus": "Over 30 days late"
+    },
+    "ledger": {
+      "heading": "Payment terms",
+      "agingHeading": "How late",
+      "outstandingHeading": "Outstanding invoices",
+      "totalOutstanding": "{{amount}} outstanding in total.",
+      "invoiceCount_one": "1 invoice",
+      "invoiceCount_other": "{{count}} invoices",
+      "emptyHeading": "Nobody is on payment terms yet",
+      "emptyBody": "Give a customer group net terms — Net 30, say — and their orders will appear here as invoices to chase.",
+      "emptyAction": "Set terms on a group",
+      "allPaidHeading": "Nothing outstanding",
+      "allPaidBody": "Every invoice on terms has been paid. New ones appear here as buyers on terms check out.",
+      "colOrder": "Invoice",
+      "colBuyer": "Buyer",
+      "colDue": "Due",
+      "colBalance": "Balance",
+      "colActions": "Actions",
+      "noDueDate": "No due date",
+      "dueIn_zero": "Due today",
+      "dueIn_one": "Due tomorrow",
+      "dueIn_other": "Due in {{count}} days",
+      "overdueBy_one": "1 day overdue",
+      "overdueBy_other": "{{count}} days overdue",
+      "partPaid": "{{amount}} paid so far",
+      "remindedAgo_zero": "Reminded today",
+      "remindedAgo_one": "Reminded yesterday",
+      "remindedAgo_other": "Reminded {{count}} days ago",
+      "paymentAmount": "Amount received ({{currency}})",
+      "paymentReference": "Reference",
+      "recordPayment": "Record payment",
+      "sendReminder": "Send reminder"
+    },
+    "settings": {
+      "heading": "Paying later at checkout",
+      "intro": "Shopify has no built-in net terms, so set up a manual payment method in your checkout settings and name it here. Mannon hides it from everyone whose terms do not allow it — they see nothing at all, not a disabled button.",
+      "methodLabel": "Your pay-later payment method",
+      "methodHelp": "The name exactly as it appears in Settings → Payments → Manual payment methods.",
+      "methodRequired": "Name the payment method. An empty name would match every method and hide the whole payment step.",
+      "showDaysLabel": "Rename it at checkout to say the buyer's terms",
+      "showDaysHelp": "An eligible buyer sees “Pay later (Net 30)” rather than having to guess what applies to them.",
+      "overdueBlocksLabel": "An overdue invoice stops further credit",
+      "overdueBlocksHelp": "A buyer with anything past its due date has to pay now, until they settle it.",
+      "previewLabel": "An eligible buyer sees",
+      "save": "Save and publish"
     }
   }
 }

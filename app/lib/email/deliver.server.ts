@@ -35,12 +35,28 @@ import { tenant } from "~/lib/tenant/shop-context.server";
 // rest of this module exists to prevent.
 configureEmailFromEnv();
 
+/**
+ * Messages that are not about a registration form.
+ *
+ * Form emails are looked up by key in that form's own templates, because each
+ * form has its own wording. A payment reminder belongs to the store, not to a
+ * form, so it carries its template with it rather than being added to
+ * `EMAIL_KEYS` — which would demand every merchant fill in a reminder template
+ * on every registration form before they could save one.
+ */
+export type TransactionalKey = "payment_reminder";
+
 export interface DeliverInput {
-  kind: EmailKey;
+  kind: EmailKey | TransactionalKey;
   to: string;
-  templates: EmailTemplates;
+  /** The form's templates, for a form email. Omitted when `template` is given. */
+  templates?: EmailTemplates;
   values: Record<string, string | null | undefined>;
   submissionId?: string | null;
+  /**
+   * The template outright, for a message that belongs to no form.
+   */
+  template?: { subject: string; body: string } | null;
   /**
    * Replaces the template for this one send. This is what "Edit email before
    * sending" writes — the merchant is answering one applicant, not changing
@@ -50,7 +66,8 @@ export interface DeliverInput {
 }
 
 export async function deliverEmail(input: DeliverInput): Promise<EmailMessage> {
-  const template = input.override ?? input.templates[input.kind];
+  const template =
+    input.override ?? input.template ?? input.templates?.[input.kind as EmailKey] ?? null;
   const subject = renderTemplate(template?.subject ?? "", input.values);
   const body = renderTemplate(template?.body ?? "", input.values);
 

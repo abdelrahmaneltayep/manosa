@@ -1,7 +1,10 @@
-import { money } from "@mannon/pricing-engine";
+import type { AgingSummary } from "@mannon/net-terms";
+import { formatMoney, money } from "@mannon/pricing-engine";
 import type { Order, OrderLimit } from "@prisma/client";
 
 import type {
+  BucketView,
+  LedgerRowView,
   LimitRowView,
   OrderRowView,
   PaymentChipTone,
@@ -172,4 +175,69 @@ export function toLimitRowView(
     countries: row.countries,
     summary: limitSummary(row, options),
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* The terms ledger                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** Whole days between two dates, in UTC — the same arithmetic the ledger uses. */
+function wholeDaysBetween(from: Date, to: Date): number {
+  const a = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+  const b = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate());
+  return Math.floor((b - a) / DAY_MS);
+}
+
+export function toLedgerRowView(
+  order: Order & { buyerRowId?: string | null; error?: string | null },
+  options: { shop: string; now: Date; t: Translate; locale?: string; canRemind: boolean },
+): LedgerRowView {
+  const { t, now, locale } = options;
+  const balance = money(
+    Math.max(0, order.totalPrice - order.refundedAmount - order.amountPaid),
+    order.currencyCode,
+  );
+  const late = order.netTermsDueAt ? wholeDaysBetween(order.netTermsDueAt, now) : 0;
+
+  return {
+    id: order.id,
+    name: order.name,
+    adminUrl: orderAdminUrl(options.shop, order.orderId),
+    buyer: order.company || order.email || t("orders.list.unknownBuyer"),
+    buyerHref: order.buyerRowId ? `/app/customers/${order.buyerRowId}` : null,
+    terms: order.netTermsDays ? t("terms.net", { count: order.netTermsDays }) : null,
+    dueLabel: !order.netTermsDueAt
+      ? t("terms.ledger.noDueDate")
+      : late > 0
+        ? t("terms.ledger.overdueBy", { count: late })
+        : t("terms.ledger.dueIn", { count: Math.abs(late) }),
+    overdue: late > 0,
+    balance: formatCurrency(balance, locale),
+    balanceRaw: formatMoney(balance),
+    paid:
+      order.amountPaid > 0
+        ? t("terms.ledger.partPaid", {
+            amount: formatCurrency(money(order.amountPaid, order.currencyCode), locale),
+          })
+        : null,
+    currencyCode: order.currencyCode,
+    remindedLabel: order.remindedAt
+      ? t("terms.ledger.remindedAgo", {
+          count: wholeDaysBetween(order.remindedAt, now),
+        })
+      : null,
+    canRemind: options.canRemind,
+    error: order.error ?? null,
+  };
+}
+
+export function toBucketViews(
+  summary: AgingSummary,
+  options: { locale?: string },
+): BucketView[] {
+  return summary.buckets.map((bucket) => ({
+    bucket: bucket.bucket as BucketView["bucket"],
+    outstanding: formatCurrency(bucket.outstanding, options.locale),
+    invoiceCount: bucket.invoiceCount,
+  }));
 }

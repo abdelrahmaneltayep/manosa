@@ -2,13 +2,14 @@ import type { Customer, CustomerGroup, Prisma } from "@prisma/client";
 
 import { db } from "~/db.server";
 import { recordAudit, type AuditActor } from "~/lib/audit/record.server";
+import { assertFeature } from "~/lib/billing/gate.server";
 import {
   applyTagChange,
   setTaxExempt as setTaxExemptInShopify,
 } from "~/lib/customers/admin-graphql.server";
 import { normalizeTags } from "~/lib/customers/tagging";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
-import { publishBuyerFacts } from "~/lib/pricing/buyer-facts.server";
+import { publishBuyerTerms } from "~/lib/terms/ledger.server";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 
 /** The checklist's pagination threshold for this list. */
@@ -161,15 +162,22 @@ export async function existingTags(limit = 200): Promise<string[]> {
   return normalizeTags([...seen]).slice(0, limit);
 }
 
-/** Republish the metafield checkout reads for this buyer. */
+/**
+ * Republish the metafield checkout reads for this buyer.
+ *
+ * Goes through `publishBuyerTerms` rather than writing the facts directly, so
+ * a group change cannot silently withdraw the credit that group grants.
+ */
 async function republishBuyer(
   admin: AdminGraphql,
-  customer: { customerId: string; tags: string[]; groupId: string | null },
+  customer: { id: string; customerId: string },
 ) {
-  await publishBuyerFacts(admin, customer.customerId, {
-    tags: customer.tags,
-    groupIds: customer.groupId ? [customer.groupId] : [],
+  const buyer = await db.customer.findUnique({
+    where: { id: customer.id },
+    include: { group: true },
   });
+  if (!buyer) return;
+  await publishBuyerTerms(admin, buyer);
 }
 
 export interface CustomerContext {
@@ -329,4 +337,42 @@ function describe(
   // `??` would be wrong here: an empty name joins to "", not null, and the log
   // would read "Moved  to the Gold group".
   return customer.company || person || customer.email || "a customer";
+}
+
+/**
+ * Set one buyer's own payment terms.
+ *
+ * These replace their group's rather than merging with them — the rule lives in
+ * `@mannon/net-terms` — and republishing is what carries the change to
+ * checkout. Nothing here touches an invoice that already exists: an order keeps
+ * the terms it was raised under, which is what the buyer was told.
+ */
+export async function setTerms(
+  id: string,
+  input: { netTermsDays: number | null; creditLimit: number | null },
+  { admin, actor }: CustomerContext,
+) {
+  await assertFeature("net_terms");
+
+  const customer = await db.customer.findUnique({ where: { id } });
+  if (!customer) throw new Response("Customer not found", { status: 404 });
+
+  const updated = await db.customer.update({
+    where: { id },
+    data: { netTermsDays: input.netTermsDays, creditLimit: input.creditLimit },
+  });
+
+  await recordAudit({
+    actor,
+    action: "customer.terms_changed",
+    summary:
+      input.netTermsDays === null
+        ? `Removed ${updated.company ?? updated.email ?? "a buyer"}'s own payment terms. Their group's terms apply again.`
+        : `Set ${updated.company ?? updated.email ?? "a buyer"} to Net ${input.netTermsDays}. This applies to new orders only.`,
+    subject: { type: "Customer", id },
+    metadata: { ...input, currencyCode: customer.currencyCode },
+  });
+
+  await republishBuyer(admin, updated);
+  return updated;
 }

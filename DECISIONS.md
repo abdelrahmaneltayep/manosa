@@ -8,6 +8,51 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — The terms Function fails closed; the limits Function fails open
+
+Both must never throw, but "safe" means opposite things. An unreadable order
+limit is dropped and the order goes through, because the harm there is blocking
+a legitimate sale. An error in the terms Function hides the pay-later method,
+because the harm here is a buyer taking goods on credit nobody agreed to.
+Rejected: one house rule for both, which would have got one of them wrong.
+
+## 2026-09-10 — `publishBuyerFacts` requires `terms`, it does not default it
+
+Making the field optional meant every existing caller published `null`, which
+reads as "this buyer has no terms" — silently withdrawing credit a merchant had
+granted, from five call sites that had no idea they were doing it. Making it
+required turned that into a compile error and found all five. Rejected: a
+default of `null`, and a default that re-reads the buyer (a hidden query inside
+a publisher).
+
+## 2026-09-10 — A buyer's terms replace their group's; they never merge
+
+Net 60 from the buyer with the tier's £500 credit limit is a third arrangement
+nobody wrote down. Whichever level sets `days` supplies the limit too. Rejected:
+field-by-field merging, which is what the obvious implementation does.
+
+## 2026-09-10 — Payments are append-only rows, and overpayment is refused
+
+A correction is another row, negative if it has to be, so the ledger can be
+explained line by line. An amount over the balance is almost always a typo — two
+digits, or the wrong invoice — and a ledger that absorbs one quietly stops
+reconciling. Rejected: editing the previous payment, and clamping silently.
+
+## 2026-09-10 — A third pure package rather than growing either existing one
+
+`packages/net-terms` is its own module. Terms are not prices and not limits:
+they answer "may this buyer owe us money", which is a question about history
+rather than about a cart. Rejected: folding aging into `order-limits` (unrelated),
+and into the pricing engine (which stays small so "every price comes from one
+module" remains checkable).
+
+## 2026-09-10 — The checkout preview shows a term this store actually uses
+
+The pay-later button preview was going to read "Pay later (Net 30)" for every
+merchant. A store whose buyers are all on Net 60 would have been shown a preview
+of a button none of them will ever see, so it takes the days from a real group
+or buyer, falling back to 30 only when nothing is set.
+
 ## 2026-09-10 — `orders/edited` flags the row rather than rewriting it
 
 The order-edited webhook carries a diff of line items with no totals in it.

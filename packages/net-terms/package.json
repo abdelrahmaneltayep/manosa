@@ -1,0 +1,19 @@
+{
+  "name": "@mannon/net-terms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Who may pay later, how much they still owe, and how late it is. Pure, and shared by the admin, the ledger and the checkout payment Function.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

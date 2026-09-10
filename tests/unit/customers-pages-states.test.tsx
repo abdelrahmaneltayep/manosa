@@ -397,7 +397,13 @@ describe("group states", () => {
 
   it("group page — the whole bundle, with unbuilt sections labelled", () => {
     const view: GroupDetailView = {
-      group: { ...groupRow(), description: "Our best resellers" },
+      group: {
+        ...groupRow(),
+        description: "Our best resellers",
+        netTermsDays: "30",
+        creditLimit: "",
+      },
+      currencyCode: "USD",
       sections: [
         {
           key: "pricing",
@@ -405,9 +411,14 @@ describe("group states", () => {
           summary: "2 live rules price the “gold” tag.",
           comingIn: null,
         },
-        { key: "limits", href: null, summary: "No order minimum.", comingIn: "3.1" },
-        { key: "terms", href: null, summary: "Net 30.", comingIn: "3.2" },
-        { key: "shipping", href: null, summary: "No shipping rule.", comingIn: "3.2" },
+        {
+          key: "limits",
+          href: "/app/orders/limits",
+          summary: "No order minimum.",
+          comingIn: null,
+        },
+        { key: "terms", href: "/app/orders/terms", summary: "Net 30.", comingIn: null },
+        { key: "shipping", href: null, summary: "No shipping rule.", comingIn: "3.4" },
         {
           key: "visibility",
           href: null,
@@ -426,14 +437,25 @@ describe("group states", () => {
     capture("15-group-bundle", html);
 
     expect(html).toContain("What this tier includes");
-    // A merchant who sets a limit nothing enforces finds out from an order.
-    expect(html).toContain("Arrives in phase 3.1");
+    // A merchant who sets something nothing enforces finds out from an order,
+    // so a section whose feature has not shipped says so on the page.
+    expect(html).toContain("Arrives in phase 3.4");
     expect(html).toContain("Open pricing rules");
+    // And the ones that have shipped link somewhere rather than carrying a badge.
+    expect(html).toContain("Open order limits");
+    expect(html).toContain("Open payment terms");
   });
 
   it("group page paginates a tier with more members than fit", () => {
     const view: GroupDetailView = {
-      group: { ...groupRow(), memberCount: 312, description: null },
+      group: {
+        ...groupRow(),
+        memberCount: 312,
+        description: null,
+        netTermsDays: "30",
+        creditLimit: "5000.00",
+      },
+      currencyCode: "USD",
       sections: [],
       members: [row()],
       memberTotal: 312,
@@ -453,7 +475,15 @@ describe("group states", () => {
 
   it("group page with no members yet", () => {
     const view: GroupDetailView = {
-      group: { ...groupRow(), memberCount: 0, description: null, pricingRuleCount: 0 },
+      group: {
+        ...groupRow(),
+        memberCount: 0,
+        description: null,
+        pricingRuleCount: 0,
+        netTermsDays: "",
+        creditLimit: "",
+      },
+      currencyCode: "USD",
       sections: [],
       members: [],
       memberTotal: 0,
@@ -486,7 +516,16 @@ describe("buyer page states", () => {
       internalNote: null,
       currencyCode: "USD",
       syncedAt: "2026-06-01T12:00:00.000Z",
+      netTermsDays: "",
+      creditLimit: "",
       ...overrides,
+    },
+    terms: {
+      summary: "Net 30 days · no credit limit",
+      overridden: false,
+      groupSummary: null,
+      ledgerSummary: null,
+      ledgerHref: "/app/orders/terms",
     },
     groups: [{ id: "g1", name: "Gold" }],
     knownTags: ["gold", "silver", "wholesale"],

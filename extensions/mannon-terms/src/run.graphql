@@ -1,0 +1,27 @@
+query RunInput {
+  cart {
+    cost {
+      totalAmount {
+        amount
+        currencyCode
+      }
+    }
+    buyerIdentity {
+      isAuthenticated
+      customer {
+        metafield(namespace: "$app:mannon", key: "buyer") {
+          jsonValue
+        }
+      }
+    }
+  }
+  paymentMethods {
+    id
+    name
+  }
+  shop {
+    metafield(namespace: "$app:mannon", key: "terms") {
+      jsonValue
+    }
+  }
+}

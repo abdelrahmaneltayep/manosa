@@ -129,6 +129,7 @@ function Toolbar({ view }: { view: OrderListView }) {
           {t("orders.list.tabOrders")}
         </s-link>
         <s-link href="/app/orders/limits">{t("orders.list.tabLimits")}</s-link>
+        <s-link href="/app/orders/terms">{t("orders.list.tabTerms")}</s-link>
       </s-stack>
 
       {/* Stated, not implied: the list starts 60 days back because that is as

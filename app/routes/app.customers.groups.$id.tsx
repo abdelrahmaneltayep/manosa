@@ -3,6 +3,8 @@ import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 
 import { GroupDetailPage } from "~/components/customers/GroupDetailPage";
+import { formatMoney, money } from "@mannon/pricing-engine";
+
 import type { GroupDetailView } from "~/components/customers/types";
 import { db } from "~/db.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
@@ -19,6 +21,8 @@ import {
   toCustomerRowView,
   toGroupRowView,
 } from "~/lib/customers/view-model.server";
+import { parseAmount } from "~/lib/terms/ledger.server";
+import { shopCurrency } from "~/lib/terms/terms.server";
 import { withAdmin } from "~/shopify.server";
 
 export const loader = ({ request, params }: LoaderFunctionArgs) =>
@@ -33,6 +37,7 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
     // the only correct answer — confirming it exists would leak that it does.
     if (!group) throw new Response("Group not found", { status: 404 });
 
+    const currencyCode = await shopCurrency();
     const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
     const ruleCounts = await pricingRuleCountsByTag();
     const pricingRuleCount = ruleCounts.get(group.tag.toLowerCase()) ?? 0;
@@ -49,7 +54,13 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
       group: {
         ...toGroupRowView(group, { t: translate(t), pricingRuleCount }),
         description: group.description,
+        netTermsDays: group.netTermsDays === null ? "" : String(group.netTermsDays),
+        creditLimit:
+          group.creditLimit === null
+            ? ""
+            : formatMoney(money(group.creditLimit, currencyCode)),
       },
+      currencyCode,
       sections: bundleSections(group, { t: translate(t), pricingRuleCount }),
       members: members.map((member) =>
         toCustomerRowView(member, { now, t: translate(t) }),
@@ -64,6 +75,15 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
     return json({ view });
   });
 
+/** A typed whole number, or null when the field was left empty or is nonsense. */
+function wholeNumber(value: string): number | null {
+  const text = value.trim();
+  if (!text) return null;
+  const parsed = Number(text);
+  // A group with "Net -5" or "Net 0" has no terms rather than strange ones.
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export const action = ({ request, params }: ActionFunctionArgs) =>
   withAdmin(request, async ({ session }) => {
     const form = await request.formData();
@@ -75,6 +95,10 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
     const name = (form.get("name") ?? "").toString().trim();
     if (!name) throw new Response("Missing name", { status: 400 });
 
+    const currencyCode = await shopCurrency();
+    const days = wholeNumber((form.get("netTermsDays") ?? "").toString());
+    const limit = parseAmount((form.get("creditLimit") ?? "").toString(), currencyCode);
+
     try {
       await updateGroup(
         id,
@@ -82,6 +106,8 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
           name,
           tag: (form.get("tag") ?? "").toString().trim() || name,
           description: (form.get("description") ?? "").toString().trim() || null,
+          netTermsDays: days,
+          creditLimit: limit,
         },
         { type: "STAFF", id: session.id },
       );

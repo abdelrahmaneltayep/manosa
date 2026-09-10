@@ -32,7 +32,8 @@
     "paths": {
       "~/*": ["./app/*"],
       "@mannon/pricing-engine": ["./packages/pricing-engine/src/index.ts"],
-      "@mannon/order-limits": ["./packages/order-limits/src/index.ts"]
+      "@mannon/order-limits": ["./packages/order-limits/src/index.ts"],
+      "@mannon/net-terms": ["./packages/net-terms/src/index.ts"]
     },
     "noEmit": true
   },

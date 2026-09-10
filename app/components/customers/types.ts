@@ -103,7 +103,14 @@ export interface GroupBundleSection {
 }
 
 export interface GroupDetailView {
-  group: GroupRowView & { description: string | null };
+  group: GroupRowView & {
+    description: string | null;
+    /** Days as typed, so a rejected form gives back what was entered. */
+    netTermsDays: string;
+    /** Decimal, in the shop's currency. Empty means no ceiling. */
+    creditLimit: string;
+  };
+  currencyCode: string;
   sections: GroupBundleSection[];
   members: CustomerRowView[];
   memberTotal: number;
@@ -125,6 +132,20 @@ export interface CustomerDetailView {
     internalNote: string | null;
     currencyCode: string;
     syncedAt: string;
+    /** This buyer's own terms. Empty means "whatever their group says". */
+    netTermsDays: string;
+    creditLimit: string;
+  };
+  /** Already-translated summary of the terms that actually apply to them. */
+  terms: {
+    summary: string;
+    /** True when their own terms replace their group's — the chip. */
+    overridden: boolean;
+    /** The group's terms, named so the merchant knows what they are replacing. */
+    groupSummary: string | null;
+    /** Already-formatted, e.g. "$1,200.50 outstanding · 1 overdue". */
+    ledgerSummary: string | null;
+    ledgerHref: string;
   };
   groups: { id: string; name: string }[];
   /** Tags already in use in this store, for the tag field's autocomplete. */

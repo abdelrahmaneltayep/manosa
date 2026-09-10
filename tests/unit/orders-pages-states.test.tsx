@@ -2,9 +2,12 @@ import { resolve } from "node:path";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { LedgerPage } from "~/components/orders/LedgerPage";
 import { LimitsPage } from "~/components/orders/LimitsPage";
 import { OrderListPage } from "~/components/orders/OrderListPage";
 import type {
+  LedgerRowView,
+  LedgerView,
   LimitRowView,
   LimitsView,
   OrderListView,
@@ -16,11 +19,12 @@ import { createCaptureHarness, type CaptureHarness } from "../support/state-capt
 /**
  * Every state in checklist §5, rendered and asserted.
  *
- * QA_CAPTURE=1 also writes each one to qa/3.1/. Structure only — see the note
- * each capture carries.
+ * QA_CAPTURE=1 writes the order and limit states to qa/3.1/ and the net-terms
+ * states (3.2) to qa/3.2/. Structure only — see the note each capture carries.
  */
 
-const OUT = resolve(process.cwd(), "qa/3.1");
+const ORDERS_OUT = resolve(process.cwd(), "qa/3.1");
+const TERMS_OUT = resolve(process.cwd(), "qa/3.2");
 
 let harness: CaptureHarness;
 const render = (node: React.ReactNode, locale: Locale = "en") =>
@@ -31,8 +35,9 @@ const capture = (name: string, html: string, locale: Locale = "en") =>
 beforeAll(async () => {
   harness = await createCaptureHarness({
     title: "Orders",
-    outFor: () => OUT,
-    dirs: [OUT],
+    // One test file spans two tasks; each state goes to the task that owns it.
+    outFor: (name) => (name.startsWith("terms-") ? TERMS_OUT : ORDERS_OUT),
+    dirs: [ORDERS_OUT, TERMS_OUT],
   });
 });
 
@@ -415,5 +420,207 @@ describe("order limits", () => {
     expect(html).toContain("حدود الطلب");
     expect(html).not.toContain("Order limits");
     capture("limits-list-ar", html, "ar");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+const ledgerRow = (overrides: Partial<LedgerRowView> = {}): LedgerRowView => ({
+  id: "o1",
+  name: "#1001",
+  adminUrl: "https://alpha.myshopify.com/admin/orders/5001",
+  buyer: "Acme Ltd",
+  buyerHref: "/app/customers/c1",
+  terms: "Net 30 days",
+  dueLabel: "Due in 12 days",
+  overdue: false,
+  balance: "$1,000.00",
+  balanceRaw: "1000.00",
+  paid: null,
+  currencyCode: "USD",
+  remindedLabel: null,
+  canRemind: true,
+  error: null,
+  ...overrides,
+});
+
+const ledgerView = (overrides: Partial<LedgerView> = {}): LedgerView => ({
+  rows: [ledgerRow()],
+  buckets: [
+    { bucket: "current", outstanding: "$1,000.00", invoiceCount: 1 },
+    { bucket: "days_1_15", outstanding: "$0.00", invoiceCount: 0 },
+    { bucket: "days_16_30", outstanding: "$0.00", invoiceCount: 0 },
+    { bucket: "days_30_plus", outstanding: "$0.00", invoiceCount: 0 },
+  ],
+  outstanding: "$1,000.00",
+  page: 1,
+  pageCount: 1,
+  anyBuyerHasTerms: true,
+  entitled: true,
+  requiredPlan: "growth",
+  publishedAt: "2026-09-10T09:00:00.000Z",
+  settings: {
+    methodName: "Net terms",
+    showDaysInName: true,
+    overdueBlocks: true,
+    preview: "Pay later (Net 30)",
+  },
+  settingsError: false,
+  ...overrides,
+});
+
+describe("the terms ledger", () => {
+  it("empty: nobody on terms yet, with the way to start", () => {
+    const html = render(
+      <LedgerPage
+        view={ledgerView({ rows: [], anyBuyerHasTerms: false, outstanding: "$0.00" })}
+      />,
+    );
+
+    expect(html).toContain("Nobody is on payment terms yet");
+    expect(html).toContain("Set terms on a group");
+    capture("terms-empty", html);
+  });
+
+  it("all paid is not the same state as nobody on terms", () => {
+    const html = render(<LedgerPage view={ledgerView({ rows: [] })} />);
+
+    expect(html).toContain("Nothing outstanding");
+    expect(html).not.toContain("Nobody is on payment terms yet");
+    capture("terms-all-paid", html);
+  });
+
+  it("aging: every bucket shown, overdue money in red", () => {
+    const html = render(
+      <LedgerPage
+        view={ledgerView({
+          buckets: [
+            { bucket: "current", outstanding: "$1,000.00", invoiceCount: 1 },
+            { bucket: "days_1_15", outstanding: "$480.00", invoiceCount: 1 },
+            { bucket: "days_16_30", outstanding: "$0.00", invoiceCount: 0 },
+            { bucket: "days_30_plus", outstanding: "$2,150.00", invoiceCount: 2 },
+          ],
+          outstanding: "$3,630.00",
+        })}
+      />,
+    );
+
+    // Every band, including the empty one — otherwise a merchant cannot tell
+    // "nobody is that late" from "that column was dropped".
+    expect(html).toContain("1–15 days late");
+    expect(html).toContain("16–30 days late");
+    expect(html).toContain("Over 30 days late");
+    expect(html).toContain('tone="critical"');
+    expect(html).toContain("$3,630.00 outstanding in total");
+    capture("terms-aging", html);
+  });
+
+  it("rows: overdue red, part payments, and a recent reminder", () => {
+    const html = render(
+      <LedgerPage
+        view={ledgerView({
+          rows: [
+            ledgerRow({
+              id: "o2",
+              name: "#1002",
+              dueLabel: "9 days overdue",
+              overdue: true,
+              paid: "$400.00 paid so far",
+              balance: "$600.00",
+            }),
+            ledgerRow({
+              id: "o3",
+              name: "#1003",
+              dueLabel: "41 days overdue",
+              overdue: true,
+              remindedLabel: "Reminded 2 days ago",
+              canRemind: false,
+            }),
+            ledgerRow(),
+          ],
+        })}
+      />,
+    );
+
+    expect(html).toContain("9 days overdue");
+    expect(html).toContain("$400.00 paid so far");
+    expect(html).toContain("Reminded 2 days ago");
+    // The reminder button is disabled while one is too recent, by the
+    // attribute's presence — never disabled="false".
+    expect(html).toContain("disabled");
+    expect(html).not.toContain('disabled="false"');
+    capture("terms-rows", html);
+  });
+
+  it("a refused payment says why, beside the field that caused it", () => {
+    const html = render(
+      <LedgerPage
+        view={ledgerView({
+          rows: [
+            ledgerRow({
+              error:
+                "That is more than the #1001 balance. Record at most the outstanding amount.",
+            }),
+          ],
+        })}
+      />,
+    );
+
+    expect(html).toContain("more than the #1001 balance");
+    capture("terms-payment-error", html);
+  });
+
+  it("unpublished: warns that checkout has not been told", () => {
+    const html = render(<LedgerPage view={ledgerView({ publishedAt: null })} />);
+
+    expect(html).toContain("Checkout has not been told");
+    expect(html).toContain("shown to everybody");
+    capture("terms-unpublished", html);
+  });
+
+  it("gated: invoices still shown and still chased, the editor disabled", () => {
+    const html = render(<LedgerPage view={ledgerView({ entitled: false })} />);
+
+    expect(html).toContain("paid plan");
+    expect(html).toContain("nothing is deleted");
+    // Features pause, data is never deleted.
+    expect(html).toContain("#1001");
+    expect(html).not.toContain('disabled="false"');
+    capture("terms-gated", html);
+  });
+
+  it("settings: shows what the eligible buyer's button will say", () => {
+    const html = render(<LedgerPage view={ledgerView()} />);
+
+    expect(html).toContain("Pay later (Net 30)");
+    expect(html).toContain("not a disabled button");
+    capture("terms-settings", html);
+  });
+
+  it("a settings error names the consequence, not just the rule", () => {
+    const html = render(<LedgerPage view={ledgerView({ settingsError: true })} />);
+    expect(html).toContain("hide the whole payment step");
+    capture("terms-settings-error", html);
+  });
+
+  it("the overdue-blocks toggle reads as checked when it is on", () => {
+    const on = render(<LedgerPage view={ledgerView()} />);
+    const off = render(
+      <LedgerPage
+        view={ledgerView({
+          settings: { ...ledgerView().settings, overdueBlocks: false },
+        })}
+      />,
+    );
+
+    expect(on).toContain('checked="true"');
+    expect(off).not.toContain('checked="false"');
+  });
+
+  it("renders in Arabic, right to left", () => {
+    const html = render(<LedgerPage view={ledgerView()} />, "ar");
+    expect(html).toContain("شروط الدفع");
+    expect(html).not.toContain("Payment terms");
+    capture("terms-ledger-ar", html, "ar");
   });
 });

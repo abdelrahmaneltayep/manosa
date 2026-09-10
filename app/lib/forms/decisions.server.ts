@@ -23,7 +23,7 @@ import {
 import { readEmails } from "~/lib/forms/merge-tags";
 import { readDefinition, type Answers } from "~/lib/forms/schema";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
-import { publishBuyerFacts } from "~/lib/pricing/buyer-facts.server";
+import { publishBuyerTerms } from "~/lib/terms/ledger.server";
 import { tenant } from "~/lib/tenant/shop-context.server";
 
 /**
@@ -250,10 +250,9 @@ export async function approveSubmission(
 
   // Checkout has to be told, or the admin shows a wholesale price the till
   // does not honour.
-  await publishBuyerFacts(admin, customerId, {
-    tags: mirrored.tags,
-    groupIds: mirrored.groupId ? [mirrored.groupId] : [],
-  });
+  // Their tier's net terms take effect the moment they are approved into it,
+  // so the terms go out with the tags rather than waiting for the next edit.
+  await publishBuyerTerms(admin, { ...mirrored, group: group ?? null });
 
   const decided = await db.formSubmission.update({
     where: { id },
@@ -351,10 +350,8 @@ export async function undoApproval(
       where: { id: mirrored.id },
       data: { tags, groupId: null, status: "PENDING" },
     });
-    await publishBuyerFacts(admin, reverted.customerId, {
-      tags: reverted.tags,
-      groupIds: [],
-    });
+    // Undoing an approval takes back the group, and with it the group's terms.
+    await publishBuyerTerms(admin, { ...reverted, group: null });
   }
 
   const restored = await db.formSubmission.update({

@@ -112,3 +112,66 @@ export interface LimitsView {
   /** A preview message, rendered by the same module the checkout uses. */
   preview: { heading: string; message: string } | null;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Net terms                                                                   */
+/* -------------------------------------------------------------------------- */
+
+export type AgingBucketKey = "current" | "days_1_15" | "days_16_30" | "days_30_plus";
+
+export interface BucketView {
+  bucket: AgingBucketKey;
+  /** Already-formatted money. */
+  outstanding: string;
+  invoiceCount: number;
+}
+
+export interface LedgerRowView {
+  /** Our own order row id — what the payment form posts. */
+  id: string;
+  name: string;
+  adminUrl: string;
+  buyer: string;
+  buyerHref: string | null;
+  /** Already-translated, e.g. "Net 30". Null when the order carries no terms. */
+  terms: string | null;
+  /** Already-translated: "Due in 12 days" or "9 days overdue". */
+  dueLabel: string;
+  overdue: boolean;
+  /** Formatted money still owed. */
+  balance: string;
+  /** The same number as a bare decimal, for the payment field's placeholder. */
+  balanceRaw: string;
+  /** Already-translated part-payment note, or null when nothing is paid. */
+  paid: string | null;
+  currencyCode: string;
+  /** Already-translated "Reminded 3 days ago", or null. */
+  remindedLabel: string | null;
+  /** False while a reminder is too recent to send another. */
+  canRemind: boolean;
+  /** A failed payment entry, shown beside the field that caused it. */
+  error: string | null;
+}
+
+export interface LedgerView {
+  rows: LedgerRowView[];
+  buckets: BucketView[];
+  /** Formatted total still owed across every bucket. */
+  outstanding: string;
+  page: number;
+  pageCount: number;
+  /** Tells "nobody is on terms" from "everybody has paid". */
+  anyBuyerHasTerms: boolean;
+  entitled: boolean;
+  requiredPlan: string;
+  /** Null until the settings have reached Shopify. */
+  publishedAt: string | null;
+  settings: {
+    methodName: string;
+    showDaysInName: boolean;
+    overdueBlocks: boolean;
+    /** What the button will say, built the way the Function builds it. */
+    preview: string;
+  };
+  settingsError: boolean;
+}

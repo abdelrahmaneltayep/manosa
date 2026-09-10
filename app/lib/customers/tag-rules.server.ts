@@ -17,7 +17,7 @@ import {
   type TagRuleIssue,
 } from "~/lib/customers/tagging";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
-import { publishBuyerFacts } from "~/lib/pricing/buyer-facts.server";
+import { publishBuyerTerms } from "~/lib/terms/ledger.server";
 import { tenant } from "~/lib/tenant/shop-context.server";
 
 /**
@@ -278,9 +278,11 @@ export async function runTagSweep(
         where: { id: customer.id },
         data: { tags: decision.tags },
       });
-      await publishBuyerFacts(admin, updated.customerId, {
-        tags: updated.tags,
-        groupIds: updated.groupId ? [updated.groupId] : [],
+      await publishBuyerTerms(admin, {
+        ...updated,
+        group: updated.groupId
+          ? await db.customerGroup.findUnique({ where: { id: updated.groupId } })
+          : null,
       });
       changed += 1;
     } catch (error) {

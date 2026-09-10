@@ -1,4 +1,6 @@
 import { db } from "~/db.server";
+import { applyTermsToOrder, publishBuyerTerms } from "~/lib/terms/ledger.server";
+import { termsFor } from "~/lib/terms/terms.server";
 import { tagOrder } from "~/lib/orders/admin-graphql.server";
 import {
   factsFromWebhook,
@@ -51,7 +53,35 @@ export async function handleOrdersUpsert(
     ? existing.isWholesale
     : await isWholesaleOrder(facts, record?.wholesaleTag ?? "wholesale");
 
-  await upsertOrder(facts, isWholesale);
+  const saved = await upsertOrder(facts, isWholesale);
+
+  // Put it on terms, if the buyer has any. The days are copied onto the order
+  // now, so changing their terms later applies to new orders only — which is
+  // what the invoice they already hold says.
+  if (isWholesale && facts.customerId) {
+    const buyer = await db.customer.findFirst({
+      where: { customerId: facts.customerId },
+      include: { group: true },
+    });
+
+    if (buyer) {
+      const terms = termsFor(buyer, record?.currencyCode ?? "USD");
+      if (terms) await applyTermsToOrder(saved, terms.days);
+
+      // Their balance just changed, so what checkout would decide has too.
+      // Until this runs, a buyer who has just hit their credit limit is still
+      // offered credit at the next checkout.
+      try {
+        await publishBuyerTerms(await adminFor(shop), buyer);
+      } catch (error) {
+        console.warn(
+          `[mannon] could not republish terms for ${buyer.customerId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+  }
 
   // Retail orders are mirrored but not tagged: this app has no business
   // labelling a store's ordinary orders. Nor is the tag re-applied on an

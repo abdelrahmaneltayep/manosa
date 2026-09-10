@@ -148,6 +148,60 @@ export function CustomerDetailPage({ view }: { view: CustomerDetailView }) {
         </form>
       </s-section>
 
+      <s-section heading={t("customers.detail.termsHeading")}>
+        <form method="post">
+          <input type="hidden" name="intent" value="setTerms" />
+          <s-stack direction="block" gap="small">
+            <s-stack direction="inline" gap="small-500" alignItems="center">
+              <s-text>{view.terms.summary}</s-text>
+              {/* The chip the checklist asks for: a merchant looking at a Gold
+                  buyer needs to see that Gold's terms are not what applies. */}
+              {view.terms.overridden ? (
+                <s-badge tone="info">{t("customers.detail.termsOverridden")}</s-badge>
+              ) : null}
+            </s-stack>
+
+            {view.terms.overridden && view.terms.groupSummary ? (
+              <s-text color="subdued">
+                {t("customers.detail.termsGroupWas", {
+                  terms: view.terms.groupSummary,
+                })}
+              </s-text>
+            ) : null}
+
+            {view.terms.ledgerSummary ? (
+              <s-stack direction="inline" gap="small-500" alignItems="center">
+                <s-text>{view.terms.ledgerSummary}</s-text>
+                <s-link href={view.terms.ledgerHref}>
+                  {t("customers.detail.termsLedgerLink")}
+                </s-link>
+              </s-stack>
+            ) : null}
+
+            <s-number-field
+              name="netTermsDays"
+              label={t("customers.detail.termsDaysLabel")}
+              details={t("customers.detail.termsDaysHelp")}
+              value={customer.netTermsDays}
+            />
+            <s-number-field
+              name="creditLimit"
+              label={t("customers.detail.creditLimitLabel", {
+                currency: customer.currencyCode,
+              })}
+              details={t("customers.detail.creditLimitHelp")}
+              value={customer.creditLimit}
+            />
+            {/* Stated in the UI, because it is the thing a merchant gets wrong:
+                changing terms does not move a due date already agreed. */}
+            <s-paragraph color="subdued">
+              {t("customers.detail.termsNewOrdersOnly")}
+            </s-paragraph>
+            <s-button type="submit">{t("customers.detail.saveTerms")}</s-button>
+          </s-stack>
+        </form>
+      </s-section>
+
       <s-section heading={t("customers.detail.noteHeading")}>
         <form method="post">
           <input type="hidden" name="intent" value="setNote" />

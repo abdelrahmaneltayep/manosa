@@ -115,6 +115,21 @@ model Shop {
   /// Hash of the last published limits, so an unchanged set is not re-pushed.
   limitsHash           String?
   limitsPublishedAt    DateTime?
+
+  // --- Net terms (phase 3.2) ---------------------------------------------
+  /// The manual payment method a merchant set up for paying later. The Function
+  /// hides it from everyone who is not eligible.
+  termsMethodName      String    @default("Net terms")
+  /// Rename it at checkout to say the terms: "Pay later (Net 30)".
+  termsShowDays        Boolean   @default(true)
+  /// An unpaid invoice past its due date stops further credit.
+  termsOverdueBlocks   Boolean   @default(true)
+  termsSettingsHash    String?
+  termsPublishedAt     DateTime?
+  /// The deployed payment customization Function, and the customization that
+  /// points at it.
+  paymentFunctionId    String?
+  paymentCustomizationId String?
   /// Progress of the one-off order backfill.
   ordersBackfilledAt   DateTime?
   ordersBackfillCursor String?
@@ -421,8 +436,11 @@ model CustomerGroup {
   tag String
 
   // --- Bundle: each of these is owned by a later phase, shown here now. ----
-  /// Net payment terms in days. Enforced in phase 3.2.
+  /// Net payment terms in days.
   netTermsDays         Int?
+  /// The most a member may owe at once, in minor units. Null means no ceiling.
+  /// A limit without days is not an agreement — see `@mannon/net-terms`.
+  creditLimit          Int?
   /// Free shipping above this subtotal, in minor units. Phase 3.
   freeShippingOver     Int?
   /// Collections this group may see. Empty means everything. Phase 3.4.
@@ -489,6 +507,16 @@ model Customer {
   currencyCode  String    @default("USD")
   orderCount    Int       @default(0)
   lastOrderAt   DateTime?
+
+  // --- Net terms (phase 3.2) ----------------------------------------------
+  /// This buyer's own terms, which replace their group's rather than merging
+  /// with them. Null means "whatever their group says".
+  netTermsDays Int?
+  /// Their own credit ceiling, in minor units of `currencyCode`.
+  creditLimit  Int?
+  /// Opt-in, per the checklist: reminders are drafted for the merchant to send
+  /// unless this buyer has agreed to automatic ones.
+  autoRemind   Boolean @default(false)
 
   /// Staff-only. Never shown to the buyer and never sent in an email.
   internalNote String?
@@ -870,9 +898,19 @@ model Order {
   /// Net terms due date. Filled in by phase 3.2; the list already renders the
   /// states that depend on it.
   netTermsDueAt DateTime?
-  /// Days of terms the buyer had, for the "Net 30" chip.
+  /// Days of terms the buyer had *at the time*, for the "Net 30" chip. Stored
+  /// on the order because changing a buyer's terms applies to new orders only.
   netTermsDays  Int?
+  /// Received against this order so far, in minor units. Partial payments are
+  /// a fact of wholesale; an invoice that is only paid or unpaid makes the
+  /// merchant do the arithmetic themselves.
+  amountPaid    Int       @default(0)
   paidAt        DateTime?
+  /// Last time a reminder went out, so the ledger does not offer to send a
+  /// second one an hour later.
+  remindedAt    DateTime?
+
+  payments Payment[]
 
   processedAt DateTime
   cancelledAt DateTime?
@@ -904,6 +942,31 @@ model Order {
 /// every wholesale buyer the group rows do not cover. Limits are enforced by a
 /// cart validation Function, so the numbers here are published to a shop
 /// metafield exactly as the pricing ruleset is.
+/// A payment received against an order on terms.
+///
+/// Recorded by the merchant, because Shopify does not know about money that
+/// arrived by bank transfer. Rows are never edited — a correction is another
+/// row — so the ledger can always be explained line by line.
+model Payment {
+  id      String @id @default(cuid())
+  shop    String
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Minor units of the order's currency. Negative records a correction.
+  amount       Int
+  currencyCode String   @default("USD")
+  receivedAt   DateTime
+  /// Free text: "bank transfer, ref 88213".
+  reference    String?
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@index([shop, orderId])
+  @@index([shop, receivedAt])
+}
+
 model OrderLimit {
   id      String         @id @default(cuid())
   shop    String

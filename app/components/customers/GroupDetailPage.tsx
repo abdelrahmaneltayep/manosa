@@ -55,6 +55,23 @@ export function GroupDetailPage({ view }: { view: GroupDetailView }) {
               label={t("customers.group.descriptionLabel")}
               value={group.description ?? ""}
             />
+            {/* Net terms belong on the tier: it is the level a merchant thinks
+                at, and a buyer's own terms replace these rather than adding to
+                them. Editing one buyer's is on their own page. */}
+            <s-number-field
+              name="netTermsDays"
+              label={t("customers.group.termsDaysLabel")}
+              details={t("customers.group.termsDaysHelp")}
+              value={group.netTermsDays}
+            />
+            <s-number-field
+              name="creditLimit"
+              label={t("customers.group.creditLimitLabel", {
+                currency: view.currencyCode,
+              })}
+              details={t("customers.group.creditLimitHelp")}
+              value={group.creditLimit}
+            />
             <s-button
               type="submit"
               variant="primary"

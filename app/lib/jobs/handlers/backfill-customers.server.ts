@@ -7,7 +7,7 @@ import {
 import { factsFromNode, upsertCustomer } from "~/lib/customers/sync.server";
 import { enqueueJob } from "~/lib/jobs/queue.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
-import { publishBuyerFacts } from "~/lib/pricing/buyer-facts.server";
+import { publishBuyerTerms } from "~/lib/terms/ledger.server";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 import { unauthenticated } from "~/shopify.server";
 
@@ -55,9 +55,11 @@ export async function backfillCustomers(adminFor: AdminForShop = offlineAdmin) {
       saved.tags.some((tag) => tag.toLowerCase() === record.wholesaleTag.toLowerCase());
 
     if (isWholesale) {
-      await publishBuyerFacts(admin, saved.customerId, {
-        tags: saved.tags,
-        groupIds: saved.groupId ? [saved.groupId] : [],
+      await publishBuyerTerms(admin, {
+        ...saved,
+        group: saved.groupId
+          ? await db.customerGroup.findUnique({ where: { id: saved.groupId } })
+          : null,
       });
       wholesale += 1;
     }

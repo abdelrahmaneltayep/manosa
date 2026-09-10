@@ -276,6 +276,7 @@ describe("publishing buyer facts", () => {
     const admin = fakeAdmin(HAPPY);
     await publishBuyerFacts(admin, "gid://shopify/Customer/1", {
       tags: ["wholesale", "gold"],
+      terms: null,
     });
 
     const metafield = (
@@ -291,6 +292,7 @@ describe("publishing buyer facts", () => {
     expect(JSON.parse(metafield.value as string)).toEqual({
       tags: ["gold", "wholesale"],
       groupIds: [],
+      terms: null,
     });
   });
 
@@ -299,12 +301,18 @@ describe("publishing buyer facts", () => {
     expect(normalizeBuyerFacts({ tags: " wholesale , gold ,, wholesale " })).toEqual({
       tags: ["gold", "wholesale"],
       groupIds: [],
+      terms: null,
     });
     expect(normalizeBuyerFacts({ tags: ["b", "a", "a"] })).toEqual({
       tags: ["a", "b"],
       groupIds: [],
+      terms: null,
     });
-    expect(normalizeBuyerFacts({ tags: null })).toEqual({ tags: [], groupIds: [] });
+    expect(normalizeBuyerFacts({ tags: null })).toEqual({
+      tags: [],
+      groupIds: [],
+      terms: null,
+    });
   });
 
   it("sorts deterministically, so an unchanged buyer produces an unchanged value", () => {
@@ -324,7 +332,10 @@ describe("publishing buyer facts", () => {
     });
 
     await expect(
-      publishBuyerFacts(admin, "gid://shopify/Customer/404", { tags: ["wholesale"] }),
+      publishBuyerFacts(admin, "gid://shopify/Customer/404", {
+        tags: ["wholesale"],
+        terms: null,
+      }),
     ).rejects.toBeInstanceOf(AdminApiError);
   });
 });

@@ -1,0 +1,27 @@
+# Mannon's "pay later" payment method at checkout.
+#
+# Shopify has no concept of net terms, so a merchant sets up a manual payment
+# method and this Function decides who may see it. Everyone else sees nothing
+# at all — not a disabled button, which the checklist is explicit about, and
+# which is also the only kind merchants find acceptable in front of retail
+# customers.
+#
+# The Function decides nothing itself: it reads the published terms and asks
+# @mannon/net-terms, the same module the admin's ledger asks.
+
+api_version = "2025-07"
+
+[[extensions]]
+name = "Mannon net terms"
+handle = "mannon-terms"
+type = "function"
+description = "Shows the pay-later payment method only to wholesale buyers whose terms and credit limit allow it."
+
+  [[extensions.targeting]]
+  target = "purchase.payment-customization.run"
+  input_query = "src/run.graphql"
+  export = "run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"
