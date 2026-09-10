@@ -24,7 +24,7 @@ Current task: 5.1 Storefront Buyer Agent [starting]
 - [x] 4.2 Rule-from-a-sentence, margin guard — commit `d45f02b` — QA: `qa/4.2/REPORT.md`
 - [x] 4.3 Screening, drafted emails, segments, CSV whisperer — commit `be3c6d0` — QA: `qa/4.3/REPORT.md`
 - [x] 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order — commits `b073b74` + `e05190b` — QA: `qa/4.4/REPORT.md` (cold read returned FAIL on 17 findings; all fixed, gate re-run clean)
-- [x] 4.5 Home assembled: KPI cards, setup checklist, activity log, ✦ Setup Wizard — QA: `qa/4.5/REPORT.md`
+- [x] 4.5 Home assembled: KPI cards, setup checklist, activity log, ✦ Setup Wizard — commit `ef73ee3` — QA: `qa/4.5/REPORT.md`
 
 ## Next up
 
