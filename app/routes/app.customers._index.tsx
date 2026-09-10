@@ -6,6 +6,7 @@ import { CustomerListPage } from "~/components/customers/CustomerListPage";
 import type { CustomerListView } from "~/components/customers/types";
 import { db } from "~/db.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
+import { translate } from "~/i18n/translate";
 import {
   AT_RISK_DAYS,
   changeGroup,
@@ -54,7 +55,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     });
 
     const view: CustomerListView = {
-      rows: page.rows.map((row) => toCustomerRowView(row, { now, t: t as never })),
+      rows: page.rows.map((row) => toCustomerRowView(row, { now, t: translate(t) })),
       total: page.total,
       page: page.page,
       pageSize: CUSTOMERS_PAGE_SIZE,

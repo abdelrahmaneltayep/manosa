@@ -5,6 +5,7 @@ import { useLoaderData } from "@remix-run/react";
 import { GroupListPage } from "~/components/customers/GroupListPage";
 import type { GroupListView } from "~/components/customers/types";
 import { detectLocale, getFixedT } from "~/i18n.server";
+import { translate } from "~/i18n/translate";
 import {
   createGroup,
   createStarterGroups,
@@ -37,7 +38,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     const view: GroupListView = {
       rows: groups.map((group) =>
         toGroupRowView(group, {
-          t: t as never,
+          t: translate(t),
           pricingRuleCount: ruleCounts.get(group.tag.toLowerCase()) ?? 0,
         }),
       ),

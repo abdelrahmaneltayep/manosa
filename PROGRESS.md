@@ -1,188 +1,117 @@
-# Mannon — build progress
+# Progress
 
-Phase gates: a phase is not started until every task in the previous phase has a
-clean entry in `QA-REPORT.md`, CI is green, and the phase summary has been
-approved. Nothing is deployed mid-phase.
+Updated: 2026-09-10T09:00:00Z
+Current milestone: 3 — Orders
+Current task: 3.1 Wholesale order list, order limits, quantity increments [in progress]
 
-Legend: ☐ not started · ◐ in progress · ☑ done (clean QA) · ⚠ done with open items
+## Done
 
-## Phase 0 — Foundation
+- [x] 0.1 Scaffold, auth, session storage, shop-scoped Prisma, CI — commit `f0567f4` — QA: `qa/0.1/REPORT.md`
+- [x] 0.2 Webhook framework, audit log, i18n EN/AR — commit `832d79d` — QA: `qa/0.2/REPORT.md`
+- [x] 0.3 Billing: plans, gate middleware, Plans page — commit `fb3590f` — QA: `qa/0.3/REPORT.md`
+- [x] 1.1 `packages/pricing-engine`, golden vectors first — commit `95307e1` — QA: `qa/1.1/REPORT.md`
+- [x] 1.2 Shopify discount Function wired to the engine — commit `ee84d34` — QA: `qa/1.2/REPORT.md`
+- [x] 1.3 Pricing page: rule list, builder, priority, combinations — commit `33289ae` — QA: `qa/1.3/REPORT.md`
+- [x] 1.4 CSV import and export, dry run and undo — commit `fa14f95` — QA: `qa/1.4/REPORT.md`
+- [x] 2.1 Customer sync, groups, tagging engine, buyers list — commit `e4313ca` — QA: `qa/2.1/REPORT.md`
+- [x] 2.2 Registration form builder, theme block, VIES, spam protection — commit `1206e68` — QA: `qa/2.2/REPORT.md`
+- [x] 2.3 Approval pipeline: queue, decisions, emails, evaluator — commit `3e0c403` — QA: `qa/2.3/REPORT.md`
 
-| Task                                                        | Status | Notes                                                                                                                                        |
-| ----------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0.1 Scaffold, auth, session storage, shop-scoped Prisma, CI | ⚠      | Code and automated tests complete and green. Embedded-admin state walkthrough is blocked in this environment — see QA-REPORT 0.1 open items. |
-| 0.2 Webhook framework, audit log, i18n EN/AR                | ⚠      | Code and automated tests complete and green. Same embedded-admin walkthrough open item as 0.1. See QA-REPORT 0.2.                            |
-| 0.3 Billing: plans, gate middleware, Plans page             | ⚠      | Plan ladder resolved. Three parity items deferred with reasons; billing not yet run against real Shopify. See QA-REPORT 0.3.                 |
+## Next up
 
-## Phase 1 — Pricing engine + Pricing page
+- 3.1 Wholesale order list (order webhooks, placed-via attribution), order limits, quantity increments
+- 3.2 Net terms: eligibility, pay-later via draft orders, ledger with aging, reminders
+- 3.3 Quotes and draft orders: request pipeline, expiry, accept link, price locking
+- 3.4 Quick order storefront blocks, inside the ≤10-point Lighthouse budget
+- 4.1 AI infrastructure: client, streaming, timeouts, audit hooks
+- 4.2 Rule-from-a-sentence, margin guard
+- 4.3 Registration screening, drafted emails, segments, CSV whisperer
+- 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order
+- 4.5 Home page assembled, Setup Wizard
+- 5.1–5.3 Storefront Buyer Agent · 6.1–6.3 Analytics, Settings, polish · 7.1–7.3 Release
 
-| Task                                                        | Status |
-| ----------------------------------------------------------- | ------ |
-| 1.1 `packages/pricing-engine` (golden vectors first)        | ☑      |
-| 1.2 Shopify discount Function wired to the engine           | ⚠      |
-| 1.3 Pricing page: rule list, builder, priority/combinations | ⚠      |
-| 1.4 CSV import/export with dry-run and undo                 | ⚠      |
+## Blocked
 
-## Phase 2 — Customers & Forms
+- **Everything admin-facing, for visual verification** — `shopify.dev` and
+  `cdn.shopify.com` are unreachable from this environment (org network policy),
+  so Polaris `s-*` elements never upgrade and no admin screen has ever been seen
+  as a merchant sees it. **Unblocker:** network egress to those two hosts, or a
+  session on `mannon-9iu9ewku.myshopify.com`. Meanwhile: every screen is a
+  props-only component whose states are rendered and captured to `qa/<task>/`.
+  Not blocking any task — 0.1 through 2.3 all shipped — but nothing in the admin
+  has a visual pass.
+- **`shopify app deploy` and the dev-store run** — same unblocker. The discount
+  Function has never run at a real checkout, the theme block has never rendered
+  in a real theme, and the Admin API mutations are asserted by request shape
+  against fakes rather than exercised. Carried since 1.2.
+- **Nothing scans uploaded files.** Needs a virus-scanning service. Until then
+  `FormUpload.scannedAt` stays null and the admin says "not virus-scanned"
+  rather than implying otherwise. Downloads are attachments, `nosniff`,
+  sandboxed, behind the admin session.
+- **No email has actually been sent.** The transport is real (Resend over HTTP,
+  or `MANNON_EMAIL_TRANSPORT=log`), but there is no `MANNON_RESEND_API_KEY` here.
+  **Unblocker:** that key. The request shape is asserted; the response is not.
+  Every message the app would send is recorded in `EmailMessage` either way.
+- **`ANTHROPIC_API_KEY` is not set.** Needed from 4.1. Everything AI is built to
+  degrade to the manual path without it, so this blocks verification, not work.
 
-| Task                                                              | Status |
-| ----------------------------------------------------------------- | ------ |
-| 2.1 Customer sync, groups, tagging, approved-buyers list          | ⚠      |
-| 2.2 Registration form builder, theme block, VIES, spam protection | ⚠      |
-| 2.3 Approval pipeline: queue, emails, auto-approval evaluator     | ⚠      |
+## Deferred on purpose, with the task that owns them
 
-## Phase 3 — Orders
+- **GDPR mandatory webhooks** (`customers/data_request`, `customers/redact`,
+  `shop/redact`) → 7.2. The framework and the job runner take each as a few
+  lines. **This is app-review blocking** — it cannot slip past 7.2.
+- **Retention jobs** → 7.2: `WebhookDelivery`, `FormEvent`, `EmailMessage`,
+  `RuleImportDraft`, archived `PricingRule`s past 30 days, and the 12-month
+  `AuditLog` window the checklist specifies.
+- **Per-variant price lists** → needs a `price_list` rule kind in the engine.
+  One rule per variant blows the 48KB metafield limit at roughly two hundred
+  variants. Blocks demo persona 2 in 7.1.
+- **Market scoping in the rule builder** → needs the Shopify Markets query,
+  which needs a store. The engine and storage support it; only the control is
+  withheld, so the admin cannot show a rule applying that checkout ignores.
+- **Plans page: discount-code field, ✦ Plan Advisor, export-on-downgrade** →
+  0.3 deferred the first two (redemption tracking; AI infrastructure); the third
+  now has something to export and can land with 6.2.
+- **Shopify B2B companies (Plus)** — locations and catalogs. Mannon's groups are
+  its own tiers; reconciling them needs a Plus store to look at.
+- **`.xlsx` import** → 4.3, with the CSV whisperer that makes an arbitrary sheet
+  meaningful. **Multi-step form pages, address autocomplete, QR codes** → each
+  needs a second place to resolve conditional visibility, or a third-party
+  service.
 
-| Task                                                            | Status |
-| --------------------------------------------------------------- | ------ |
-| 3.1 Wholesale order list, order limits, quantity increments     | ☐      |
-| 3.2 Net terms: eligibility, pay-later, ledger, reminders        | ☐      |
-| 3.3 Quotes & draft orders, expiry, price locking                | ☐      |
-| 3.4 Quick order storefront blocks (≤10-point Lighthouse budget) | ☐      |
+## Open questions for the user
 
-## Phase 4 — AI layer (admin)
+Neither is blocking; both would change product decisions if answered.
 
-| Task                                                                | Status |
-| ------------------------------------------------------------------- | ------ |
-| 4.1 AI infrastructure: client, streaming, timeouts, audit hooks     | ☐      |
-| 4.2 Rule-from-a-sentence + margin guard                             | ☐      |
-| 4.3 Registration screening, drafted emails, segments, CSV whisperer | ☐      |
-| 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order            | ☐      |
-| 4.5 Home page assembled + Setup Wizard                              | ☐      |
+1. **Product framing.** `docs/spec/brand.md` describes a narrower quote →
+   counter → accept → reorder product that "rides Shopify's native B2B and
+   prices on draft orders — it never rebuilds tax, totals, or checkout". The
+   other three specs describe a full wholesale-pricing suite, and 1.2 built a
+   discount Function that prices at checkout. The build follows the three specs.
+   See `DECISIONS.md`, 2026-09-07.
+2. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
 
-## Phase 5 — Storefront Buyer Agent
+## Notes for my next self
 
-| Task                                            | Status |
-| ----------------------------------------------- | ------ |
-| 5.1 Agent service on the shopping-agent harness | ☐      |
-| 5.2 Chat widget theme extension                 | ☐      |
-| 5.3 Conversation log, takeover, tier upsell     | ☐      |
-
-## Phase 6 — Analytics, Settings, polish
-
-| Task                                                        | Status |
-| ----------------------------------------------------------- | ------ |
-| 6.1 Analytics: events, charts, funnel, aging, ask-your-data | ☐      |
-| 6.2 Settings: all sections, agent controls, danger zone     | ☐      |
-| 6.3 States sweep, Web Vitals pass, accessibility pass       | ☐      |
-
-## Phase 7 — Release
-
-| Task                                               | Status |
-| -------------------------------------------------- | ------ |
-| 7.1 Demo store seeding (3 personas, nightly reset) | ☐      |
-| 7.2 Listing assets, GDPR webhooks, retention jobs  | ☐      |
-| 7.3 Full regression + Built for Shopify self-audit | ☐      |
-
----
-
-## Decisions taken
-
-- **A rejection always carries a reason, and undo is not a decision** — undo
-  lasts ten seconds and takes back what the approval added, but never deletes a
-  Shopify customer. Reversing an approval after that means rejecting the buyer,
-  with a reason. `docs/adr/0013`.
-- **Auto-approval is off by default, needs every criterion, and stops deciding
-  if it cannot read one** — dropping a criterion makes the rule wider, and a
-  wider rule approves people the merchant never meant to. `docs/adr/0013`.
-- **Notification emails are recorded before they are sent**, so "did they hear
-  from us?" does not depend on a provider's dashboard; and a failed send never
-  reverses the decision that asked for it. `docs/adr/0013`.
-- **There is one registration-form renderer, and the theme block frames it** —
-  a Liquid copy would be a second implementation of the code that decides
-  whether an application is accepted. The form works with JavaScript switched
-  off, and that path is exercised in a real browser. `docs/adr/0012`.
-- **Unverified is not invalid** — a VIES outage, a country it does not cover, or
-  a format we do not recognise all accept the applicant with a flag. Only VIES
-  answering "no" rejects one. `docs/adr/0012`.
-- **Shopify's customers are mirrored, not queried per request** — the buyers
-  list needs filters, sorting and real pagination that the Admin API cannot
-  serve. Shopify stays the source of truth: every write goes there first, tags
-  through `tagsAdd`/`tagsRemove` so another app's tags survive. `docs/adr/0010`.
-- **Auto-tagging decides in a pure module and never runs on its own** — a tag is
-  what pricing rules target, so tagging someone changes what they pay. The
-  preview and the apply are the same function; there is no unattended sweep.
-  `docs/adr/0011`.
-- **CSV imports are planned before they are run**, and the dry run checks the
-  published size so an import cannot half-land at checkout. Undo removes exactly
-  what it created, for an hour. `docs/adr/0009`.
-- **Rules are stored in the engine's own wire shape**, so a database row becomes
-  an engine rule through the same code that reads the checkout ruleset. Saving
-  publishes; concurrency is version-checked. `docs/adr/0008`.
-- **Checkout reads a published ruleset from metafields**, because a Function
-  cannot call our API and its input query is fixed at deploy time. The Function
-  computes nothing itself. `docs/adr/0007`.
-- **The pricing engine is a pure, dependency-free package** and never converts
-  currency — an absolute-money rule in an unpriced currency is skipped, not
-  converted at a rate we invented. Money is integer minor units throughout.
-  `docs/adr/0006`.
-- **Plan ladder: Free · Pro $29 · Growth $59 · Agentic $99** (confirmed by the
-  user, 0.3). Pro is the entry paid tier and Growth the mid tier — not a typo.
-  Entitlements attach to the price point; `rank` in `app/lib/billing/plans.ts`
-  is the ordering, and nothing should infer one from the names.
-- **Shopify Billing API, not Managed Pricing** — the checklist's Plans page
-  (usage meters, downgrade impact preview, Plan Advisor) cannot live on a page
-  Shopify renders. `docs/adr/0005`.
-
-- **PostgreSQL in every environment**, not SQLite in dev — `docs/adr/0001`.
-- **Fail-closed tenant isolation** via a Prisma client extension — `docs/adr/0002`.
-- **Polaris web components** (`s-*`) over React Polaris, per the spec. `@shopify/polaris`
-  is not installed, so nothing can accidentally import the React components.
-- **i18n on i18next directly**, not through `remix-i18next` — `docs/adr/0003`.
-- **One webhook registry**, drift-tested against `shopify.app.toml`, and a
-  Postgres-backed job runner rather than a broker — `docs/adr/0004`.
-- **Scopes start minimal** (`read_products,read_customers,write_customers,read_orders,write_draft_orders,write_discounts`)
-  and each phase adds only what it needs, with a reason.
-
-## Open questions (blocking where noted)
-
-1. ~~**Plan ladder**~~ — resolved: Free · Pro $29 · Growth $59 · Agentic $99.
-
-   _Original question, for the record:_ The build prompt and `…pages-features.md` §9 say
-   Free / Growth $29 / Pro $59 / Agentic $99. `mannon-brand.md` §7 says
-   Free $0 / Starter $9 / Growth $29 / Scale $69, with Claude features unlocking at
-   Growth+. These are different products commercially — four tiers with the agent
-   at $99 versus at $69, and a $9 tier that does not exist in the other. Which is
-   current? Everything else in 0.3 (gate middleware, usage meters, the Plan Advisor's
-   honesty rules) is unaffected and can be built either way.
-
-2. **Product framing — non-blocking, worth confirming.** The three spec files
-   describe a broad wholesale-pricing suite (rules engine, forms, limits, terms).
-   `mannon-brand.md` describes a narrower quote → counter → accept → reorder product
-   that "rides Shopify's native B2B and prices on draft orders — it never rebuilds
-   tax, totals, or checkout". Phase 1.2 (a Shopify discount Function computing
-   wholesale prices at checkout) is the suite reading, not the brand-doc reading.
-   I am building to the three spec files; flagging so the divergence is a decision
-   rather than a drift.
-3. ~~**Hard dependencies of 1.3, created by 1.2**~~ — two resolved, one deferred:
-   - ☑ Saving now publishes: every create, update, archive and reorder pushes the
-     active ruleset to checkout.
-   - ☑ `$app:mannon.collections` is published from `products/update` and
-     `collections/update`, so collection targeting works at checkout.
-   - ☐ The country-to-market map is **not** built. Rather than let the admin and
-     checkout disagree, market scoping is simply not offered in the rule builder
-     — the engine and storage support it, only the control is withheld. Needs the
-     Shopify Markets query, which cannot be verified without a store.
-4. **Deferred from 0.3 on purpose:** the Plans page discount-code field (needs
-   redemption tracking to be real, rather than a field that swallows any code);
-   the ✦ Plan Advisor (needs the AI infrastructure from 4.1 and a month of usage
-   to be honest); and "export offered first" on downgrade (nothing exportable
-   exists until 1.4). Usage meters read zero until 1.3 and 2.2 fill in the two
-   counts, as the task specifies.
-5. **Deferred to 7.2 on purpose, recorded so they are not forgotten:** the three
-   mandatory GDPR compliance webhooks (`customers/data_request`,
-   `customers/redact`, `shop/redact`), pruning of `WebhookDelivery` rows, and the
-   12-month `AuditLog` retention the checklist specifies in §8. The framework and
-   the job runner take each of these as a few lines when that task comes.
-6. **Nothing scans uploaded files.** A service decision rather than a code one:
-   there is no virus scanner. The admin says "not virus-scanned" rather than
-   implying otherwise. **Email now has a transport** (Resend over HTTP, or a
-   log transport for development) but no provider key exists in this
-   environment, so no real message has ever been sent — every message the app
-   would send is recorded either way.
-7. **Shopify B2B companies (Plus) are not modelled.** `…pages-features.md` §3
-   lists companies, locations and catalogs. Mannon's groups are its own tiers.
-   Reconciling the two needs a Plus store to look at, so it is flagged rather
-   than guessed at.
-8. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
-   Left as-is — say the word if it should be renamed.
+- **Read `CLAUDE.md` first, then this file.** The specs are checked in at
+  `docs/spec/`; the architecture reasoning is in `docs/adr/` (thirteen so far).
+- **Postgres is not always running.** `service postgresql start`, then
+  `pg_isready`. Two databases: `mannon_dev` and `mannon_test`.
+- **Run `npm run build` before `npx playwright test`** — the e2e server serves
+  `build/`, and a stale build tests yesterday's code.
+- **`npm run qa:capture`** renders every state to `qa/<task>/` and screenshots
+  it. Adding a task means adding its state test to that script and a
+  `captureSuite("<task>")` line in `tests/e2e/qa-states.spec.ts`.
+- **The capture harness checks for raw i18n keys** on every capture. If a new
+  catalog root appears, add it to `CATALOG_ROOTS` in
+  `tests/support/state-capture.tsx`.
+- **The three recurring bug shapes**, all now guarded: English plural keys
+  written without `_one` (caught three times), boolean props on `s-*` elements
+  (twice), and a pluralised key called without `count`.
+- **Prisma promises are lazy.** They must be settled inside the ALS scope —
+  `settleInScope` in `app/lib/tenant/shop-context.server.ts` exists because of a
+  bug where the tenant was lost between building a query and awaiting it.
+- **A migration edited after it was applied** breaks `prisma migrate dev` with a
+  checksum error. Fix by updating the recorded checksum, not by resetting.
+- **GitHub is reachable** even though shopify.dev is not — `Shopify/function-examples`
+  was cloned for the authoritative Function schema rather than working from memory.

@@ -6,6 +6,7 @@ import { CustomerDetailPage } from "~/components/customers/CustomerDetailPage";
 import type { CustomerDetailView } from "~/components/customers/types";
 import { db } from "~/db.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
+import { translate } from "~/i18n/translate";
 import {
   changeGroup,
   existingTags,
@@ -40,7 +41,7 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
 
     const view: CustomerDetailView = {
       customer: {
-        ...toCustomerRowView(customer, { now, t: t as never }),
+        ...toCustomerRowView(customer, { now, t: translate(t) }),
         firstName: customer.firstName,
         lastName: customer.lastName,
         company: customer.company,

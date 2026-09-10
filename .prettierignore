@@ -4,4 +4,10 @@ package-lock.json
 coverage
 playwright-report
 test-results
+
+# State captures: generated HTML and PNGs, not source.
 qa
+
+# The specs are checked in verbatim as the user supplied them. Reformatting
+# them would make the diff of a future revision unreadable.
+docs/spec/*.md

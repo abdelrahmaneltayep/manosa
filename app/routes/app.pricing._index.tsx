@@ -5,8 +5,8 @@ import { useLoaderData } from "@remix-run/react";
 import { RuleListPage } from "~/components/pricing/RuleListPage";
 import type { RuleListView } from "~/components/pricing/types";
 import { db } from "~/db.server";
-import { getFixedT } from "~/i18n.server";
-import { detectLocale } from "~/i18n.server";
+import { detectLocale, getFixedT } from "~/i18n.server";
+import { translate } from "~/i18n/translate";
 import { loadEntitlements } from "~/lib/billing/entitlements.server";
 import { RulesetTooLargeError } from "~/lib/pricing/ruleset.server";
 import {
@@ -41,7 +41,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 
     const view: RuleListView = {
       rows: page.rows.map((row) =>
-        toRowView(row, { now, duplicateNames: duplicates, t: t as never }),
+        toRowView(row, { now, duplicateNames: duplicates, t: translate(t) }),
       ),
       total: page.total,
       page: page.page,

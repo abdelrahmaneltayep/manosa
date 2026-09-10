@@ -1,4 +1,5 @@
 import { formatMoney, money } from "@mannon/pricing-engine";
+import type { Translate } from "~/i18n/translate";
 import type { Customer, CustomerGroup } from "@prisma/client";
 
 import type {
@@ -10,8 +11,6 @@ import type {
 import { AT_RISK_DAYS } from "~/lib/customers/customers.server";
 import type { StoredTagRule } from "~/lib/customers/tag-rules.server";
 import type { TagCondition } from "~/lib/customers/tagging";
-
-type Translate = (key: string, params?: Record<string, unknown>) => string;
 
 const DAY_MS = 86_400_000;
 

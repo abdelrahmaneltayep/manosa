@@ -6,6 +6,7 @@ import { GroupDetailPage } from "~/components/customers/GroupDetailPage";
 import type { GroupDetailView } from "~/components/customers/types";
 import { db } from "~/db.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
+import { translate } from "~/i18n/translate";
 import { CUSTOMERS_PAGE_SIZE } from "~/lib/customers/customers.server";
 import {
   DuplicateGroupHandleError,
@@ -46,11 +47,13 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
 
     const view: GroupDetailView = {
       group: {
-        ...toGroupRowView(group, { t: t as never, pricingRuleCount }),
+        ...toGroupRowView(group, { t: translate(t), pricingRuleCount }),
         description: group.description,
       },
-      sections: bundleSections(group, { t: t as never, pricingRuleCount }),
-      members: members.map((member) => toCustomerRowView(member, { now, t: t as never })),
+      sections: bundleSections(group, { t: translate(t), pricingRuleCount }),
+      members: members.map((member) =>
+        toCustomerRowView(member, { now, t: translate(t) }),
+      ),
       memberTotal: group.memberCount,
       page,
       pageSize: CUSTOMERS_PAGE_SIZE,

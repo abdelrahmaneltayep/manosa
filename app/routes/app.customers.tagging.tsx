@@ -6,6 +6,7 @@ import { useLoaderData } from "@remix-run/react";
 import { TagRulesPage } from "~/components/customers/TagRulesPage";
 import type { TagRuleListView } from "~/components/customers/types";
 import { detectLocale, getFixedT } from "~/i18n.server";
+import { translate } from "~/i18n/translate";
 import { loadEntitlements } from "~/lib/billing/entitlements.server";
 import { hasFeature } from "~/lib/billing/entitlements.server";
 import { isPlanGateError } from "~/lib/billing/gate.server";
@@ -42,7 +43,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     const preview = wantsPreview && !locked ? await previewTagRules(now) : null;
 
     const view: TagRuleListView = {
-      rows: rules.map((rule) => toTagRuleRowView(rule, t as never)),
+      rows: rules.map((rule) => toTagRuleRowView(rule, translate(t))),
       locked,
       requiredPlan: locked ? lowestPlanWithFeature("auto_tagging") : null,
       preview: preview
@@ -50,7 +51,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
             examined: preview.result.examined,
             changed: preview.result.changed,
             samples: preview.decisions.slice(0, PREVIEW_SAMPLES).map((entry) => ({
-              name: displayName(entry.customer, t as never),
+              name: displayName(entry.customer, translate(t)),
               add: entry.decision.add,
               remove: entry.decision.remove,
             })),
