@@ -25,6 +25,7 @@ import {
   listGroups,
   toHandle,
 } from "~/lib/customers/groups.server";
+import type { CustomerNode } from "~/lib/customers/admin-graphql.server";
 import {
   factsFromNode,
   factsFromWebhook,
@@ -126,12 +127,18 @@ async function installShop(shop: string, planKey = "pro") {
   );
 }
 
-const node = (overrides: Record<string, unknown> = {}) => ({
+/**
+ * Typed, not `as never`: this fixture is the only description of Shopify's
+ * customer node in the tests, and an untyped one let a schema change through
+ * silently — the deprecated `email`/`phone` move would have dropped every
+ * synced buyer's address without a single test failing.
+ */
+const node = (overrides: Partial<CustomerNode> = {}): CustomerNode => ({
   id: "gid://shopify/Customer/1",
-  email: "buyer@acme.test",
+  defaultEmailAddress: { emailAddress: "buyer@acme.test" },
+  defaultPhoneNumber: { phoneNumber: "+966500000000" },
   firstName: "Sam",
   lastName: "Reed",
-  phone: null,
   state: "ENABLED",
   taxExempt: false,
   tags: ["wholesale"],
@@ -168,9 +175,12 @@ afterAll(async () => {
 
 describe("reading Shopify's customer", () => {
   it("narrows a GraphQL node to money in minor units", () => {
-    const facts = factsFromNode(node() as never);
+    const facts = factsFromNode(node());
     expect(facts.lifetimeSpend).toEqual(parseMoney("1200.50", "USD"));
     expect(facts.orderCount).toBe(4);
+    // The join key to everything: approvals, terms, the buyer's own prices.
+    expect(facts.email).toBe("buyer@acme.test");
+    expect(facts.phone).toBe("+966500000000");
     expect(facts.company).toBe("Acme Ltd");
     expect(facts.countryCode).toBe("SA");
     expect(facts.state).toBe("enabled");
@@ -212,8 +222,8 @@ describe("mirroring customers", () => {
   it("is idempotent: the same delivery twice makes one row", async () => {
     await installShop(ALPHA);
     await inAlpha(async () => {
-      await upsertCustomer(factsFromNode(node() as never));
-      await upsertCustomer(factsFromNode(node() as never));
+      await upsertCustomer(factsFromNode(node()));
+      await upsertCustomer(factsFromNode(node()));
       expect(await db.customer.count()).toBe(1);
     });
   });
@@ -225,11 +235,11 @@ describe("mirroring customers", () => {
     await installShop(ALPHA);
     await inAlpha(async () => {
       await Promise.all([
-        upsertCustomer(factsFromNode(node() as never)),
+        upsertCustomer(factsFromNode(node())),
         upsertCustomer(
           factsFromWebhook({ id: 1, total_spent: "5.00", currency: "USD" })!,
         ),
-        upsertCustomer(factsFromNode(node() as never)),
+        upsertCustomer(factsFromNode(node())),
       ]);
 
       expect(await db.customer.count()).toBe(1);
@@ -239,7 +249,7 @@ describe("mirroring customers", () => {
   it("keeps a last-order date a later webhook does not know", async () => {
     await installShop(ALPHA);
     await inAlpha(async () => {
-      await upsertCustomer(factsFromNode(node() as never));
+      await upsertCustomer(factsFromNode(node()));
       // The customer webhook carries no last-order date; overwriting with null
       // would make an active buyer look like they never ordered.
       await upsertCustomer(factsFromWebhook({ id: 1, total_spent: "1300.00" })!);
@@ -252,11 +262,11 @@ describe("mirroring customers", () => {
   it("clears the deleted flag when Shopify sends the customer again", async () => {
     await installShop(ALPHA);
     await inAlpha(async () => {
-      await upsertCustomer(factsFromNode(node() as never));
+      await upsertCustomer(factsFromNode(node()));
       await markCustomerDeleted("gid://shopify/Customer/1");
       expect((await db.customer.findFirst())?.deletedInShopifyAt).not.toBeNull();
 
-      await upsertCustomer(factsFromNode(node() as never));
+      await upsertCustomer(factsFromNode(node()));
       expect((await db.customer.findFirst())?.deletedInShopifyAt).toBeNull();
     });
   });

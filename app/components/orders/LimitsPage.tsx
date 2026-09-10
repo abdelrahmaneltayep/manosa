@@ -23,6 +23,8 @@ export function LimitsPage({ view }: { view: LimitsView }) {
             {t("orders.list.tabLimits")}
           </s-link>
           <s-link href="/app/orders/terms">{t("orders.list.tabTerms")}</s-link>
+          <s-link href="/app/orders/quotes">{t("orders.list.tabQuotes")}</s-link>
+          <s-link href="/app/orders/po">{t("orders.list.tabPo")}</s-link>
         </s-stack>
       </s-section>
 

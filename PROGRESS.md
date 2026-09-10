@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T14:55:00Z
+Updated: 2026-09-10T15:40:00Z
 Current milestone: 4 — Claude
-Current task: 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order [in progress]
+Current task: 4.5 Home page assembled, Setup Wizard [in progress]
 
 ## Done
 
@@ -23,10 +23,10 @@ Current task: 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order [in progr
 - [x] 4.1 AI infrastructure: client, streaming, timeouts, audit hooks — commit `b8136b5` — QA: `qa/4.1/REPORT.md`
 - [x] 4.2 Rule-from-a-sentence, margin guard — commit `d45f02b` — QA: `qa/4.2/REPORT.md`
 - [x] 4.3 Screening, drafted emails, segments, CSV whisperer — commit `be3c6d0` — QA: `qa/4.3/REPORT.md`
+- [x] 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order — commit `PENDING` — QA: `qa/4.4/REPORT.md` (gate clean; independent cold read outstanding)
 
 ## Next up
 
-- 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order
 - 4.5 Home page assembled, Setup Wizard
 - 5.1–5.3 Storefront Buyer Agent · 6.1–6.3 Analytics, Settings, polish · 7.1–7.3 Release
 
@@ -67,6 +67,9 @@ Current task: 4.4 Merchant Agent briefing, Ask Mannon bar, PO-to-order [in progr
   session exists, the query shape and the minor-unit conversion are pinned
   against a fake admin and nothing else. With the scope missing the guard says
   "costs could not be checked", which is the right thing for it to say.
+- **No briefing has ever been written by Claude, and no purchase order read.**
+  Both need the key. The facts a briefing points at are computed and tested;
+  the model's part is driven through an injected client.
 - **`ANTHROPIC_API_KEY` is not set.** The 4.1 infrastructure is built and
   tested against an injected stub, and the product works without a key — but
   **no call has ever been made to Anthropic**, so no prompt in this app has
@@ -159,6 +162,16 @@ Neither is blocking; both would change product decisions if answered.
   only ever emit an id it was given, so a forged payload reads as an unanswered
   question rather than a leak. Reuse the pattern for every later feature that
   names a merchant's objects.
+- **Every GraphQL operation in this app is now schema-validated.** 4.4 ran all
+  29 through Shopify's own validator (the AI Toolkit's MCP server, which works
+  here even though `shopify.dev` does not). All valid. Two deprecations found
+  and fixed: `Customer.email` → `defaultEmailAddress.emailAddress` and
+  `Customer.phone` → `defaultPhoneNumber.phoneNumber`. Re-validate after
+  writing a new query — it is the only check on them that is not a guess.
+- **A test fixture typed `as never` is a fixture the compiler never checks.**
+  The customer node fixture was untyped, so the deprecated-field migration
+  above changed every synced buyer's email to null and _no test failed_. It is
+  now `CustomerNode` and asserts the email and phone it produces.
 - **A Remix action's `json({ view })` is NOT what the component renders.** A
   non-redirect action response re-runs the loader, so a component reading only
   `useLoaderData` throws away everything the action computed. Five routes had
@@ -198,6 +211,11 @@ Neither is blocking; both would change product decisions if answered.
   through `tests/support/liquid-stand-in.ts`. Adding a Liquid construct a block
   uses may need adding to the stand-in — it renders unknown tags as nothing, so
   a gap shows up as missing markup in a capture.
+- **Two `npm test` runs at once corrupt each other.** They share one
+  `mannon_test` database and each `resetDatabase()` truncates it, so a
+  concurrent run fails in unrelated files and looks like a real regression.
+  4.4 hit this while a QA subagent ran the suite in parallel. Re-run a single
+  file to tell contention from a genuine break.
 - **`npm test` needs Postgres running**, and it stops between sessions:
   `service postgresql start`, then `pg_isready`. The failure looks like "No test
   files found", not like a database error.

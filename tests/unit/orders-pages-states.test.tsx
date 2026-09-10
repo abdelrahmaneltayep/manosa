@@ -624,3 +624,16 @@ describe("the terms ledger", () => {
     capture("terms-ledger-ar", html, "ar");
   });
 });
+
+describe("the orders tab bar", () => {
+  it("reaches every page in the section", () => {
+    const html = render(<OrderListPage view={listView()} />);
+
+    // Quotes shipped in 3.3 with no way to reach it from here, and ✦ PO-to-order
+    // would have shipped the same way. Both are asserted now.
+    expect(html).toContain('href="/app/orders/limits"');
+    expect(html).toContain('href="/app/orders/terms"');
+    expect(html).toContain('href="/app/orders/quotes"');
+    expect(html).toContain('href="/app/orders/po"');
+  });
+});

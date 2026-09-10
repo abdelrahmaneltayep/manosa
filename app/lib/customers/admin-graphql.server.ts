@@ -15,10 +15,16 @@ export const CUSTOMER_PAGE_SIZE = 250;
 
 const CUSTOMER_FIELDS = `
     id
-    email
+    # Customer.email and Customer.phone are deprecated in favour of these two
+    # objects; validated against the live Admin schema, 2026-09-10.
+    defaultEmailAddress {
+      emailAddress
+    }
+    defaultPhoneNumber {
+      phoneNumber
+    }
     firstName
     lastName
-    phone
     state
     taxExempt
     tags
@@ -111,10 +117,11 @@ const CUSTOMER_CREATE = `#graphql
 /** What a customer looks like coming back from the Admin API. */
 export interface CustomerNode {
   id: string;
-  email: string | null;
+  /** Shopify's replacements for the deprecated `email` and `phone` fields. */
+  defaultEmailAddress: { emailAddress: string | null } | null;
+  defaultPhoneNumber: { phoneNumber: string | null } | null;
   firstName: string | null;
   lastName: string | null;
-  phone: string | null;
   state: string | null;
   taxExempt: boolean | null;
   tags: string[] | null;

@@ -157,6 +157,10 @@ test.describe("Screening, segments and column-mapping states", () => {
   captureSuite("4.3");
 });
 
+test.describe("Merchant Agent, Ask bar and PO-to-order states", () => {
+  captureSuite("4.4");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)

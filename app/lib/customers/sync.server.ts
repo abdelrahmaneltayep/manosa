@@ -65,11 +65,11 @@ export function factsFromNode(node: CustomerNode): CustomerFacts {
 
   return {
     customerId: node.id,
-    email: trimmed(node.email),
+    email: trimmed(node.defaultEmailAddress?.emailAddress),
     firstName: trimmed(node.firstName),
     lastName: trimmed(node.lastName),
     company: trimmed(node.defaultAddress?.company),
-    phone: trimmed(node.phone),
+    phone: trimmed(node.defaultPhoneNumber?.phoneNumber),
     countryCode: trimmed(node.defaultAddress?.countryCodeV2)?.toUpperCase() ?? null,
     province: trimmed(node.defaultAddress?.provinceCode),
     tags: normalizeTags(node.tags ?? []),

@@ -19,6 +19,7 @@ export function QuoteListPage({ view }: { view: QuoteListView }) {
           <s-link href="/app/orders/quotes" aria-current="page">
             {t("orders.list.tabQuotes")}
           </s-link>
+          <s-link href="/app/orders/po">{t("orders.list.tabPo")}</s-link>
         </s-stack>
       </s-section>
 

@@ -8,6 +8,48 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-10 — The briefing may not write a number, and the reader enforces it
+
+`readBriefing` refuses any reason containing a digit. The app renders its own
+figure beside every line, recomputed on each page load, so a second number
+written by the model is the one that can be wrong — and it would be the one a
+merchant reads. It also makes staleness honest: because nothing stored holds a
+figure, yesterday's briefing renders today's numbers under yesterday's
+timestamp. Rejected: asking the model nicely not to (a prompt is a request, not
+a rule), and letting it quote figures we then diff against ours (twice the work
+and still a screen with two numbers on it).
+
+## 2026-09-10 — ⌘J does not focus the Ask bar
+
+The checklist asks for it. It needs a client-side key listener, and every admin
+screen here is a props-only component with no client JavaScript — which is the
+only reason any of their states can be exercised in an environment with no
+Polaris and no Shopify session. Shipping an untestable listener into an embedded
+iframe, where the host may well intercept the chord anyway, is worse than not
+shipping it. Flagged as a user-visible gap. Rejected: an inline script in the
+route (untestable here), and `accessKey` (a different chord, and a worse one).
+
+## 2026-09-10 — PO-to-order reads text; PDFs and spreadsheets get the fallback
+
+The checklist's dropzone takes pdf/xlsx/csv/eml. Neither a PDF parser nor a
+spreadsheet reader is in the fixed stack, and adding one is a stack change this
+file cannot make on its own. A file that cannot be read as text produces the
+checklist's _own_ error state — "Couldn't read this PDF — paste the lines as
+text?" — which is reached honestly rather than by omission, and the textarea
+beside it always works. Rejected: adding pdf-parse and xlsx (a stack change, and
+two more dependencies parsing hostile input), and silently accepting the upload
+and failing later.
+
+## 2026-09-10 — The Ask bar routes; it has no intent that writes
+
+Claude maps a question to one of nine intents; eight are reads and the ninth
+produces a link. There is no code path from the bar to a write, so "delete all
+my rules" cannot execute — not because the prompt forbids it, but because the
+destination does not exist. Rejected: a write intent behind a confirmation
+dialog (a confirm is a UI, and a UI is not a security boundary), and letting the
+model compose a query (an injection surface with the merchant's whole database
+behind it).
+
 ## 2026-09-10 — Screening compares the website, and never fetches it
 
 Checklist §3 says "Checking website & VAT". The VAT half is real (VIES, from

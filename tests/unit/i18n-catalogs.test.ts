@@ -128,6 +128,10 @@ describe("translation catalogs", () => {
       // A quantity range chip: "10–49", "50+". Digits and punctuation only.
       "describe.chip.from",
       "describe.chip.range",
+      // The home page's heading is the merchant's own shop name.
+      "home.heading",
+      // "12 × SKU-1" — a quantity, a multiplication sign, and their own words.
+      "po.requested",
     ]);
     const untranslated = Object.keys(EN).filter(
       (key) => !allowed.has(key) && AR[key] !== undefined && EN[key] === AR[key],

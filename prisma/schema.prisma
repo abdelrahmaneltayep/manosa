@@ -43,9 +43,9 @@ model Session {
 /// soft-closed by the app/uninstalled webhook (Phase 0.2) so we keep the
 /// install history without keeping PII.
 model Shop {
-  id            String    @id @default(cuid())
+  id            String  @id @default(cuid())
   /// The myshopify.com domain. Tenant key for every other table.
-  shop          String    @unique
+  shop          String  @unique
   /// Shopify's own GID for the shop, e.g. "gid://shopify/Shop/1234". Needed to
   /// own a shop metafield; read once and cached because it never changes.
   shopGid       String?
@@ -54,7 +54,12 @@ model Shop {
   countryCode   String?
   currencyCode  String?
   ianaTimezone  String?
-  primaryLocale String    @default("en")
+  primaryLocale String  @default("en")
+
+  /// Briefing item kinds the merchant has asked not to see again — the
+  /// checklist's per-type mute list. Kinds, not items: "don't show me this
+  /// type again" is about the type.
+  briefingMuted String[]
   installedAt   DateTime  @default(now())
   uninstalledAt DateTime?
   /// Set by the Danger zone "pause app" control (Settings, Phase 6.2).
@@ -1259,4 +1264,33 @@ model CustomerSegment {
 
   @@unique([shop, name])
   @@index([shop, updatedAt])
+}
+
+/// One morning's briefing from the Merchant Agent.
+///
+/// Kept rather than regenerated on view, for three reasons: the checklist's
+/// "AI down → yesterday's is here" needs a yesterday to show; a briefing that
+/// changed every time the page was refreshed would not be something a merchant
+/// could act on; and generating one costs a model call the shop pays for.
+///
+/// The items hold **kinds and reasons**, never figures. Every number on the
+/// screen is recomputed from the database when the page renders, so a stale
+/// briefing shows a stale timestamp and fresh numbers rather than the other
+/// way round — see docs/adr/0021.
+model MerchantBriefing {
+  id   String @id @default(cuid())
+  shop String
+
+  /// `BriefingItem[]` from app/lib/ai/prompts/briefing.server.ts.
+  items Json
+  /// True when the facts were there but nothing deserved the merchant — the
+  /// designed "All quiet" state, which is different from never having run.
+  quiet Boolean @default(false)
+
+  generatedAt     DateTime @default(now())
+  aiModel         String?
+  aiPromptVersion String?
+  aiRequestId     String?
+
+  @@index([shop, generatedAt])
 }

@@ -284,3 +284,63 @@ export interface QuoteDetailView {
     searched: boolean;
   };
 }
+
+/* -------------------------------------------------------------------------- */
+/* ✦ PO-to-order                                                               */
+/* -------------------------------------------------------------------------- */
+
+export interface PoLineView {
+  index: number;
+  /** What the document asked for, in the buyer's own words. */
+  requested: string;
+  quantity: number;
+  confidence: "exact" | "likely" | "ambiguous" | "none";
+  /** The matched product, when there is one. */
+  matched: string | null;
+  sku: string | null;
+  /** The contract price, from the engine. Formatted, or null. */
+  unitPrice: string | null;
+  lineTotal: string | null;
+  /** What the document claimed, and by how much it differs. */
+  statedPrice: string | null;
+  priceDelta: string | null;
+  /** Which rule set this price. */
+  ruleSummary: string | null;
+  /** For an ambiguous line: what the merchant picks between. */
+  candidates: { id: string; label: string; sku: string | null }[];
+}
+
+export interface PurchaseOrderView {
+  /** False with no key, or on a plan without PO-to-order. */
+  available: boolean;
+  /** The reason the composer is off, when it is. */
+  locked: "no_key" | "plan" | null;
+  /** What the merchant pasted, echoed back. */
+  text: string;
+  /** Set when a file could not be read as text — the checklist's fallback. */
+  fileError: "unreadable" | "too_large" | null;
+  failure:
+    | "no_key"
+    | "timeout"
+    | "rate_limited"
+    | "refused"
+    | "invalid_output"
+    | "error"
+    | "empty"
+    | null;
+  /** The buyer this is being priced for. Null until one is chosen. */
+  buyer: { id: string; label: string } | null;
+  buyers: { id: string; label: string }[];
+  lines: PoLineView[];
+  /** Recomputed from Mannon rules, never from the document. */
+  subtotal: string | null;
+  /** The buyer's own PO number, for the draft order's note. */
+  reference: string | null;
+  notes: string | null;
+  /** Lines that are not an exact match. Approving needs them dealt with. */
+  needsAttention: number;
+  /** Carried back on every round trip. */
+  payload: string;
+  /** Set once a draft order exists. */
+  created: { name: string; invoiceUrl: string | null } | null;
+}

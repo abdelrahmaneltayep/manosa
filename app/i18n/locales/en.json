@@ -1275,7 +1275,8 @@
       "next": "Next",
       "pageOf": "Page {{page}} of {{pageCount}}",
       "tabTerms": "Payment terms",
-      "tabQuotes": "Quotes"
+      "tabQuotes": "Quotes",
+      "tabPo": "PO to order"
     },
     "source": {
       "STOREFRONT": "Storefront",
@@ -1751,6 +1752,214 @@
       "tax_exempt": "Tax-exempt",
       "tax_liable": "Not tax-exempt",
       "status": "Status {{status}}"
+    }
+  },
+  "home": {
+    "heading": "{{shop}}",
+    "briefing": {
+      "heading": "✦ This morning",
+      "loading": "Reading your shop…",
+      "mute": "Not this again",
+      "stale": "Written {{when}}",
+      "emptyHeading": "✦ I'm the Merchant Agent",
+      "emptyBody": "Each morning I'll tell you what needs you. There's nothing to go on yet — here's what I'll be watching.",
+      "willWatch1": "Applications waiting, and anything about one worth a second look.",
+      "willWatch2": "Invoices going past their terms, and buyers who have gone quiet.",
+      "quietHeading": "All quiet",
+      "quietBody": "Nothing needs you today.",
+      "unavailableHeading": "Briefing unavailable",
+      "unavailableWithOld": "Today's could not be written, so this is the last one. The figures beside it are current.",
+      "unavailableAlone": "Today's could not be written, and there is no earlier one to show. Nothing else on this page is affected.",
+      "offHeading": "✦ The Merchant Agent is off",
+      "offBody": "It needs the Merchant Agent on your plan and an Anthropic key. Everything else in Mannon works without it.",
+      "figure": {
+        "applications_waiting_one": "{{count}} application",
+        "applications_waiting_other": "{{count}} applications",
+        "screening_flagged_one": "{{count}} flagged",
+        "screening_flagged_other": "{{count}} flagged",
+        "invoices_overdue_one": "{{count}} invoice overdue",
+        "invoices_overdue_other": "{{count}} invoices overdue",
+        "invoices_overdueAmount_one": "{{amount}} overdue on {{count}} invoice",
+        "invoices_overdueAmount_other": "{{amount}} overdue on {{count}} invoices",
+        "credit_exceeded_one": "{{count}} buyer over their limit",
+        "credit_exceeded_other": "{{count}} buyers over their limit",
+        "quotes_expiring_one": "{{count}} quote expiring",
+        "quotes_expiring_other": "{{count}} quotes expiring",
+        "orders_needing_resync_one": "{{count}} order out of step",
+        "orders_needing_resync_other": "{{count}} orders out of step",
+        "rules_unused_one": "{{count}} unused rule",
+        "rules_unused_other": "{{count}} unused rules",
+        "no_active_rules": "No rules are live",
+        "buyers_gone_quiet_one": "{{count}} buyer has gone quiet",
+        "buyers_gone_quiet_other": "{{count}} buyers have gone quiet",
+        "wholesale_week_one": "{{count}} wholesale order this week",
+        "wholesale_week_other": "{{count}} wholesale orders this week",
+        "wholesale_weekAmount_one": "{{amount}} from {{count}} order this week",
+        "wholesale_weekAmount_other": "{{amount}} from {{count}} orders this week",
+        "form_never_opened_one": "{{count}} form nobody has opened",
+        "form_never_opened_other": "{{count}} forms nobody has opened",
+        "uploads_unscanned_one": "{{count}} file not scanned",
+        "uploads_unscanned_other": "{{count}} files not scanned"
+      },
+      "action": {
+        "review": "Review",
+        "chase": "Chase",
+        "open": "Open",
+        "createRule": "Create a rule",
+        "share": "Share the link"
+      }
+    },
+    "ask": {
+      "heading": "✦ Ask Mannon",
+      "label": "Ask about your wholesale business",
+      "action": "Ask",
+      "examplesHeading": "For example:",
+      "example1": "Who owes me money?",
+      "example2": "How many buyers have gone quiet?",
+      "example3": "What did I sell to wholesale last week?",
+      "offHeading": "✦ Ask Mannon is off",
+      "offBody": "It needs the Merchant Agent on your plan and an Anthropic key.",
+      "seeAll": "See all of it",
+      "take-me": "Take me there",
+      "builderNote": "Mannon does not change anything from here — this opens the page where you do it.",
+      "reformulation1": "Who owes me money?",
+      "reformulation2": "Which quotes expire this week?",
+      "reformulation3": "How many applications are waiting?",
+      "failure": {
+        "no_key": {
+          "heading": "Ask Mannon is off",
+          "body": "This store has no Anthropic key."
+        },
+        "timeout": {
+          "heading": "That took too long",
+          "body": "Ask again — nothing was changed."
+        },
+        "rate_limited": {
+          "heading": "Too many questions just now",
+          "body_one": "Try again in {{count}} second.",
+          "body_other": "Try again in {{count}} seconds."
+        },
+        "refused": {
+          "heading": "I didn't catch that",
+          "body": "Try one of these instead:"
+        },
+        "invalid_output": {
+          "heading": "I didn't catch that",
+          "body": "Try one of these instead:"
+        },
+        "error": {
+          "heading": "Something went wrong",
+          "body": "Ask again. Nothing was changed."
+        },
+        "empty": {
+          "heading": "Ask me something",
+          "body": "A short question about your buyers, orders, quotes or rules."
+        }
+      }
+    }
+  },
+  "ask": {
+    "answer": {
+      "count_buyers_one": "You have {{count}} approved wholesale buyer.",
+      "count_buyers_other": "You have {{count}} approved wholesale buyers.",
+      "count_applications_one": "{{count}} application is waiting for you.",
+      "count_applications_other": "{{count}} applications are waiting for you.",
+      "list_overdue_one": "{{count}} invoice is overdue — {{amount}} outstanding.",
+      "list_overdue_other": "{{count}} invoices are overdue — {{amount}} outstanding.",
+      "list_expiring_quotes_one": "{{count}} quote expires in the next {{days}} days.",
+      "list_expiring_quotes_other": "{{count}} quotes expire in the next {{days}} days.",
+      "wholesale_sales_one": "{{amount}} across {{count}} wholesale order in the last {{days}} days.",
+      "wholesale_sales_other": "{{amount}} across {{count}} wholesale orders in the last {{days}} days.",
+      "list_quiet_buyers_one": "{{count}} buyer has not ordered in {{days}} days.",
+      "list_quiet_buyers_other": "{{count}} buyers have not ordered in {{days}} days.",
+      "find_rule_one": "{{count}} rule matches “{{search}}”.",
+      "find_rule_other": "{{count}} rules match “{{search}}”.",
+      "explain_price": "Prices depend on who is buying — open the price explainer and pick the buyer for {{sku}} at {{quantity}}.",
+      "open_builder": {
+        "pricing_rule": "That's a change to your pricing — here's where you make it.",
+        "segment": "That's a segment — here's where you build one.",
+        "form": "That's a change to your registration form.",
+        "quote": "That's a quote — here's where you draft one.",
+        "csv_import": "That's an import — here's where you upload the file.",
+        "customer_group": "That's a change to your customer groups."
+      }
+    }
+  },
+  "po": {
+    "heading": "✦ Purchase order to draft order",
+    "composerHeading": "Paste the order",
+    "buyerLabel": "Who is this for?",
+    "buyerHelp": "Their contract prices are what gets used.",
+    "noBuyer": "No buyer — use list prices",
+    "textLabel": "The purchase order",
+    "textHelp": "Paste the email or the lines. Claude reads what was ordered; Mannon prices it.",
+    "fileLabel": "Or upload a file (.csv, .txt, .eml)",
+    "readAction": "✦ Read the order",
+    "seePlans": "See plans",
+    "reviewHeading": "What was ordered",
+    "pricesAreOurs": "Every price here comes from your own rules. Nothing the document says about price is charged.",
+    "notesHeading": "What Claude assumed",
+    "needsAttention_one": "{{count}} line needs you",
+    "needsAttention_other": "{{count}} lines need you",
+    "needsAttentionBody": "Nothing has been left out. Pick what each one was, or create the order without them.",
+    "requested": "{{quantity}} × {{what}}",
+    "matched": "Matched: {{title}} ({{sku}})",
+    "unmatched": "Nothing in your catalogue matched this line.",
+    "contractPrice": "{{unit}} each · {{total}}",
+    "priceDelta": "The document says {{stated}}; your contract price is {{contract}} — a difference of {{delta}}.",
+    "whichOne": "Which one did they mean?",
+    "useThis": "Use this",
+    "subtotal": "Subtotal at your prices: {{amount}}",
+    "createAction": "Create the draft order",
+    "createdHeading": "Draft order {{name}} created",
+    "createdBody": "It is in Shopify with your contract prices on every line. Edit or invoice it there.",
+    "openInvoice": "Open it in Shopify",
+    "confidence": {
+      "exact": "Exact SKU",
+      "likely": "One match",
+      "ambiguous": "Several matches",
+      "none": "No match"
+    },
+    "locked": {
+      "no_keyHeading": "✦ PO-to-order is off",
+      "no_keyBody": "This store has no Anthropic key. You can still build a draft order in Shopify by hand.",
+      "planHeading": "PO-to-order is on a bigger plan",
+      "planBody": "It reads a purchase order and turns it into a draft order at your contract prices."
+    },
+    "fileError": {
+      "unreadableHeading": "Couldn't read this file",
+      "too_largeHeading": "That file is too big",
+      "paste": "Paste the lines as text instead — that always works."
+    },
+    "failure": {
+      "no_key": {
+        "heading": "PO-to-order is off",
+        "body": "This store has no Anthropic key."
+      },
+      "timeout": {
+        "heading": "Claude did not answer in time",
+        "body": "Try again. Nothing was ordered."
+      },
+      "rate_limited": {
+        "heading": "Too many requests just now",
+        "body": "Wait a moment and try again."
+      },
+      "refused": {
+        "heading": "Claude did not read this one",
+        "body": "Paste just the order lines and try again."
+      },
+      "invalid_output": {
+        "heading": "That came back unusable",
+        "body": "Claude could not read order lines out of this, twice. Paste the lines on their own."
+      },
+      "error": {
+        "heading": "Reading it failed",
+        "body": "Try again. Nothing was ordered."
+      },
+      "empty": {
+        "heading": "Nothing to read",
+        "body": "Paste the order, or upload a file with the lines in it."
+      }
     }
   }
 }

@@ -22,6 +22,8 @@ export function LedgerPage({ view }: { view: LedgerView }) {
           <s-link href="/app/orders/terms" aria-current="page">
             {t("orders.list.tabTerms")}
           </s-link>
+          <s-link href="/app/orders/quotes">{t("orders.list.tabQuotes")}</s-link>
+          <s-link href="/app/orders/po">{t("orders.list.tabPo")}</s-link>
         </s-stack>
       </s-section>
 

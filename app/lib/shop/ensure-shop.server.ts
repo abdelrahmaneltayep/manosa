@@ -41,6 +41,14 @@ export async function ensureShopRecord() {
       runAt: new Date(),
       replacePending: true,
     });
+    // And the Merchant Agent's first briefing, which then re-enqueues itself
+    // daily. Nothing is written for a shop without the key or the plan — the
+    // home page says so rather than showing an empty card.
+    await enqueueJob({
+      kind: "agent.daily_briefing",
+      runAt: new Date(),
+      replacePending: true,
+    });
     return created;
   }
 

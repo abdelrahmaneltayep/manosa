@@ -1538,7 +1538,8 @@
       "next": "التالي",
       "pageOf": "صفحة {{page}} من {{pageCount}}",
       "tabTerms": "شروط الدفع",
-      "tabQuotes": "عروض الأسعار"
+      "tabQuotes": "عروض الأسعار",
+      "tabPo": "أمر شراء"
     },
     "source": {
       "STOREFRONT": "المتجر",
@@ -2128,6 +2129,302 @@
       "tax_exempt": "معفى من الضريبة",
       "tax_liable": "غير معفى من الضريبة",
       "status": "الحالة {{status}}"
+    }
+  },
+  "home": {
+    "heading": "{{shop}}",
+    "briefing": {
+      "heading": "✦ هذا الصباح",
+      "loading": "أقرأ متجرك…",
+      "mute": "لا تُظهر هذا مجددًا",
+      "stale": "كُتبت في {{when}}",
+      "emptyHeading": "✦ أنا وكيل التاجر",
+      "emptyBody": "كل صباح سأخبرك بما يحتاجك. لا توجد بيانات بعد — إليك ما سأراقبه.",
+      "willWatch1": "الطلبات المنتظرة، وأي طلب يستحق نظرة ثانية.",
+      "willWatch2": "الفواتير التي تتجاوز مواعيدها، والمشترون الذين توقفوا عن الطلب.",
+      "quietHeading": "كل شيء هادئ",
+      "quietBody": "لا شيء يحتاجك اليوم.",
+      "unavailableHeading": "الملخص غير متاح",
+      "unavailableWithOld": "تعذّرت كتابة ملخص اليوم، فهذا آخر ملخص. الأرقام بجانبه محدَّثة.",
+      "unavailableAlone": "تعذّرت كتابة ملخص اليوم، ولا يوجد ملخص سابق لعرضه. لا شيء آخر في هذه الصفحة يتأثر.",
+      "offHeading": "✦ وكيل التاجر متوقف",
+      "offBody": "يحتاج وكيل التاجر ضمن خطتك ومفتاح Anthropic. كل شيء آخر في مانون يعمل بدونه.",
+      "figure": {
+        "applications_waiting_zero": "لا طلبات",
+        "applications_waiting_one": "طلب واحد",
+        "applications_waiting_two": "طلبان",
+        "applications_waiting_few": "{{count}} طلبات",
+        "applications_waiting_many": "{{count}} طلبًا",
+        "applications_waiting_other": "{{count}} طلب",
+        "screening_flagged_zero": "لا شيء مُعلَّم",
+        "screening_flagged_one": "واحد مُعلَّم",
+        "screening_flagged_two": "اثنان مُعلَّمان",
+        "screening_flagged_few": "{{count}} مُعلَّمة",
+        "screening_flagged_many": "{{count}} مُعلَّمًا",
+        "screening_flagged_other": "{{count}} مُعلَّم",
+        "invoices_overdue_zero": "لا فواتير متأخرة",
+        "invoices_overdue_one": "فاتورة متأخرة",
+        "invoices_overdue_two": "فاتورتان متأخرتان",
+        "invoices_overdue_few": "{{count}} فواتير متأخرة",
+        "invoices_overdue_many": "{{count}} فاتورة متأخرة",
+        "invoices_overdue_other": "{{count}} فاتورة متأخرة",
+        "credit_exceeded_zero": "لا أحد تجاوز حده",
+        "credit_exceeded_one": "مشترٍ تجاوز حده",
+        "credit_exceeded_two": "مشتريان تجاوزا حدهما",
+        "credit_exceeded_few": "{{count}} مشترين تجاوزوا حدهم",
+        "credit_exceeded_many": "{{count}} مشتريًا تجاوزوا حدهم",
+        "credit_exceeded_other": "{{count}} مشترٍ تجاوز حده",
+        "quotes_expiring_zero": "لا عروض تنتهي",
+        "quotes_expiring_one": "عرض ينتهي قريبًا",
+        "quotes_expiring_two": "عرضان ينتهيان قريبًا",
+        "quotes_expiring_few": "{{count}} عروض تنتهي قريبًا",
+        "quotes_expiring_many": "{{count}} عرضًا ينتهي قريبًا",
+        "quotes_expiring_other": "{{count}} عرض ينتهي قريبًا",
+        "orders_needing_resync_zero": "لا طلبات خارج المزامنة",
+        "orders_needing_resync_one": "طلب خارج المزامنة",
+        "orders_needing_resync_two": "طلبان خارج المزامنة",
+        "orders_needing_resync_few": "{{count}} طلبات خارج المزامنة",
+        "orders_needing_resync_many": "{{count}} طلبًا خارج المزامنة",
+        "orders_needing_resync_other": "{{count}} طلب خارج المزامنة",
+        "rules_unused_zero": "لا قواعد غير مستخدمة",
+        "rules_unused_one": "قاعدة غير مستخدمة",
+        "rules_unused_two": "قاعدتان غير مستخدمتين",
+        "rules_unused_few": "{{count}} قواعد غير مستخدمة",
+        "rules_unused_many": "{{count}} قاعدة غير مستخدمة",
+        "rules_unused_other": "{{count}} قاعدة غير مستخدمة",
+        "buyers_gone_quiet_zero": "لا مشترين صامتين",
+        "buyers_gone_quiet_one": "مشترٍ توقف عن الطلب",
+        "buyers_gone_quiet_two": "مشتريان توقفا عن الطلب",
+        "buyers_gone_quiet_few": "{{count}} مشترين توقفوا عن الطلب",
+        "buyers_gone_quiet_many": "{{count}} مشتريًا توقفوا عن الطلب",
+        "buyers_gone_quiet_other": "{{count}} مشترٍ توقف عن الطلب",
+        "wholesale_week_zero": "لا طلبات جملة هذا الأسبوع",
+        "wholesale_week_one": "طلب جملة هذا الأسبوع",
+        "wholesale_week_two": "طلبا جملة هذا الأسبوع",
+        "wholesale_week_few": "{{count}} طلبات جملة هذا الأسبوع",
+        "wholesale_week_many": "{{count}} طلب جملة هذا الأسبوع",
+        "wholesale_week_other": "{{count}} طلب جملة هذا الأسبوع",
+        "form_never_opened_zero": "لا نماذج غير مفتوحة",
+        "form_never_opened_one": "نموذج لم يفتحه أحد",
+        "form_never_opened_two": "نموذجان لم يفتحهما أحد",
+        "form_never_opened_few": "{{count}} نماذج لم يفتحها أحد",
+        "form_never_opened_many": "{{count}} نموذجًا لم يفتحه أحد",
+        "form_never_opened_other": "{{count}} نموذج لم يفتحه أحد",
+        "uploads_unscanned_zero": "لا ملفات دون فحص",
+        "uploads_unscanned_one": "ملف لم يُفحص",
+        "uploads_unscanned_two": "ملفان لم يُفحصا",
+        "uploads_unscanned_few": "{{count}} ملفات لم تُفحص",
+        "uploads_unscanned_many": "{{count}} ملفًا لم يُفحص",
+        "uploads_unscanned_other": "{{count}} ملف لم يُفحص",
+        "no_active_rules": "لا قواعد مفعّلة",
+        "invoices_overdueAmount_zero": "لا شيء متأخر",
+        "invoices_overdueAmount_one": "{{amount}} متأخرة على فاتورة",
+        "invoices_overdueAmount_two": "{{amount}} متأخرة على فاتورتين",
+        "invoices_overdueAmount_few": "{{amount}} متأخرة على {{count}} فواتير",
+        "invoices_overdueAmount_many": "{{amount}} متأخرة على {{count}} فاتورة",
+        "invoices_overdueAmount_other": "{{amount}} متأخرة على {{count}} فاتورة",
+        "wholesale_weekAmount_zero": "لا مبيعات هذا الأسبوع",
+        "wholesale_weekAmount_one": "{{amount}} من طلب واحد هذا الأسبوع",
+        "wholesale_weekAmount_two": "{{amount}} من طلبين هذا الأسبوع",
+        "wholesale_weekAmount_few": "{{amount}} من {{count}} طلبات هذا الأسبوع",
+        "wholesale_weekAmount_many": "{{amount}} من {{count}} طلبًا هذا الأسبوع",
+        "wholesale_weekAmount_other": "{{amount}} من {{count}} طلب هذا الأسبوع"
+      },
+      "action": {
+        "review": "راجع",
+        "chase": "تابِع",
+        "open": "افتح",
+        "createRule": "أنشئ قاعدة",
+        "share": "شارك الرابط"
+      }
+    },
+    "ask": {
+      "heading": "✦ اسأل مانون",
+      "label": "اسأل عن تجارة الجملة لديك",
+      "action": "اسأل",
+      "examplesHeading": "على سبيل المثال:",
+      "example1": "من عليه مستحقات لي؟",
+      "example2": "كم مشتريًا توقف عن الطلب؟",
+      "example3": "كم بعت بالجملة الأسبوع الماضي؟",
+      "offHeading": "✦ «اسأل مانون» متوقف",
+      "offBody": "يحتاج وكيل التاجر ضمن خطتك ومفتاح Anthropic.",
+      "seeAll": "اعرض الكل",
+      "take-me": "خذني إلى هناك",
+      "builderNote": "لا يغيّر مانون شيئًا من هنا — هذا يفتح الصفحة التي تفعل ذلك فيها.",
+      "reformulation1": "من عليه مستحقات لي؟",
+      "reformulation2": "أي عروض تنتهي هذا الأسبوع؟",
+      "reformulation3": "كم طلب تسجيل ينتظر؟",
+      "failure": {
+        "no_key": {
+          "heading": "«اسأل مانون» متوقف",
+          "body": "لا يوجد مفتاح Anthropic لهذا المتجر."
+        },
+        "timeout": {
+          "heading": "استغرق ذلك وقتًا طويلًا",
+          "body": "اسأل مرة أخرى — لم يتغير شيء."
+        },
+        "rate_limited": {
+          "heading": "أسئلة كثيرة في وقت واحد",
+          "body_zero": "حاول مجددًا الآن.",
+          "body_one": "حاول مجددًا بعد ثانية.",
+          "body_two": "حاول مجددًا بعد ثانيتين.",
+          "body_few": "حاول مجددًا بعد {{count}} ثوانٍ.",
+          "body_many": "حاول مجددًا بعد {{count}} ثانية.",
+          "body_other": "حاول مجددًا بعد {{count}} ثانية."
+        },
+        "refused": {
+          "heading": "لم أفهم ذلك",
+          "body": "جرّب أحد هذه بدلًا منه:"
+        },
+        "invalid_output": {
+          "heading": "لم أفهم ذلك",
+          "body": "جرّب أحد هذه بدلًا منه:"
+        },
+        "error": {
+          "heading": "حدث خطأ ما",
+          "body": "اسأل مرة أخرى. لم يتغير شيء."
+        },
+        "empty": {
+          "heading": "اسألني شيئًا",
+          "body": "سؤال قصير عن مشتريك أو طلباتك أو عروضك أو قواعدك."
+        }
+      }
+    }
+  },
+  "ask": {
+    "answer": {
+      "count_buyers_zero": "لا مشترين معتمدين.",
+      "count_buyers_one": "لديك مشترٍ جملة معتمد واحد.",
+      "count_buyers_two": "لديك مشتريا جملة معتمدان.",
+      "count_buyers_few": "لديك {{count}} مشترين جملة معتمدين.",
+      "count_buyers_many": "لديك {{count}} مشتريًا جملة معتمدًا.",
+      "count_buyers_other": "لديك {{count}} مشترِ جملة معتمد.",
+      "count_applications_zero": "لا طلبات تنتظرك.",
+      "count_applications_one": "طلب واحد ينتظرك.",
+      "count_applications_two": "طلبان ينتظرانك.",
+      "count_applications_few": "{{count}} طلبات تنتظرك.",
+      "count_applications_many": "{{count}} طلبًا ينتظرك.",
+      "count_applications_other": "{{count}} طلب ينتظرك.",
+      "list_overdue_zero": "لا فواتير متأخرة.",
+      "list_overdue_one": "فاتورة واحدة متأخرة — {{amount}} مستحقة.",
+      "list_overdue_two": "فاتورتان متأخرتان — {{amount}} مستحقة.",
+      "list_overdue_few": "{{count}} فواتير متأخرة — {{amount}} مستحقة.",
+      "list_overdue_many": "{{count}} فاتورة متأخرة — {{amount}} مستحقة.",
+      "list_overdue_other": "{{count}} فاتورة متأخرة — {{amount}} مستحقة.",
+      "list_expiring_quotes_zero": "لا عروض تنتهي خلال {{days}} يومًا.",
+      "list_expiring_quotes_one": "عرض واحد ينتهي خلال {{days}} يومًا.",
+      "list_expiring_quotes_two": "عرضان ينتهيان خلال {{days}} يومًا.",
+      "list_expiring_quotes_few": "{{count}} عروض تنتهي خلال {{days}} يومًا.",
+      "list_expiring_quotes_many": "{{count}} عرضًا ينتهي خلال {{days}} يومًا.",
+      "list_expiring_quotes_other": "{{count}} عرض ينتهي خلال {{days}} يومًا.",
+      "wholesale_sales_zero": "لا مبيعات جملة خلال {{days}} يومًا.",
+      "wholesale_sales_one": "{{amount}} من طلب جملة واحد خلال {{days}} يومًا.",
+      "wholesale_sales_two": "{{amount}} من طلبي جملة خلال {{days}} يومًا.",
+      "wholesale_sales_few": "{{amount}} من {{count}} طلبات جملة خلال {{days}} يومًا.",
+      "wholesale_sales_many": "{{amount}} من {{count}} طلب جملة خلال {{days}} يومًا.",
+      "wholesale_sales_other": "{{amount}} من {{count}} طلب جملة خلال {{days}} يومًا.",
+      "list_quiet_buyers_zero": "لا مشترين توقفوا عن الطلب خلال {{days}} يومًا.",
+      "list_quiet_buyers_one": "مشترٍ واحد لم يطلب منذ {{days}} يومًا.",
+      "list_quiet_buyers_two": "مشتريان لم يطلبا منذ {{days}} يومًا.",
+      "list_quiet_buyers_few": "{{count}} مشترين لم يطلبوا منذ {{days}} يومًا.",
+      "list_quiet_buyers_many": "{{count}} مشتريًا لم يطلب منذ {{days}} يومًا.",
+      "list_quiet_buyers_other": "{{count}} مشترٍ لم يطلب منذ {{days}} يومًا.",
+      "find_rule_zero": "لا قواعد تطابق «{{search}}».",
+      "find_rule_one": "قاعدة واحدة تطابق «{{search}}».",
+      "find_rule_two": "قاعدتان تطابقان «{{search}}».",
+      "find_rule_few": "{{count}} قواعد تطابق «{{search}}».",
+      "find_rule_many": "{{count}} قاعدة تطابق «{{search}}».",
+      "find_rule_other": "{{count}} قاعدة تطابق «{{search}}».",
+      "explain_price": "تعتمد الأسعار على من يشتري — افتح شارح الأسعار واختر المشتري لـ {{sku}} عند {{quantity}}.",
+      "open_builder": {
+        "pricing_rule": "هذا تغيير في تسعيرك — من هنا تجريه.",
+        "segment": "هذه شريحة — من هنا تبنيها.",
+        "form": "هذا تغيير في نموذج التسجيل.",
+        "quote": "هذا عرض سعر — من هنا تكتب مسودته.",
+        "csv_import": "هذا استيراد — من هنا ترفع الملف.",
+        "customer_group": "هذا تغيير في مجموعات العملاء."
+      }
+    }
+  },
+  "po": {
+    "heading": "✦ من أمر الشراء إلى مسودة طلب",
+    "composerHeading": "الصق أمر الشراء",
+    "buyerLabel": "لمن هذا الطلب؟",
+    "buyerHelp": "أسعار عقده هي المستخدمة.",
+    "noBuyer": "بلا مشترٍ — استخدم أسعار القائمة",
+    "textLabel": "أمر الشراء",
+    "textHelp": "الصق الرسالة أو السطور. يقرأ كلود ما طُلب، ويسعّره مانون.",
+    "fileLabel": "أو ارفع ملفًا (‎.csv، ‎.txt، ‎.eml)",
+    "readAction": "✦ اقرأ الطلب",
+    "seePlans": "اطّلع على الخطط",
+    "reviewHeading": "ما طُلب",
+    "pricesAreOurs": "كل سعر هنا من قواعدك أنت. لا يُحتسب ما يقوله المستند عن الأسعار.",
+    "notesHeading": "ما افترضه كلود",
+    "needsAttention_zero": "لا سطور تحتاجك",
+    "needsAttention_one": "سطر واحد يحتاجك",
+    "needsAttention_two": "سطران يحتاجانك",
+    "needsAttention_few": "{{count}} سطور تحتاجك",
+    "needsAttention_many": "{{count}} سطرًا يحتاجك",
+    "needsAttention_other": "{{count}} سطر يحتاجك",
+    "needsAttentionBody": "لم يُحذف شيء. اختر ما يقصده كل سطر، أو أنشئ الطلب بدونها.",
+    "requested": "{{quantity}} × {{what}}",
+    "matched": "مطابق: {{title}} ({{sku}})",
+    "unmatched": "لا شيء في كتالوجك يطابق هذا السطر.",
+    "contractPrice": "{{unit}} للوحدة · {{total}}",
+    "priceDelta": "يقول المستند {{stated}}؛ سعر عقدك {{contract}} — بفارق {{delta}}.",
+    "whichOne": "أيهما يقصدون؟",
+    "useThis": "استخدم هذا",
+    "subtotal": "المجموع بأسعارك: {{amount}}",
+    "createAction": "أنشئ مسودة الطلب",
+    "createdHeading": "أُنشئت مسودة الطلب {{name}}",
+    "createdBody": "هي في Shopify بأسعار عقدك على كل سطر. عدّلها أو أصدر فاتورتها هناك.",
+    "openInvoice": "افتحها في Shopify",
+    "confidence": {
+      "exact": "رمز مطابق",
+      "likely": "تطابق واحد",
+      "ambiguous": "عدة تطابقات",
+      "none": "لا تطابق"
+    },
+    "locked": {
+      "no_keyHeading": "✦ الميزة متوقفة",
+      "no_keyBody": "لا يوجد مفتاح Anthropic لهذا المتجر. لا يزال بإمكانك إنشاء مسودة طلب في Shopify يدويًا.",
+      "planHeading": "هذه الميزة ضمن خطة أكبر",
+      "planBody": "تقرأ أمر الشراء وتحوّله إلى مسودة طلب بأسعار عقدك."
+    },
+    "fileError": {
+      "unreadableHeading": "تعذّرت قراءة هذا الملف",
+      "too_largeHeading": "هذا الملف كبير جدًا",
+      "paste": "الصق السطور كنص بدلًا من ذلك — هذا ينجح دائمًا."
+    },
+    "failure": {
+      "no_key": {
+        "heading": "الميزة متوقفة",
+        "body": "لا يوجد مفتاح Anthropic لهذا المتجر."
+      },
+      "timeout": {
+        "heading": "لم يجب كلود في الوقت المحدد",
+        "body": "أعد المحاولة. لم يُطلب شيء."
+      },
+      "rate_limited": {
+        "heading": "طلبات كثيرة في وقت واحد",
+        "body": "انتظر لحظة ثم أعد المحاولة."
+      },
+      "refused": {
+        "heading": "لم يقرأ كلود هذا",
+        "body": "الصق سطور الطلب وحدها وأعد المحاولة."
+      },
+      "invalid_output": {
+        "heading": "عادت غير صالحة",
+        "body": "لم يستطع كلود قراءة سطور طلب من هذا، مرتين. الصق السطور وحدها."
+      },
+      "error": {
+        "heading": "فشلت القراءة",
+        "body": "أعد المحاولة. لم يُطلب شيء."
+      },
+      "empty": {
+        "heading": "لا شيء لقراءته",
+        "body": "الصق أمر الشراء، أو ارفع ملفًا يحتوي السطور."
+      }
     }
   }
 }
