@@ -878,3 +878,24 @@ rather than typed out inside the prompt. It was a hand-kept list: adding
 never told the chart existed, so no question could ever route to it. That is the
 same failure as `CATALOG_ROOTS`, `qa:capture`'s file list and the audit action
 picker. `PROMPT_VERSIONS.ask_data` goes to "2" because the prompt changed.
+
+## 2026-09-11 — A buyer's redaction deletes their records and redacts the merchant's
+
+`customers/redact` deletes everything that exists only because of the buyer —
+their application, the files they uploaded, the mail sent to them, their
+conversations with the agent, their customer row. It **redacts** their orders
+and quotes instead of deleting them: the name, company, email and customer id
+come off, and the fact that an order of that value happened on that day stays.
+
+Deleting them outright is the more thorough-looking answer and the wrong one.
+An order is the merchant's own accounting document, the merchant is the
+controller, and erasing it would tear a hole in the revenue figures of a
+business still trading to satisfy a request the law does not make of them.
+
+The shop-wide purge does the opposite — orders go whole — for the same reason
+read the other way: there is no merchant left to be trading on them.
+
+Rejected: deleting orders on a buyer redaction (above), and redacting rather
+than deleting on a shop purge (it would leave a shop's whole order history
+sitting in this app for ever after they uninstalled, under copy promising it
+was gone in 48 hours).

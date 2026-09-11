@@ -8,6 +8,9 @@ import { handleOrdersEdited } from "~/lib/webhooks/handlers/orders-edited.server
 import { handleOrdersUpsert } from "~/lib/webhooks/handlers/orders-upsert.server";
 import { handleProductsUpdate } from "~/lib/webhooks/handlers/products-update.server";
 import { handleAppUninstalled } from "~/lib/webhooks/handlers/app-uninstalled.server";
+import { handleCustomersDataRequest } from "~/lib/webhooks/handlers/customers-data-request.server";
+import { handleCustomersRedact } from "~/lib/webhooks/handlers/customers-redact.server";
+import { handleShopRedact } from "~/lib/webhooks/handlers/shop-redact.server";
 
 /**
  * Payloads are Shopify's, not ours — handlers narrow what they actually read
@@ -121,6 +124,34 @@ export const WEBHOOK_SUBSCRIPTIONS: readonly WebhookSubscription[] = [
     description:
       "Refresh membership for the products in a collection whose rules changed.",
     handler: handleCollectionsUpdate,
+  },
+  // Shopify's three mandatory privacy topics. Every app in the store must
+  // subscribe to all three and answer them; an app that does not is refused at
+  // review, and more to the point a merchant who promised their buyers a
+  // deletion needs it to have happened.
+  {
+    topic: "customers/data_request",
+    uri: "/webhooks/customers/data-request",
+    description:
+      "A buyer has asked what this shop holds about them. Counted and written " +
+      "to the audit log for the merchant to answer from.",
+    handler: handleCustomersDataRequest,
+  },
+  {
+    topic: "customers/redact",
+    uri: "/webhooks/customers/redact",
+    description:
+      "Delete one buyer: their application, files, mail and conversations, and " +
+      "their name and address off the merchant's own order records.",
+    handler: handleCustomersRedact,
+  },
+  {
+    topic: "shop/redact",
+    uri: "/webhooks/shop/redact",
+    description:
+      "Shopify's own signal that the 48 hours after an uninstall are up. Runs " +
+      "the same purge `app/uninstalled` scheduled, now.",
+    handler: handleShopRedact,
   },
   {
     topic: "shop/update",

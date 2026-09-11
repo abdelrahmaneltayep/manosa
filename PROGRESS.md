@@ -2,7 +2,7 @@
 
 Updated: 2026-09-11T18:30:00Z
 Current milestone: 6 — Analytics
-Current task: 6.7 polish [done] · 7.1 Release [next]
+Current task: 7.2 privacy [done] · 7.1 / 7.3 release [next]
 
 ## Done
 
@@ -42,6 +42,8 @@ Current task: 6.7 polish [done] · 7.1 Release [next]
 - [x] 6.7 (part) Orders over time — an eighth chart, counts not money, with its own whole-number axis — commit `7dcd13e` — QA: `qa/6.7/REPORT.md`. Closes the `pages-features.md` §7 line deferred at 6.2. The ✦ chart menu was a hand-kept list **inside the prompt**: adding a chart to `CHART_KEYS` satisfied the validator while the model was never told it existed, so nothing could route to it. Generated from an exhaustive record now, with a test.
 
 - [x] 6.7 (part two) The three things that were registered and never built — the reorder chip (hardcoded `false` since 2.1), the net-terms risk signal (`terms_risk`: a prompt version, no prompt, no caller, no screen) and the widget greeting's tier and last order (open since 5.2) — commit `e9b2703` — QA: `qa/6.7/REPORT.md`. **Neither chip needed a model**: both are arithmetic on rows this app already stores, so `reorder_prediction` and `terms_risk` are deleted from the AI registry rather than left as names for features that do not exist. Found on the way: the Buyer Agent block was at **99.2% of its byte budget** because the guard counted `{% comment %}` and `{% schema %}`, neither of which Shopify ever serves — so the budget was pushing against documenting storefront code.
+
+- [x] 7.2 (part) Privacy — Shopify's three mandatory topics (`customers/data_request`, `customers/redact`, `shop/redact`), which this app subscribed to **none** of, and a shop purge that finally reaches the buyers — commit `PENDING` — QA: `qa/7.2/REPORT.md`. The purge cleared the *merchant's* two contact fields and left every buyer's name, address, phone, VAT number, form answers, uploaded documents and every message sent to them behind, under copy promising deletion within 48 hours. `tests/unit/privacy-coverage.test.ts` reads the schema and fails the build when a table holding personal data is not named by the purge or unreachable by a single buyer's redaction — every exemption written down with its reason.
 
 ## Next up
 
@@ -510,3 +512,10 @@ Neither is blocking; both would change product decisions if answered.
   like, and a merchant could read the reply above the question.
   `AgentMessage.seq` is the total order now. Anywhere two rows can share a
   timestamp, ordering by that timestamp is not an ordering.
+- **A Shopify customer id is the same value in every shop that person bought
+  from.** So one merchant's deletion request must never reach another's record
+  of the same human being. Three tests in `tests/integration/privacy.test.ts`
+  seed the same buyer in two shops and check exactly that.
+- **Uploaded files are rows** (`FormUpload.content` is `Bytes`), so deleting the
+  row is the whole deletion. If they ever move to object storage, every
+  deletion path in `app/lib/privacy/` and the shop purge needs a second half.
