@@ -391,13 +391,36 @@ describe("recordPayment", () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
-      const order = await seedOrder({ refundedAmount: 30000 });
+      // As the writer stores it: Shopify's `current_total_price` already has
+      // the refund taken off, so a $1,000 order refunded $300 arrives as
+      // `totalPrice: 70000` **beside** `refundedAmount: 30000`. The previous
+      // version of this fixture set the refund on a row still carrying the
+      // gross total — a combination the writer cannot produce — and so it
+      // encoded the double-subtraction rather than catching it.
+      const order = await seedOrder({ totalPrice: 70000, refundedAmount: 30000 });
       const { order: settled } = await recordPayment(
         order.id,
         { amount: 70000, receivedAt: NOW, reference: null },
         { actor },
       );
       expect(settled.paidAt).not.toBeNull();
+    });
+  });
+
+  it("does not settle an invoice on a payment short of the refunded total", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      const order = await seedOrder({ totalPrice: 70000, refundedAmount: 30000 });
+      const { order: part } = await recordPayment(
+        order.id,
+        { amount: 40000, receivedAt: NOW, reference: null },
+        { actor },
+      );
+
+      // Subtracting the refund twice would have made $40,000 settle a $70,000
+      // invoice, and told the merchant they had been paid in full.
+      expect(part.paidAt).toBeNull();
     });
   });
 

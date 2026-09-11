@@ -16,6 +16,7 @@ import { money, zero, type Money } from "@mannon/pricing-engine";
 import type { Customer, CustomerGroup, Order } from "@prisma/client";
 
 import { db } from "~/db.server";
+import { amountOwed } from "~/lib/orders/totals";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 
 /**
@@ -58,12 +59,19 @@ export function termsAreOverridden(buyer: BuyerWithGroup): boolean {
   return buyer.netTermsDays !== null && (buyer.group?.netTermsDays ?? null) !== null;
 }
 
-/** An order as the ledger sees it. */
+/**
+ * An order as the ledger sees it.
+ *
+ * `totalPrice` alone. It is written from Shopify's `current_total_price`,
+ * which already has the refund taken off it, so subtracting `refundedAmount`
+ * here charged the refund twice and showed the merchant **less** owed than
+ * they were owed — on the one screen whose whole job is chasing money.
+ */
 export function toInvoice(order: Order): Invoice {
   return {
     id: order.id,
     name: order.name,
-    amount: money(order.totalPrice - order.refundedAmount, order.currencyCode),
+    amount: money(order.totalPrice, order.currencyCode),
     paid: money(order.amountPaid, order.currencyCode),
     dueAt: order.netTermsDueAt,
     paidAt: order.paidAt,
@@ -149,6 +157,6 @@ export function publishableTerms(
 
 /** What is still owed on one order. */
 export function balanceOfOrder(order: Order): Money {
-  const remaining = order.totalPrice - order.refundedAmount - order.amountPaid;
+  const remaining = amountOwed(order);
   return remaining > 0 ? money(remaining, order.currencyCode) : zero(order.currencyCode);
 }

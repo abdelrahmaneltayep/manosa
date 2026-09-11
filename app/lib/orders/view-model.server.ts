@@ -1,4 +1,5 @@
 import type { AgingSummary } from "@mannon/net-terms";
+import { amountOwed } from "~/lib/orders/totals";
 import { formatMoney, money } from "@mannon/pricing-engine";
 import type { Order, OrderLimit } from "@prisma/client";
 
@@ -193,10 +194,7 @@ export function toLedgerRowView(
   options: { shop: string; now: Date; t: Translate; locale?: string; canRemind: boolean },
 ): LedgerRowView {
   const { t, now, locale } = options;
-  const balance = money(
-    Math.max(0, order.totalPrice - order.refundedAmount - order.amountPaid),
-    order.currencyCode,
-  );
+  const balance = money(amountOwed(order), order.currencyCode);
   const late = order.netTermsDueAt ? wholeDaysBetween(order.netTermsDueAt, now) : 0;
 
   return {

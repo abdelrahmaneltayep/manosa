@@ -127,12 +127,18 @@ export function rows(
   const slot = box.height / values.length;
   const height = Math.max(0.5, slot - gap);
 
-  return values.map((value, index) => ({
-    x: box.x,
-    y: box.y + index * slot + (slot - height) / 2,
-    width: Math.max(0, Math.min(1, value / max)) * box.width,
-    height,
-  }));
+  return values.map((value, index) => {
+    const width = Math.max(0, Math.min(1, value / max)) * box.width;
+    return {
+      x: box.x,
+      y: box.y + index * slot + (slot - height) / 2,
+      // A nib rather than nothing. On a top-ten with one dominant row the tail
+      // rendered as a column of floating numbers beside marks 0.07 of a pixel
+      // wide — a row that is present in the data is a row with a mark.
+      width: value > 0 ? Math.max(MIN_MARK, width) : 0,
+      height,
+    };
+  });
 }
 
 /**
@@ -150,19 +156,40 @@ export function line(
   const max = options.max ?? niceMax(values);
 
   if (values.length === 0) return [];
-  // A single point sits in the middle rather than at the left edge, where it
-  // would read as the start of a line that is not there.
-  const step = values.length === 1 ? 0 : box.width / (values.length - 1);
-  const x0 = values.length === 1 ? box.x + box.width / 2 : box.x;
 
   return values.map((value, index) => ({
-    x: x0 + index * step,
+    x: dayX(index, values.length, plot),
     y: box.y + box.height - Math.max(0, Math.min(1, value / max)) * box.height,
   }));
 }
 
+/**
+ * Where the nth of `count` days sits along the axis.
+ *
+ * The single source for the line's points, the day labels and the annotation
+ * rules. They used to use three different formulas — the line spanning edge to
+ * edge over `n − 1` gaps, the labels and the rules at the centres of `n` slots
+ * — so every point was drawn half a slot from the day it belonged to, and an
+ * annotation reading "the app arrived here" pointed somewhere else.
+ */
+export function dayX(index: number, count: number, plot: Plot = PLOT): number {
+  const box = inner(plot);
+  if (count <= 0) return box.x;
+  if (count === 1) return box.x + box.width / 2;
+  return box.x + (index * box.width) / (count - 1);
+}
+
 export const polyline = (points: readonly { x: number; y: number }[]): string =>
   points.map((point) => `${round(point.x)},${round(point.y)}`).join(" ");
+
+/**
+ * The shortest a bar may be and still be seen.
+ *
+ * Half a viewBox unit is about three pixels on a 660px card. A row whose value
+ * is genuinely zero still draws nothing — the floor is for small, not for
+ * absent.
+ */
+export const MIN_MARK = 0.5;
 
 /** Two decimal places is finer than any screen renders, and keeps the DOM small. */
 export const round = (value: number): number => Math.round(value * 100) / 100;

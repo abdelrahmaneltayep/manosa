@@ -3,6 +3,19 @@
 Hat: senior QA engineer who did not write this code and does not trust it.
 Date: 2026-09-11 · Branch: `claude/mannon-b2b-wholesale-oc5b18`
 
+> **Status: clean pass, after a FAIL and a full fix round.** The independent
+> cold read returned **FAIL** on twenty findings, three of them P0: every money
+> figure on the page subtracted the refund twice, a shop with real sales was
+> shown invented numbers whenever the window was quiet, and the aging chart
+> contradicted `/app/orders/terms` by construction. All twenty are fixed;
+> `qa/6.2/COLD-READ.md` has the evidence and §8 below summarises. This is the
+> second run.
+>
+> The refund bug was **not confined to 6.2**: the same expression appeared in
+> seven places across three milestones, including the net-terms ledger, where
+> it showed a merchant *less* owed than they were. All seven now go through one
+> definition in `app/lib/orders/totals.ts`.
+
 ## 1. Scope
 
 Checklist §7's charts and their states: wholesale vs retail revenue over time,
@@ -132,9 +145,73 @@ totals direct-labelled, and every chart ships with its data table beside it.
    The gating code and its two view fields were removed rather than left dead —
    see `DECISIONS.md`.
 
+## 8. What the cold read found, and what changed
+
+Twenty findings, all fixed. The evidence and seven reproducible probes are in
+`qa/6.2/COLD-READ.md` and `qa/6.2/probes/`.
+
+**The three P0s.**
+
+1. **Every money figure subtracted the refund twice.** `Order.totalPrice` is
+   written from Shopify's `current_total_price`, which is *already* net of
+   refunds — so `totalPrice - refundedAmount` removed it again. A $100 order
+   with $40 refunded read as $20.00 on the analytics page, $60.00 on Home,
+   $60.00 on the Orders list and $65.00 on the products chart. Four numbers for
+   one order, three of them on screens a merchant can open side by side. The
+   same expression was in seven places including `toInvoice` and the ledger
+   query — fixed everywhere, through one definition.
+2. **A shop with real sales was shown invented numbers.** `hasAnyData` read
+   *window-scoped* totals despite its own comment saying otherwise, so a shop
+   with a year of history and a quiet `?range=7` got the worked example, and
+   clicking between the range links made their business appear and disappear.
+   Worse: a shop whose window was all in another currency got the example
+   *and* lost the banner explaining the zero. It is now a window-independent
+   query, and the example is refused outright whenever a caveat is set.
+3. **The aging chart could not agree with the ledger.** It was filtered by
+   `processedAt` in the window, while an aging report is about invoices issued
+   long ago — so $1,400 of overdue money read as "Nothing in this window", and
+   in a 30-day window the "over 30 days late" bucket was mathematically
+   unreachable. It is now queried the way the ledger queries it, with no
+   window, and the card says "as of today". A test asserts the two agree
+   bucket for bucket.
+
+**The rest**, briefly: the funnel's last step counted cancelled orders placed
+before the application (100% conversion claimed); "Last 7 days" drew 8 bars
+whose first was a half-day at full width; the products and rules charts are
+line-level and never said so; in Arabic every value label was drawn *across*
+its own bar, because the default `text-anchor` resolves to the right edge in
+RTL; the revenue chart had no value axis, no markers and no tooltips; the
+trend line, day labels and annotation rules used three different x formulas, so
+every point sat half a slot from the day it named; annotation labels ran off
+the chart and overlapped each other; the example state put all card text and
+seven links below AA; a ranked row could render a bar 0.07px wide; "everyone
+else" was drawn as though it were a buyer; §7's required loading skeleton did
+not exist; the loader scanned every line twice with no ceiling; AOV was in
+`pages-features.md` and nowhere in the app; and the revenue CSV shipped bare
+minor units under a column headed "Wholesale".
+
+**Two process findings, which are why this shipped.** Both tests guarding the
+P0s could not fail:
+
+- the refund test hand-injected `refundedAmount` onto a row the writer can
+  never produce — verbatim the anti-pattern `docs/adr/0024`'s own addendum
+  named *one task earlier*;
+- the test named for the quiet-window case asserted against a **different
+  window** than the one it set up.
+
+Both were rewritten first and watched go red before anything was fixed. A third
+test of the same shape was then found in `tests/integration/terms.test.ts` and
+rewritten too — it had encoded the refund bug rather than catching it.
+
+**And the captures claimed more than they contained**: five of eleven PNGs were
+byte-identical, and `10-analytics-90-days` was the 30-day data, so no capture
+had ever rendered a 31- or 91-point chart — which is why the label collisions
+were never seen. There are now 16 captures from 13 distinct renders, including
+a real 31-point month, a 91-point quarter, a recent-install annotation, the
+long tail, the skeleton and the capped window.
+
 ## 7. Open, not passed
 
-- **No cold read yet.**
 - **No merchant has seen this page.** Polaris never upgrades here. What is
   different from every previous task: **the marks themselves are ours**, so the
   SVG in these captures is byte-for-byte what a browser gets, and bar geometry,
@@ -154,4 +231,12 @@ totals direct-labelled, and every chart ships with its data table beside it.
   `read_all_orders`, so a 90-day window shows what it has. The footer says so.
 - **Nothing has been measured against the Built for Shopify budgets.** The page
   ships no client JS and one inline `<style>`, which is the right shape for LCP
-  and CLS, but the numbers are unmeasured.
+  and CLS, but the numbers are unmeasured. The loader now reads its lines once
+  instead of twice and caps at 5,000 orders per view, saying so when it does —
+  but the 10k-order store Appendix A asks for has still never been tried.
+- **Orders-over-time is still missing.** `pages-features.md` §7 asks for
+  "wholesale vs. retail revenue, AOV, orders over time";
+  `feature-checklist.md` §7 lists neither AOV nor an order-count series. AOV is
+  now on the page. An order-count series is a second chart with its own axis
+  (never a second axis on the revenue chart), and is deferred with a written
+  decision rather than left unsaid — see `DECISIONS.md`.

@@ -8,6 +8,34 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-11 — `Order.totalPrice` is already net of refunds, and there is now one place that says so
+
+The cold read on 6.2 found `totalPrice - refundedAmount` in seven places across
+three milestones — analytics, the Home KPI card, the orders view model, the
+net-terms ledger and `toInvoice`. `totalPrice` is written from Shopify's
+`current_total_price`, which already has the refund taken off, so every one of
+them removed it twice. On the ledger that meant showing a merchant **less**
+owed than they were, on the one screen whose job is chasing money.
+`app/lib/orders/totals.ts` is now the single definition: `orderRevenue` is
+`totalPrice`, `amountOwed` is `totalPrice - amountPaid`, and a gross figure — if
+one is ever wanted — is `totalPrice + refundedAmount`, not the other way round.
+Three tests that had encoded the bug were rewritten from the writer's own
+output first, and watched go red.
+
+## 2026-09-11 — Orders-over-time is deferred; AOV is not
+
+`pages-features.md` §7 asks for "Wholesale vs. retail revenue, **AOV**, orders
+over time". `feature-checklist.md` §7 — the file `CLAUDE.md` names as settling
+required states — lists neither. Per stop condition 6, both lines are quoted
+here rather than silently picked between.
+
+AOV is one division away from figures already on the page and is now a stat
+line under the revenue chart — a single current value is a stat, not a one-bar
+chart. An order-count series is a different measure on a different scale, so it
+is a **second chart**, never a second axis on the revenue one; it is deferred to
+6.5 rather than bolted on during a fix round, and recorded in `PROGRESS.md` so
+it is not lost.
+
 ## 2026-09-11 — The analytics page is not plan-gated
 
 `feature-checklist.md` §7 lists the charts, the CSV exports and the aging report

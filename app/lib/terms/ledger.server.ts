@@ -3,6 +3,7 @@ import { parseMoney, type Money } from "@mannon/pricing-engine";
 import type { Order } from "@prisma/client";
 
 import { db } from "~/db.server";
+import { orderRevenue } from "~/lib/orders/totals";
 import { recordAudit, type AuditActor } from "~/lib/audit/record.server";
 import { assertFeature } from "~/lib/billing/gate.server";
 import { publishBuyerFacts } from "~/lib/pricing/buyer-facts.server";
@@ -79,7 +80,7 @@ export async function recordPayment(
   }
 
   const paid = order.amountPaid + input.amount;
-  const settled = paid >= order.totalPrice - order.refundedAmount;
+  const settled = paid >= orderRevenue(order);
 
   const [payment, updated] = await db.$transaction([
     db.payment.create({

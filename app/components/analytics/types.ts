@@ -61,6 +61,15 @@ export interface AnnotationView {
 }
 
 export interface AnalyticsView {
+  /**
+   * The window is still being read.
+   *
+   * Checklist §7 asks for "skeleton chart + tiles". Real here rather than
+   * theoretical: the range picker does full navigations against a loader that
+   * runs seven queries, so there is a moment with nothing on screen.
+   */
+  loading: boolean;
+
   /** 7, 30 or 90. */
   range: number;
   ranges: number[];
@@ -82,8 +91,14 @@ export interface AnalyticsView {
   excludedOrders: number;
   /** Orders whose lines Shopify did not fully return. */
   ordersMissingLines: number;
+  /** The window held more orders than one view reads. */
+  ordersCapped: boolean;
 
   annotations: AnnotationView[];
+  /** Value-axis labels for the revenue chart, top to bottom. */
+  axisTicks: string[];
+  /** Average wholesale order value, and how many orders it averages. */
+  aov: { value: string; orders: number };
   revenue: { wholesale: SeriesView; retail: SeriesView };
   byGroup: RankedRowView[];
   topBuyers: RankedRowView[];

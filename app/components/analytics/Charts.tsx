@@ -12,6 +12,7 @@ import {
   round,
   shouldLabel,
   withEndRoom,
+  dayX,
 } from "~/lib/analytics/geometry";
 import type {
   AgingRowView,
@@ -37,11 +38,20 @@ const box = inner();
 
 /* -------------------------------------------------------------------------- */
 
-/** The gridlines and the baseline. Hairlines, solid, one shade off the card. */
-function Frame() {
+/**
+ * The gridlines, the baseline, and the value axis.
+ *
+ * The axis labels are the reason a reader can tell a tall bar from a big
+ * number. Without them `niceMax` is actively misleading: a peak of 12.3M
+ * rounds the top of the scale to 20M, so the tallest mark reaches 62% of the
+ * plot and nothing on screen says why.
+ */
+function Frame({ ticks }: { ticks?: readonly string[] }) {
+  const lines = gridlines();
+
   return (
     <>
-      {gridlines().map((y, index) => (
+      {lines.map((y, index) => (
         <line
           key={index}
           className="mn-grid"
@@ -50,6 +60,19 @@ function Frame() {
           y1={round(y)}
           y2={round(y)}
         />
+      ))}
+
+      {(ticks ?? []).map((label, index) => (
+        <text
+          key={`v${index}`}
+          className="mn-label"
+          x={box.x}
+          y={round(lines[index]! - 0.6)}
+          textAnchor="start"
+          direction="ltr"
+        >
+          {label}
+        </text>
       ))}
       <line
         className="mn-axis"
@@ -75,11 +98,19 @@ export function RevenueChart({
   retail,
   partial,
   annotations,
+  axisTicks,
 }: {
   wholesale: SeriesView;
   retail: SeriesView;
   partial: boolean;
   annotations: { key: string; day: string; label: string }[];
+  /**
+   * The value-axis labels, top to bottom, already formatted in the shop's
+   * currency. Formatted on the server, because money formatting lives there
+   * and a component that did its own would be a second place for the page and
+   * its CSV to disagree.
+   */
+  axisTicks: readonly string[];
 }) {
   const { t } = useTranslation();
   const days = wholesale.points.map((point) => point.label);
@@ -98,29 +129,46 @@ export function RevenueChart({
   );
 
   return (
-    <div className="mn-viz">
+    <div className="mn-viz" dir="ltr">
       <svg
         viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
         role="img"
         aria-label={t("analytics.revenue.alt")}
       >
-        <Frame />
+        <Frame ticks={axisTicks} />
 
         {/* A marked day is a rule behind the marks, not on top of them: a
             store installed mid-window has a line starting at zero because the
             app was not there, which is not the same as nothing selling. */}
-        {annotations.map((mark) => {
+        {annotations.map((mark, order) => {
           const index = wholesale.points.findIndex((point) => point.day === mark.day);
           if (index < 0 || wholesale.points.length === 0) return null;
-          const step = box.width / Math.max(1, wholesale.points.length);
-          const x = round(box.x + index * step + step / 2);
+
+          // The same x the data point uses. These used to be computed from
+          // slot centres while the line used gap edges, so a rule reading "the
+          // app arrived here" pointed half a day away from the point it named.
+          const x = round(dayX(index, wholesale.points.length));
+          // Past the middle, the label goes on the other side — otherwise a
+          // shop that installed recently, which is exactly when this mark
+          // matters, has its label silently clipped by the viewBox.
+          const flip = x > box.x + box.width * 0.55;
+          // Stacked when two marks are close: install and publish in the same
+          // fortnight is the ordinary onboarding path, and both were drawn on
+          // the same line.
+          const y = round(box.y + 2 + order * 2.6);
 
           return (
             <g key={mark.key}>
               <line className="mn-axis" x1={x} x2={x} y1={box.y} y2={box.y + box.height}>
                 <title>{mark.label}</title>
               </line>
-              <text className="mn-label" x={x + 0.6} y={box.y + 2}>
+              <text
+                className="mn-label"
+                x={round(flip ? x - 0.6 : x + 0.6)}
+                y={y}
+                textAnchor={flip ? "end" : "start"}
+                direction="ltr"
+              >
                 {mark.label}
               </text>
             </g>
@@ -178,6 +226,30 @@ export function RevenueChart({
                 ),
               )}
             />
+            {/* A hit target per day, carrying both series' figures. Invisible,
+                because a dot on every point of a ninety-day chart is noise —
+                but hoverable, which is the only way a line chart answers
+                "what was that day?" without a client-side tooltip. */}
+            {line(
+              wholesale.points.map((point) => point.value),
+              { max },
+            ).map((point, index) => (
+              <circle
+                key={index}
+                cx={round(point.x)}
+                cy={round(point.y)}
+                r="1.2"
+                fill="transparent"
+              >
+                <title>
+                  {`${days[index]} · ${t("analytics.revenue.wholesale", {
+                    total: wholesale.points[index]?.money ?? "",
+                  })} · ${t("analytics.revenue.retail", {
+                    total: retail.points[index]?.money ?? "",
+                  })}`}
+                </title>
+              </circle>
+            ))}
           </>
         )}
 
@@ -186,7 +258,7 @@ export function RevenueChart({
             <text
               key={index}
               className="mn-label"
-              x={round(box.x + ((index + 0.5) * box.width) / Math.max(1, days.length))}
+              x={round(dayX(index, days.length))}
               y={round(PLOT.height - 2)}
               textAnchor="middle"
             >
@@ -238,12 +310,15 @@ export function RankedChart({ rows: data, alt }: { rows: RankedRowView[]; alt: s
   );
 
   return (
-    <div className="mn-viz">
+    <div className="mn-viz" dir="ltr">
       <svg viewBox={`0 0 ${PLOT.width} ${PLOT.height}`} role="img" aria-label={alt}>
         {bars.map((bar, index) => (
           <g key={data[index]!.key}>
             <rect
-              className="mn-s1"
+              // The remainder row is a total, not a buyer. Given the same hue
+              // it became the longest bar on some charts while sitting last,
+              // so the chart read as neither sorted nor legible.
+              className={data[index]!.isRest ? "mn-rest" : "mn-s1"}
               x={round(bar.x)}
               y={round(bar.y)}
               width={round(bar.width)}
@@ -253,11 +328,19 @@ export function RankedChart({ rows: data, alt }: { rows: RankedRowView[]; alt: s
               <title>{`${data[index]!.label} · ${data[index]!.money}`}</title>
             </rect>
             {/* Outside the bar end, always: a label inside a short bar is a
-                label with its first characters cropped off. */}
+                label with its first characters cropped off.
+
+                `text-anchor` and `direction` are set explicitly because these
+                charts are drawn in physical coordinates while the page around
+                them may be RTL. Without them the default `start` resolves to
+                the *right* edge in Arabic, so every value was anchored past
+                its bar and ran leftwards straight across it. */}
             <text
               className="mn-value"
               x={round(bar.x + bar.width + 0.8)}
               y={round(bar.y + bar.height / 2 + 0.8)}
+              textAnchor="start"
+              direction="ltr"
             >
               {data[index]!.money}
             </text>
@@ -280,7 +363,7 @@ export function FunnelChart({ steps, alt }: { steps: FunnelStepView[]; alt: stri
   );
 
   return (
-    <div className="mn-viz">
+    <div className="mn-viz" dir="ltr">
       <svg viewBox={`0 0 ${PLOT.width} ${PLOT.height}`} role="img" aria-label={alt}>
         {bars.map((bar, index) => (
           <g key={steps[index]!.key}>
@@ -298,6 +381,8 @@ export function FunnelChart({ steps, alt }: { steps: FunnelStepView[]; alt: stri
               className="mn-value"
               x={round(bar.x + bar.width + 0.8)}
               y={round(bar.y + bar.height / 2 + 0.8)}
+              textAnchor="start"
+              direction="ltr"
             >
               {steps[index]!.value}
             </text>
@@ -318,7 +403,7 @@ export function AgingChart({ rows: data, alt }: { rows: AgingRowView[]; alt: str
   );
 
   return (
-    <div className="mn-viz">
+    <div className="mn-viz" dir="ltr">
       <svg viewBox={`0 0 ${PLOT.width} ${PLOT.height}`} role="img" aria-label={alt}>
         {bars.map((bar, index) => (
           <g key={data[index]!.key}>
@@ -336,6 +421,8 @@ export function AgingChart({ rows: data, alt }: { rows: AgingRowView[]; alt: str
               className="mn-value"
               x={round(bar.x + bar.width + 0.8)}
               y={round(bar.y + bar.height / 2 + 0.8)}
+              textAnchor="start"
+              direction="ltr"
             >
               {data[index]!.amount}
             </text>

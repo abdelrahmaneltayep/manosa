@@ -42,6 +42,28 @@ const money = (amount: number) =>
     amount / 100,
   );
 
+/**
+ * A run of days, as long as the window really is.
+ *
+ * Seven points used to stand in for every window, so no capture had ever
+ * rendered a 31- or 91-point chart — which is every real 30- and 90-day view,
+ * and is why label collisions and off-by-half-a-slot marks went unseen.
+ */
+const series = (count: number, seed = 7) =>
+  Array.from({ length: count }, (_, index) => {
+    const at = new Date(Date.UTC(2026, 8, 1) + index * 86_400_000);
+    const day = at.toISOString().slice(0, 10);
+    // Deterministic, and shaped like a week: a flat line hides nothing but
+    // also shows nothing.
+    const value = (((index * seed) % 11) + 2) * 12_000;
+    return {
+      day,
+      label: `${at.getUTCDate()} ${at.toLocaleString("en", { month: "short", timeZone: "UTC" })}`,
+      value,
+      money: money(value),
+    };
+  });
+
 const points = (values: number[]) =>
   values.map((value, index) => ({
     day: `2026-09-${String(index + 1).padStart(2, "0")}`,
@@ -60,6 +82,7 @@ const ranked = (entries: [string, number][]) =>
   }));
 
 const view = (overrides: Partial<AnalyticsView> = {}): AnalyticsView => ({
+  loading: false,
   range: 30,
   ranges: [7, 30, 90],
   isExample: false,
@@ -69,7 +92,10 @@ const view = (overrides: Partial<AnalyticsView> = {}): AnalyticsView => ({
   timeZone: "Europe/London",
   excludedOrders: 0,
   ordersMissingLines: 0,
+  ordersCapped: false,
   annotations: [],
+  aov: { value: money(31_000), orders: 42 },
+  axisTicks: [money(250_000), money(187_500), money(125_000), money(62_500), money(0)],
   revenue: {
     wholesale: {
       key: "wholesale",
@@ -262,18 +288,114 @@ describe("the analytics page", () => {
   });
 
   it("offers a CSV per chart, carrying the window on screen", () => {
-    const html = render(<AnalyticsPage view={view({ range: 90 })} />);
+    const html = render(
+      <AnalyticsPage
+        view={view({
+          range: 90,
+          // A real 91-point series. The capture that used to carry this name
+          // rendered the seven-point default, so nothing here had ever drawn a
+          // long window.
+          revenue: {
+            wholesale: { key: "wholesale", points: series(91), total: money(6_000_000) },
+            retail: { key: "retail", points: series(91, 3), total: money(2_000_000) },
+          },
+        })}
+      />,
+    );
 
     expect(html).toContain("/app/analytics/export?chart=products&amp;range=90");
     expect(html).toContain("/app/analytics/export?chart=aging&amp;range=90");
     capture("10-analytics-90-days", html);
   });
 
-  it("reads right to left in Arabic", () => {
+  it("draws a month without its day labels colliding", () => {
+    const html = render(
+      <AnalyticsPage
+        view={view({
+          revenue: {
+            wholesale: { key: "wholesale", points: series(31), total: money(2_000_000) },
+            retail: { key: "retail", points: series(31, 5), total: money(700_000) },
+          },
+          annotations: [
+            { key: "installed", day: "2026-09-03", label: "Mannon installed" },
+            { key: "agent_published", day: "2026-09-06", label: "Buyer Agent published" },
+          ],
+        })}
+      />,
+    );
+
+    // Two marks a few days apart is the ordinary onboarding path, and both
+    // used to be drawn on the same line, overlapping.
+    expect(html).toContain("Mannon installed");
+    expect(html).toContain("Buyer Agent published");
+    capture("12-analytics-month", html);
+  });
+
+  it("marks a recent install without its label running off the chart", () => {
+    const html = render(
+      <AnalyticsPage
+        view={view({
+          revenue: {
+            wholesale: { key: "wholesale", points: series(31), total: money(2_000_000) },
+            retail: { key: "retail", points: series(31, 5), total: money(700_000) },
+          },
+          annotations: [
+            // Three days before the end — a shop that installed recently, and
+            // the one case where the label was silently clipped.
+            { key: "installed", day: "2026-09-28", label: "Mannon installed" },
+          ],
+        })}
+      />,
+    );
+
+    expect(html).toContain('text-anchor="end"');
+    capture("13-analytics-recent-install", html);
+  });
+
+  it("says when a window held more orders than it read", () => {
+    const html = render(<AnalyticsPage view={view({ ordersCapped: true })} />);
+
+    expect(html).toContain("more orders than one view reads");
+    capture("14-analytics-capped", html);
+  });
+
+  it("shows a skeleton while the window is being read", () => {
+    const html = render(<AnalyticsPage view={view({ loading: true })} />);
+
+    expect(html).toContain("Reading your numbers");
+    // The stale charts are not left on screen under a spinner.
+    expect(html).toContain("hidden");
+    capture("15-analytics-loading", html);
+  });
+
+  it("keeps a tiny row visible beside a dominant one", () => {
+    const html = render(
+      <AnalyticsPage
+        view={view({
+          topBuyers: ranked([
+            ["Café Aroma", 12_345_678],
+            ["The corner shop", 2_000],
+            ["Everyone else", 5_000],
+          ]),
+        })}
+      />,
+    );
+
+    // A row present in the data is a row with a mark; the tail used to render
+    // as floating numbers beside nothing.
+    expect(html).toContain("mn-rest");
+    capture("16-analytics-long-tail", html);
+  });
+
+  it("reads right to left in Arabic, with its value labels beside the bars", () => {
     const html = render(<AnalyticsPage view={view()} />, "ar");
 
     expect(html).toContain("التحليلات");
     expect(html).toContain("أكبر مشتري الجملة");
+    // Without these the default `start` anchor resolves to the *right* edge in
+    // an RTL document, so every value was drawn leftwards across its own bar.
+    expect(html).toContain('text-anchor="start"');
+    expect(html).toContain('dir="ltr"');
     capture("11-analytics-arabic", html, "ar");
   });
 });

@@ -49,9 +49,15 @@ export function chartCsv(
 ): string {
   switch (chart) {
     case "revenue": {
+      // The same shape as every other chart's file: raw minor units for a
+      // script, the formatted figure beside it for a person. This one shipped
+      // with bare minor units under a column headed "Wholesale", so a $120.00
+      // day read as 12000.
       const header = [
         t("analytics.csv.day"),
+        `${t("analytics.csv.wholesale")} (${t("analytics.csv.minorUnits")})`,
         t("analytics.csv.wholesale"),
+        `${t("analytics.csv.retail")} (${t("analytics.csv.minorUnits")})`,
         t("analytics.csv.retail"),
         t("analytics.csv.currency"),
       ];
@@ -62,7 +68,9 @@ export function chartCsv(
         view.revenue.wholesale.points.map((point, index) => [
           point.day,
           point.value,
+          point.money,
           view.revenue.retail.points[index]?.value ?? 0,
+          view.revenue.retail.points[index]?.money ?? "",
           view.currencyCode,
         ]),
       );

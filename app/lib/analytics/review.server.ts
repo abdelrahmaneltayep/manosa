@@ -1,6 +1,7 @@
 import { money, type Money } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
+import { amountOwed, orderRevenue } from "~/lib/orders/totals";
 import { localDay } from "~/lib/analytics/series.server";
 import { formatCurrency } from "~/lib/money";
 import { shopScope } from "~/lib/tenant/shop-context.server";
@@ -130,8 +131,7 @@ export async function monthFacts(month: string, now = new Date()): Promise<Month
       }),
     ]);
 
-  const net = (order: { totalPrice: number; refundedAmount: number }) =>
-    Math.max(0, order.totalPrice - order.refundedAmount);
+  const net = (order: { totalPrice: number }) => orderRevenue(order);
 
   const retail = await db.order.aggregate({
     where: { ...inCurrency, isWholesale: false, processedAt: window },
@@ -160,18 +160,10 @@ export async function monthFacts(month: string, now = new Date()): Promise<Month
       .filter((id): id is string => Boolean(id)),
   );
 
-  const owed = outstanding.reduce(
-    (sum, order) =>
-      sum + Math.max(0, order.totalPrice - order.refundedAmount - order.amountPaid),
-    0,
-  );
+  const owed = outstanding.reduce((sum, order) => sum + amountOwed(order), 0);
   const overdue = outstanding
     .filter((order) => order.netTermsDueAt !== null && order.netTermsDueAt < now)
-    .reduce(
-      (sum, order) =>
-        sum + Math.max(0, order.totalPrice - order.refundedAmount - order.amountPaid),
-      0,
-    );
+    .reduce((sum, order) => sum + amountOwed(order), 0);
 
   const pricedRuleNames = new Set(
     lines.flatMap((line) =>

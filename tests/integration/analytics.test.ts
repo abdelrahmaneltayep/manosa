@@ -1,7 +1,10 @@
 import type { SubmissionStatus } from "@prisma/client";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { summariseAging } from "@mannon/net-terms";
+
 import { db } from "~/db.server";
+import { toInvoice } from "~/lib/terms/terms.server";
 import { loadAnalytics } from "~/lib/analytics/charts.server";
 import { hasAnyData } from "~/lib/analytics/view-model.server";
 import { upsertOrder, factsFromWebhook } from "~/lib/orders/sync.server";
@@ -57,6 +60,8 @@ async function order(options: {
   company?: string;
   lines?: Record<string, unknown>[];
   dueAt?: string;
+  refunds?: Record<string, unknown>[];
+  cancelled?: boolean;
 }) {
   const facts = factsFromWebhook({
     admin_graphql_api_id: `gid://shopify/Order/${options.id}`,
@@ -64,6 +69,8 @@ async function order(options: {
     currency: options.currency ?? "USD",
     processed_at: options.at,
     current_total_price: options.total,
+    ...(options.refunds ? { refunds: options.refunds } : {}),
+    ...(options.cancelled ? { cancelled_at: options.at } : {}),
     customer: options.customerId
       ? { id: Number(options.customerId.split("/").pop()) }
       : null,
@@ -124,9 +131,12 @@ describe("revenue over time", () => {
       await order({ id: 1, at: "2026-09-28T10:00:00Z", total: "100.00" });
 
       const data = await load(7);
-      // Both ends inclusive: seven days back from today is eight calendar days.
-      expect(data.revenue.wholesale.points).toHaveLength(8);
-      expect(data.revenue.wholesale.points.filter((p) => p.value === 0)).toHaveLength(7);
+      // "Last 7 days" is seven whole store-local days, today included. The
+      // version this replaced produced eight buckets whose first was a part
+      // day drawn at full width, so the first and last bar of every window
+      // systematically under-reported.
+      expect(data.revenue.wholesale.points).toHaveLength(7);
+      expect(data.revenue.wholesale.points.filter((p) => p.value === 0)).toHaveLength(6);
     });
   });
 
@@ -143,15 +153,27 @@ describe("revenue over time", () => {
     });
   });
 
-  it("takes refunds off, as every other figure in this app does", async () => {
+  it("counts a refunded order once, the way Shopify already counted it", async () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
-      const row = await order({ id: 1, at: "2026-09-20T10:00:00Z", total: "100.00" });
-      await db.order.update({ where: { id: row.id }, data: { refundedAmount: 4_000 } });
+      // Written through the real webhook writer, because `current_total_price`
+      // is *already* net of the refund — the previous version of this test
+      // hand-set `refundedAmount` onto a row carrying a gross `totalPrice`,
+      // a combination the writer cannot produce, so it could not fail.
+      await order({
+        id: 1,
+        at: "2026-09-20T10:00:00Z",
+        total: "60.00",
+        refunds: [{ transactions: [{ amount: "40.00", kind: "refund" }] }],
+      });
 
-      const data = await load();
-      expect(data.revenue.wholesale.total.amount).toBe(6_000);
+      const stored = await db.order.findFirstOrThrow();
+      expect(stored.totalPrice).toBe(6_000);
+      expect(stored.refundedAmount).toBe(4_000);
+
+      // One number, matching the Orders list and the Home KPI card.
+      expect((await load()).revenue.wholesale.total.amount).toBe(6_000);
     });
   });
 
@@ -304,6 +326,34 @@ describe("rule performance", () => {
   });
 });
 
+describe("whole days", () => {
+  it("starts a window at a store-local midnight, whatever the zone", async () => {
+    await installShop(ALPHA, { ianaTimezone: "Australia/Sydney" });
+
+    await inAlpha(async () => {
+      const data = await load(7);
+      expect(data.revenue.wholesale.points).toHaveLength(7);
+      // The first bucket is a whole day, so the day it names begins at the
+      // merchant's midnight rather than seven days ago to the second.
+      expect(data.window.start.toISOString()).toBe("2026-09-23T14:00:00.000Z");
+    });
+  });
+
+  it("counts an order at the very start of the first day", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // 00:30 on the first day of the window. Under the old start — seven
+      // days back to the second, i.e. midday — this order fell outside the
+      // window while its day still got a full-width bar.
+      await order({ id: 1, at: "2026-09-24T00:30:00Z", total: "100.00" });
+
+      const data = await load(7);
+      expect(data.revenue.wholesale.total.amount).toBe(10_000);
+    });
+  });
+});
+
 describe("the registration funnel", () => {
   it("follows one cohort through, so it can never widen", async () => {
     await installShop(ALPHA);
@@ -351,6 +401,15 @@ describe("the registration funnel", () => {
         total: "100.00",
         customerId: "gid://shopify/Customer/1",
       });
+      // A cancelled order from before they ever applied. Counting it made the
+      // page claim this application converted.
+      await order({
+        id: 2,
+        at: "2026-09-02T10:00:00Z",
+        total: "70.00",
+        customerId: "gid://shopify/Customer/2",
+        cancelled: true,
+      });
 
       const funnel = (await load()).funnel;
       expect(funnel).toEqual([
@@ -376,16 +435,67 @@ describe("the aging report", () => {
       });
       await order({
         id: 2,
-        at: "2026-09-21T10:00:00Z",
+        at: "2026-08-16T10:00:00Z",
         total: "50.00",
-        // Sixty days late, not twenty-nine: the bucket boundaries are the
-        // point of this chart.
-        dueAt: "2026-08-01T00:00:00Z",
+        dueAt: "2026-08-21T00:00:00Z",
       });
 
       const aging = (await load()).aging;
       expect(aging.find((row) => row.bucket === "current")?.amount.amount).toBe(10_000);
       expect(aging.find((row) => row.bucket === "days_30_plus")?.count).toBe(1);
+    });
+  });
+
+  it("is as of today, not as of the window", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // A genuinely old invoice, issued long before any window the page
+      // offers. Windowing this chart hid $1,400 of overdue money behind
+      // "Nothing in this window", and made the worst bucket mathematically
+      // unreachable — only an order due before it was placed could fill it.
+      await order({
+        id: 1,
+        at: "2026-05-01T10:00:00Z",
+        total: "900.00",
+        dueAt: "2026-06-01T00:00:00Z",
+      });
+
+      const aging = (await load(7)).aging;
+      expect(aging.find((row) => row.bucket === "days_30_plus")?.amount.amount).toBe(
+        90_000,
+      );
+    });
+  });
+
+  it("agrees with the ledger, invoice for invoice", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order({
+        id: 1,
+        at: "2026-08-16T10:00:00Z",
+        total: "500.00",
+        dueAt: "2026-09-15T00:00:00Z",
+      });
+      await order({
+        id: 2,
+        at: "2026-06-22T10:00:00Z",
+        total: "900.00",
+        dueAt: "2026-07-22T00:00:00Z",
+      });
+
+      const owing = await db.order.findMany({
+        where: { isWholesale: true, paidAt: null, netTermsDueAt: { not: null } },
+      });
+      const ledger = summariseAging(owing.map(toInvoice), NOW, "USD");
+      const aging = (await load()).aging;
+
+      for (const bucket of ledger.buckets) {
+        const chart = aging.find((row) => row.bucket === bucket.bucket);
+        expect(chart?.amount.amount).toBe(bucket.outstanding.amount);
+        expect(chart?.count).toBe(bucket.invoiceCount);
+      }
     });
   });
 });
@@ -434,10 +544,10 @@ describe("the example state", () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
-      expect(hasAnyData(await load())).toBe(false);
+      expect(await hasAnyData(await load())).toBe(false);
 
       await order({ id: 1, at: "2026-09-20T10:00:00Z", total: "100.00" });
-      expect(hasAnyData(await load())).toBe(true);
+      expect(await hasAnyData(await load())).toBe(true);
     });
   });
 
@@ -447,12 +557,32 @@ describe("the example state", () => {
     await inAlpha(async () => {
       await order({ id: 1, at: "2026-09-01T10:00:00Z", total: "100.00" });
 
-      // Nothing in the last seven days, but this shop has history — replacing
-      // a quiet fortnight with somebody else's sample numbers would leave the
-      // merchant no way to tell the difference.
+      // Nothing in the last seven days, but this shop has history. The
+      // previous version of this test asserted against a *different* window
+      // than the one it set up, so it never checked the thing it was named
+      // for — and production passes the window-scoped data.
       const quiet = await load(7);
       expect(quiet.revenue.wholesale.total.amount).toBe(0);
-      expect(hasAnyData(await load(90))).toBe(true);
+      expect(await hasAnyData(quiet)).toBe(true);
+    });
+  });
+
+  it("is not offered to a shop whose window is only in another currency", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order({
+        id: 1,
+        at: "2026-09-20T10:00:00Z",
+        total: "80.00",
+        currency: "EUR",
+      });
+
+      // Revenue is zero and there is a banner saying why. Replacing the page
+      // with an example deletes the one true sentence on it.
+      const data = await load();
+      expect(data.excludedOrders).toBe(1);
+      expect(await hasAnyData(data)).toBe(true);
     });
   });
 });

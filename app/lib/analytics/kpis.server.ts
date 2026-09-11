@@ -1,6 +1,7 @@
 import { money, type Money } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
+import { amountOwed } from "~/lib/orders/totals";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 
 /**
@@ -143,11 +144,7 @@ export async function loadKpis(
 
   // Refunds come off, as they do everywhere else in the app. Without this the
   // card said $1,000.00 and the ledger it links to said $600.00.
-  const owed = outstanding.reduce(
-    (sum, order) =>
-      sum + Math.max(0, order.totalPrice - order.refundedAmount - order.amountPaid),
-    0,
-  );
+  const owed = outstanding.reduce((sum, order) => sum + amountOwed(order), 0);
 
   // Measured from the install, because that is the first moment this app could
   // have seen an order. A store that has sold wholesale for ten years still has

@@ -9,9 +9,11 @@ import type {
   RuleRowView,
   SeriesView,
 } from "~/components/analytics/types";
+import { db } from "~/db.server";
 import type { AnalyticsData, Range } from "~/lib/analytics/charts.server";
 import { RANGES } from "~/lib/analytics/charts.server";
 import type { Translate } from "~/i18n/translate";
+import { gridlines, niceMax } from "~/lib/analytics/geometry";
 import { formatCurrency } from "~/lib/money";
 import type { MoneySeries } from "~/lib/analytics/series.server";
 
@@ -115,8 +117,29 @@ export function analyticsView(data: AnalyticsData, options: ViewOptions): Analyt
     stillExists: row.stillExists,
   }));
 
+  // The value axis the chart draws against: the same `niceMax` the marks are
+  // scaled by, split into the same number of bands the gridlines use, and
+  // formatted here where money formatting lives.
+  const axisMax = niceMax([
+    ...data.revenue.wholesale.points.map((point) => point.value),
+    ...data.revenue.retail.points.map((point) => point.value),
+  ]);
+  const bands = gridlines().length - 1;
+  const axisTicks = Array.from({ length: bands + 1 }, (_, index) =>
+    formatCurrency(
+      money(Math.round((axisMax * (bands - index)) / bands), currencyCode),
+      locale,
+    ),
+  );
+
   return {
+    loading: false,
     range: data.window.range,
+    axisTicks,
+    aov: {
+      value: formatCurrency(data.aov.value, locale),
+      orders: data.aov.orders,
+    },
     ranges: [...RANGES],
     // An example is shown only when there is genuinely nothing — not when a
     // window happens to be quiet, which is a real answer and its own state.
@@ -127,6 +150,7 @@ export function analyticsView(data: AnalyticsData, options: ViewOptions): Analyt
     timeZone: data.window.timeZone,
     excludedOrders: data.excludedOrders,
     ordersMissingLines: data.ordersMissingLines,
+    ordersCapped: data.ordersCapped,
     annotations: data.annotations.map((mark) => ({
       key: mark.key,
       day: mark.day,
@@ -146,18 +170,27 @@ export function analyticsView(data: AnalyticsData, options: ViewOptions): Analyt
 }
 
 /**
- * Has this shop ever sold anything wholesale?
+ * Has this shop ever had anything to show?
  *
- * The question the example state turns on, and deliberately not "is this window
- * empty": a merchant whose quiet fortnight was replaced by somebody else's
- * sample numbers would have no way to tell the difference.
+ * Deliberately **not** "is this window empty", and this is now a query rather
+ * than a read of the window's own totals — which is what it used to be, so a
+ * merchant with a year of history and a quiet `?range=7` was shown invented
+ * numbers, and clicking between the three range links made their business
+ * appear and disappear.
+ *
+ * The second clause matters as much: a shop whose window orders are all in
+ * another currency has revenue of zero **and a banner explaining why**.
+ * Replacing that page with an example deleted the one true sentence on it.
  */
-export function hasAnyData(data: AnalyticsData): boolean {
-  return (
-    data.revenue.wholesale.total.amount > 0 ||
-    data.revenue.retail.total.amount > 0 ||
-    data.funnel.some((step) => step.value > 0)
-  );
+export async function hasAnyData(data: AnalyticsData): Promise<boolean> {
+  if (data.excludedOrders > 0 || data.ordersMissingLines > 0) return true;
+
+  const [orders, submissions] = await Promise.all([
+    db.order.count({ where: { isWholesale: true } }),
+    db.formSubmission.count(),
+  ]);
+
+  return orders > 0 || submissions > 0;
 }
 
 /**
@@ -212,12 +245,14 @@ export function exampleView(base: AnalyticsView, locale: string): AnalyticsView 
   return {
     ...base,
     isExample: true,
-    // An example is not this shop's history, so it never claims to be partial
-    // and never carries this shop's caveats.
+    axisTicks: base.axisTicks,
+    // An example is not this shop's history, so it never claims to be partial.
+    // The caveats are *not* cleared here: `hasAnyData` refuses the example
+    // whenever one is set, because a banner explaining a zero is the only true
+    // thing on such a page.
     partial: false,
-    excludedOrders: 0,
-    ordersMissingLines: 0,
     annotations: [],
+    aov: { value: formatCurrency(money(42_000, currencyCode), locale), orders: 26 },
     revenue: { wholesale: series("wholesale", 12_000), retail: series("retail", 4_000) },
     byGroup: ranked(["Cafés", "Restaurants", "Hotels"], 250_000),
     topBuyers: ranked(["Café Aroma", "Bean There Ltd", "The Roastery"], 180_000),

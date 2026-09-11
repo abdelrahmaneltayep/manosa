@@ -36,23 +36,34 @@ export function AnalyticsPage({ view }: { view: AnalyticsView }) {
         </s-stack>
       </s-section>
 
+      {view.loading ? <Skeleton /> : null}
       {view.isExample ? <ExampleBanner /> : null}
       {view.partial ? <PartialBanner view={view} /> : null}
       <Caveats view={view} />
 
-      <div className={view.isExample ? "mn-viz--example" : undefined}>
+      <div
+        className={view.isExample ? "mn-viz--example" : undefined}
+        {...(view.loading ? { hidden: true } : {})}
+      >
         <Card
           heading={t("analytics.revenue.heading")}
           csv="revenue"
           view={view}
           empty={view.revenue.wholesale.points.length === 0}
         >
-          <RevenueChart
-            wholesale={view.revenue.wholesale}
-            retail={view.revenue.retail}
-            partial={view.partial}
-            annotations={view.annotations}
-          />
+          <s-stack direction="block" gap="base">
+            {/* A single current value is a stat, not a chart. */}
+            <s-text color="subdued">
+              {t("analytics.aov", { value: view.aov.value, count: view.aov.orders })}
+            </s-text>
+            <RevenueChart
+              wholesale={view.revenue.wholesale}
+              retail={view.revenue.retail}
+              partial={view.partial}
+              annotations={view.annotations}
+              axisTicks={view.axisTicks}
+            />
+          </s-stack>
         </Card>
 
         <RankedCard
@@ -60,6 +71,9 @@ export function AnalyticsPage({ view }: { view: AnalyticsView }) {
           csv="groups"
           rows={view.byGroup}
           view={view}
+          // Invariant 5: the rules card discloses the analogous hazard, so
+          // this one must too.
+          note={t("analytics.byGroup.note")}
         />
         <RankedCard
           heading={t("analytics.topBuyers.heading")}
@@ -72,11 +86,12 @@ export function AnalyticsPage({ view }: { view: AnalyticsView }) {
           csv="products"
           rows={view.topProducts}
           view={view}
-          note={
-            view.ordersMissingLines > 0
-              ? t("analytics.missingLines", { count: view.ordersMissingLines })
-              : null
-          }
+          note={[
+            t("analytics.lineLevel"),
+            ...(view.ordersMissingLines > 0
+              ? [t("analytics.missingLines", { count: view.ordersMissingLines })]
+              : []),
+          ].join(" ")}
         />
 
         <RulesCard view={view} />
@@ -115,6 +130,10 @@ export function AnalyticsPage({ view }: { view: AnalyticsView }) {
           empty={view.aging.every((row) => row.value === 0)}
         >
           <s-stack direction="block" gap="base">
+            {/* Stated, because the range picker at the top of the page reads
+                as a filter on everything below it — and this chart is a
+                standing balance, not a period figure. */}
+            <s-text color="subdued">{t("analytics.aging.asOf")}</s-text>
             <AgingChart rows={view.aging} alt={t("analytics.aging.alt")} />
             <s-table>
               <s-table-header-row>
@@ -162,6 +181,29 @@ function RangePicker({ view }: { view: AnalyticsView }) {
 }
 
 /**
+ * The window is still being read.
+ *
+ * The checklist's "skeleton chart + tiles". Hidden from assistive technology:
+ * announcing four empty boxes is worse than announcing nothing, and the
+ * heading above already says what is coming.
+ */
+function Skeleton() {
+  const { t } = useTranslation();
+
+  return (
+    <s-section heading={t("analytics.loading")}>
+      <s-stack direction="block" gap="base" accessibilityVisibility="hidden">
+        {[0, 1, 2, 3].map((row) => (
+          <s-box key={row} background="subdued" padding="base" borderRadius="base">
+            <s-text color="subdued"> </s-text>
+          </s-box>
+        ))}
+      </s-stack>
+    </s-section>
+  );
+}
+
+/**
  * Nothing has sold yet, so these are somebody else's numbers.
  *
  * Said before the charts and repeated by washing them out, because a sample
@@ -195,17 +237,22 @@ function PartialBanner({ view }: { view: AnalyticsView }) {
 /** Orders this page could not add up, and why. Never silent. */
 function Caveats({ view }: { view: AnalyticsView }) {
   const { t } = useTranslation();
-  if (view.excludedOrders === 0) return null;
+  if (view.excludedOrders === 0 && !view.ordersCapped) return null;
 
   return (
     <s-section>
       <s-banner tone="warning">
-        <s-paragraph>
-          {t("analytics.excluded", {
-            count: view.excludedOrders,
-            currency: view.currencyCode,
-          })}
-        </s-paragraph>
+        {view.excludedOrders > 0 ? (
+          <s-paragraph>
+            {t("analytics.excluded", {
+              count: view.excludedOrders,
+              currency: view.currencyCode,
+            })}
+          </s-paragraph>
+        ) : null}
+        {/* A charted subset that does not say it is a subset is the quietest
+            way for a busy shop to be misinformed. */}
+        {view.ordersCapped ? <s-paragraph>{t("analytics.capped")}</s-paragraph> : null}
       </s-banner>
     </s-section>
   );
@@ -333,6 +380,7 @@ function RulesCard({ view }: { view: AnalyticsView }) {
           </s-table-body>
         </s-table>
         <s-text color="subdued">{t("analytics.rules.note")}</s-text>
+        <s-text color="subdued">{t("analytics.lineLevel")}</s-text>
       </s-stack>
     </Card>
   );

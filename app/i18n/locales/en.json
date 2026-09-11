@@ -2457,7 +2457,8 @@
       "retailLabel": "Retail"
     },
     "byGroup": {
-      "heading": "Wholesale revenue by group"
+      "heading": "Wholesale revenue by group",
+      "note": "A buyer's orders count towards the group they are in today. Moving someone between groups moves their history with them."
     },
     "topBuyers": {
       "heading": "Top wholesale buyers"
@@ -2491,7 +2492,8 @@
       "alt": "What is owed on net terms, by how late it is.",
       "colBucket": "Age",
       "colOwed": "Owed",
-      "colInvoices": "Invoices"
+      "colInvoices": "Invoices",
+      "asOf": "As of today, not for the selected window — an invoice that is late was issued a while ago."
     },
     "footer": {
       "currency": "Every figure on this page is in {{currency}}. Orders in other currencies are counted separately, never converted.",
@@ -2507,7 +2509,13 @@
       "formatted": "Amount",
       "currency": "Currency",
       "discounted": "Given away",
-      "stillExists": "Still a current rule"
-    }
+      "stillExists": "Still a current rule",
+      "minorUnits": "minor units"
+    },
+    "loading": "Reading your numbers…",
+    "lineLevel": "Line totals, before shipping and tax — so this will not add up to the revenue chart above.",
+    "capped": "This window has more orders than one view reads, so the charts below cover the most recent of them. Narrow the window for a complete picture.",
+    "aov_one": "Average wholesale order: {{value}}, across {{count}} order.",
+    "aov_other": "Average wholesale order: {{value}}, across {{count}} orders."
   }
 }

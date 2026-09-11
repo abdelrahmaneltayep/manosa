@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useNavigation } from "@remix-run/react";
 
 import { AnalyticsPage } from "~/components/analytics/AnalyticsPage";
 import type { AnalyticsView } from "~/components/analytics/types";
@@ -47,10 +47,17 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 
     const view = analyticsView(data, { locale, t });
 
-    return json({ view: hasAnyData(data) ? view : exampleView(view, locale) });
+    const real = await hasAnyData(data);
+    return json({ view: real ? view : exampleView(view, locale) });
   });
 
 export default function Analytics() {
   const { view } = useLoaderData<typeof loader>();
-  return <AnalyticsPage view={view as AnalyticsView} />;
+  // The range picker does a full navigation against a loader that runs seven
+  // queries, so there is a real moment with nothing on screen. `useNavigation`
+  // is how Remix says "that moment is now".
+  const navigation = useNavigation();
+  const loading = navigation.state === "loading";
+
+  return <AnalyticsPage view={{ ...(view as AnalyticsView), loading }} />;
 }

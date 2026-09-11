@@ -102,9 +102,18 @@ export const CHART_STYLES = `
 .mn-viz .mn-s2 { fill: var(--mn-series-2); }
 .mn-viz .mn-line-s1 { stroke: var(--mn-series-1); }
 .mn-viz .mn-line-s2 { stroke: var(--mn-series-2); }
-/* The example state, and only it: a diagonal wash nobody could mistake for
-   their own data. */
-.mn-viz--example { opacity: 0.55; }
+/* The example state washes out the **marks**, never the words.
+   Applied to the whole card it put every table figure, every label and seven
+   export links at roughly 3.9:1 on white — under the AA floor, on interactive
+   text. The banner and the labelled rows carry the message instead. */
+.mn-viz--example .mn-viz svg { opacity: 0.5; }
+/* The remainder row: the same hue, hollow, so it reads as a total rather than
+   as one more buyer. */
+.mn-viz .mn-rest {
+  fill: var(--mn-surface);
+  stroke: var(--mn-series-1);
+  stroke-width: 0.3;
+}
 .mn-swatch {
   display: inline-block;
   inline-size: 0.75em;

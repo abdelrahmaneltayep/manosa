@@ -56,6 +56,7 @@ describe("the axis label for a day", () => {
 const money = (amount: number) => `$${amount}`;
 
 const view = (): AnalyticsView => ({
+  loading: false,
   range: 30,
   ranges: [7, 30, 90],
   isExample: false,
@@ -65,7 +66,10 @@ const view = (): AnalyticsView => ({
   timeZone: "UTC",
   excludedOrders: 0,
   ordersMissingLines: 0,
+  ordersCapped: false,
   annotations: [],
+  aov: { value: money(31_000), orders: 42 },
+  axisTicks: [money(2000), money(1500), money(1000), money(500), money(0)],
   revenue: {
     wholesale: {
       key: "wholesale",
@@ -139,7 +143,11 @@ describe("a chart as a file", () => {
   it("writes a day per row for the revenue chart, both series", () => {
     const rows = chartCsv("revenue", view(), t).split("\n");
     expect(rows).toHaveLength(2);
-    expect(rows[1]).toBe(`"2026-09-01","1000","250","USD"`);
+    // Raw minor units for a script, the formatted figure beside it for a
+    // person — the same shape as every other chart's file. This one used to
+    // ship bare minor units under a column headed "Wholesale".
+    expect(rows[1]).toBe(`"2026-09-01","1000","$1000","250","$250","USD"`);
+    expect(rows[0]).toContain("analytics.csv.minorUnits");
   });
 
   it("leaves a rate computed from nothing blank in the file too", () => {

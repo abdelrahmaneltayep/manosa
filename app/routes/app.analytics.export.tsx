@@ -46,7 +46,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     });
 
     const view = analyticsView(data, { locale, t });
-    const csv = chartCsv(chart, hasAnyData(data) ? view : null, t);
+    const csv = chartCsv(chart, (await hasAnyData(data)) ? view : null, t);
 
     return new Response(csv, {
       headers: {

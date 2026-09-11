@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-11T05:40:00Z
+Updated: 2026-09-11T06:25:00Z
 Current milestone: 6 — Analytics
-Current task: 6.2 the Analytics page [done] · 6.3 ✦ ask-your-data + monthly review [next]
+Current task: 6.2 [done, cold read fixed] · 6.3 ✦ ask-your-data + monthly review [in progress — server half done]
 
 ## Done
 
@@ -30,12 +30,15 @@ Current task: 6.2 the Analytics page [done] · 6.3 ✦ ask-your-data + monthly r
 - [x] 5.3 Guardrails panel, test mode, conversation log, publish flow — commits `baeb811` + fix round — QA: `qa/5.3/REPORT.md` (cold read returned FAIL on 17 findings; the worst was that "Take over" recorded a merchant's reply with no route to the buyer while both sides were told it arrived — `qa/5.3/COLD-READ.md`. All fixed, gate re-run clean.)
 - [x] 6.1 Order lines mirrored, with discount allocations — commits `1c2cafb` + fix round — QA: `qa/6.1/REPORT.md` (cold read returned FAIL on 7 findings: revenue over-reported after any refund, a truncation flag that could never be true, and a query ~100× over Shopify's cost ceiling. All fixed — `qa/6.1/COLD-READ.md`.)
 - [x] shop facts — the store's own currency and timezone are finally read from Shopify — commit `0dbc09a` (they never had been; every money figure fell back to USD)
-- [x] 6.2 the Analytics page — seven charts, their states, CSV per chart, the currency/timezone footer — QA: `qa/6.2/REPORT.md` (12 captures; palette validated against both surfaces)
+- [x] 6.2 the Analytics page — seven charts, their states, CSV per chart, the currency/timezone footer — commits `ad7a048` + fix round — QA: `qa/6.2/REPORT.md` (cold read returned FAIL on 20 findings, 3 of them P0 — `qa/6.2/COLD-READ.md`. All fixed; 16 captures from 13 distinct renders.)
+- [~] 6.3 ✦ ask-your-data + ✦ monthly review — server half committed `7a05849`; screens, the 1st-of-month job, i18n and captures still to do
 
 ## Next up
 
-- **Run the cold read on 6.2** — it has not had one
-- 6.3 ✦ ask-your-data + ✦ monthly review, both gated on `merchant_agent`
+- 6.3, the rest: the ask box on the analytics page, the review list and detail,
+  the 1st-of-month job, i18n, captures. Both gated on `merchant_agent`
+- **Orders-over-time** — `pages-features.md` §7 asks for it and the checklist
+  does not; deferred to 6.5 with a written decision, not forgotten
 - 6.3 ✦ ask-your-data + ✦ monthly review · 6.4 Settings · 6.5 polish
 - 5.2 has one unfinished piece: the widget's greeting is personalised by name
   only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
@@ -148,6 +151,14 @@ Neither is blocking; both would change product decisions if answered.
 
 ## Notes for my next self
 
+- **`Order.totalPrice` is ALREADY net of refunds.** It comes from Shopify's
+  `current_total_price`. Never subtract `refundedAmount` from it —
+  `app/lib/orders/totals.ts` is the one definition, and the bug was in seven
+  places at once before 6.2's cold read found it.
+- **Three tests in a row have "passed" by encoding the bug they guarded** —
+  two in 6.2, one in 3.2's terms suite. All three hand-set a column combination
+  the production writer cannot produce. Before trusting a test that guards a
+  money rule, ask what the _writer_ stores, not what the fixture can.
 - **Postgres does not survive a container recycle.** `service postgresql start`,
   then `pg_isready`. The symptom is every vitest run failing in global setup.
 - **Charts are server-rendered inline SVG, no library.** Geometry lives in

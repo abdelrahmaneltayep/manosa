@@ -50,9 +50,8 @@ export async function ledgerPage({
     orderBy: [{ netTermsDueAt: "asc" }, { name: "asc" }],
   });
 
-  const owing = all.filter(
-    (order) => order.totalPrice - order.refundedAmount - order.amountPaid > 0,
-  );
+  // `totalPrice` is already net of refunds; see `toInvoice`.
+  const owing = all.filter((order) => order.totalPrice - order.amountPaid > 0);
   const summary = summariseAging(owing.map(toInvoice), now, currencyCode);
 
   const anyBuyerHasTerms =

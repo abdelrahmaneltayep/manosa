@@ -1,0 +1,59 @@
+import { describe, expect, it } from "vitest";
+
+import { RevenueChart, RankedChart } from "~/components/analytics/Charts";
+import type { AnalyticsView } from "~/components/analytics/types";
+import { createCaptureHarness, type CaptureHarness } from "../support/state-capture";
+
+/** Cold-read render probe for 6.2 — geometry at window sizes the captures skip. */
+
+let harness: CaptureHarness;
+
+const money = (amount: number) =>
+  new Intl.NumberFormat("en", { style: "currency", currency: "USD" }).format(
+    amount / 100,
+  );
+
+const points = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    day: `2026-09-${String((index % 30) + 1).padStart(2, "0")}`,
+    label: `${(index % 30) + 1} Sep`,
+    value: 10_000 + index * 1_000,
+    money: money(10_000 + index * 1_000),
+  }));
+
+describe("render probe", () => {
+  it("31-day window with a late annotation", async () => {
+    harness = await createCaptureHarness({ title: "probe", outFor: () => ".", dirs: [] });
+
+    const view: AnalyticsView["revenue"] = {
+      wholesale: { key: "wholesale", points: points(31), total: money(1) },
+      retail: { key: "retail", points: points(31), total: money(1) },
+    };
+
+    const html = harness.render(
+      <RevenueChart
+        wholesale={view.wholesale}
+        retail={view.retail}
+        partial={false}
+        annotations={[
+          { key: "installed", day: "2026-09-28", label: "Mannon installed" },
+        ]}
+      />,
+    );
+    // eslint-disable-next-line no-console
+    console.info(html.replace(/></g, ">\n<"));
+    expect(html).toContain("<svg");
+  });
+
+  it("ranked chart with a long money label", async () => {
+    harness = await createCaptureHarness({ title: "probe", outFor: () => ".", dirs: [] });
+    const rows = [
+      { key: "a", label: "A", value: 12_345_678, money: "1.234.567,89 €", isRest: false },
+      { key: "b", label: "B", value: 2_000, money: "20,00 €", isRest: false },
+    ];
+    const html = harness.render(<RankedChart rows={rows} alt="x" />);
+    // eslint-disable-next-line no-console
+    console.info(html.replace(/></g, ">\n<"));
+    expect(html).toContain("<svg");
+  });
+});

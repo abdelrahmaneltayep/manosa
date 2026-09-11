@@ -1,0 +1,265 @@
+import { describe, expect, it } from "vitest";
+
+import { db } from "~/db.server";
+import { loadAnalytics } from "~/lib/analytics/charts.server";
+import { hasAnyData } from "~/lib/analytics/view-model.server";
+import { ledgerPage } from "~/lib/terms/ledger-query.server";
+import { upsertOrder, factsFromWebhook } from "~/lib/orders/sync.server";
+import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
+import { resetDatabase } from "../support/db";
+
+/** Cold-read probes for 6.2. Not a suite — evidence. */
+
+const ALPHA = "alpha.myshopify.com";
+const inAlpha = <T>(fn: () => Promise<T>) => shopScope.run(ALPHA, fn);
+const NOW = new Date("2026-09-30T12:00:00Z");
+const labels = {
+  rest: "Everyone else",
+  retail: "Retail",
+  ungrouped: "No group",
+  unnamedBuyer: "Unnamed",
+};
+const load = (range: 7 | 30 | 90 = 30) => loadAnalytics({ range, now: NOW, labels });
+
+async function installShop(shop: string, overrides: Record<string, unknown> = {}) {
+  await shopScope.run(shop, () =>
+    db.shop.create({
+      data: {
+        ...tenant(),
+        currencyCode: "USD",
+        ianaTimezone: "UTC",
+        installedAt: new Date("2026-01-01T00:00:00Z"),
+        ...overrides,
+      },
+    }),
+  );
+}
+
+/** An order exactly as the webhook writer would store it. */
+async function order(options: {
+  id: number;
+  at: string;
+  /** `current_total_price` — Shopify's number AFTER refunds and edits. */
+  total: string;
+  refunded?: string;
+  currency?: string;
+  customerId?: string;
+  dueAt?: string;
+  cancelled?: string;
+  wholesale?: boolean;
+}) {
+  const facts = factsFromWebhook({
+    admin_graphql_api_id: `gid://shopify/Order/${options.id}`,
+    name: `#${options.id}`,
+    currency: options.currency ?? "USD",
+    processed_at: options.at,
+    current_total_price: options.total,
+    cancelled_at: options.cancelled ?? null,
+    refunds: options.refunded
+      ? [{ transactions: [{ amount: options.refunded, kind: "refund" }] }]
+      : [],
+    customer: options.customerId
+      ? { id: Number(options.customerId.split("/").pop()) }
+      : null,
+    discount_applications: [{ title: "Café trade price" }],
+    line_items: [
+      {
+        admin_graphql_api_id: `gid://shopify/LineItem/${options.id}`,
+        title: "House Blend 1kg",
+        product_id: 1,
+        quantity: 10,
+        current_quantity: 10,
+        price: "10.00",
+        discount_allocations: [{ amount: "35.00", discount_application_index: 0 }],
+      },
+    ],
+  })!;
+
+  return upsertOrder({ ...facts }, options.wholesale ?? true, {
+    ...(options.dueAt ? { netTermsDueAt: new Date(options.dueAt) } : {}),
+  });
+}
+
+describe("PROBE A — a refund comes off twice", () => {
+  it("reports less revenue than Shopify's own current total", async () => {
+    await resetDatabase();
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // $100 order, $40 refunded. Shopify then sends current_total_price=60.00
+      // and total_refunded=40.00 on orders/updated — see
+      // tests/integration/orders.test.ts:306 for the same shape.
+      await order({ id: 1, at: "2026-09-20T10:00:00Z", total: "60.00", refunded: "40.00" });
+
+      const row = await db.order.findFirstOrThrow();
+      // eslint-disable-next-line no-console
+      console.info("stored", {
+        totalPrice: row.totalPrice,
+        refundedAmount: row.refundedAmount,
+      });
+
+      const data = await load();
+      // eslint-disable-next-line no-console
+      console.info("analytics wholesale total", data.revenue.wholesale.total.amount);
+
+      // What the merchant actually kept: 6000 minor units.
+      expect(data.revenue.wholesale.total.amount).toBe(6_000);
+    });
+  });
+
+  it("disagrees with the Home KPI for the same window", async () => {
+    await resetDatabase();
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order({ id: 1, at: "2026-09-20T10:00:00Z", total: "60.00", refunded: "40.00" });
+
+      const kpi = await db.order.aggregate({
+        where: { isWholesale: true, cancelledAt: null },
+        _sum: { totalPrice: true },
+      });
+      const data = await load();
+      // eslint-disable-next-line no-console
+      console.info("home kpi vs analytics", {
+        home: kpi._sum.totalPrice,
+        analytics: data.revenue.wholesale.total.amount,
+        topProducts: data.topProducts[0]?.value,
+      });
+      expect(data.revenue.wholesale.total.amount).toBe(kpi._sum.totalPrice);
+    });
+  });
+});
+
+describe("PROBE B — the example state reaches a shop with real data", () => {
+  it("shows invented numbers for a quiet window", async () => {
+    await resetDatabase();
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order({ id: 1, at: "2026-09-01T10:00:00Z", total: "100.00" });
+
+      const quiet = await load(7);
+      // eslint-disable-next-line no-console
+      console.info("hasAnyData(quiet 7d) =", hasAnyData(quiet));
+      expect(hasAnyData(quiet)).toBe(true);
+    });
+  });
+
+  it("shows invented numbers to a shop whose orders are all in another currency", async () => {
+    await resetDatabase();
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order({ id: 1, at: "2026-09-20T10:00:00Z", total: "100.00", currency: "EUR" });
+
+      const data = await load();
+      // eslint-disable-next-line no-console
+      console.info("excluded", data.excludedOrders, "hasAnyData", hasAnyData(data));
+      expect(hasAnyData(data)).toBe(true);
+    });
+  });
+});
+
+describe("PROBE C — the aging chart against the ledger it must agree with", () => {
+  it("agrees with /app/orders/terms about what is 30+ days overdue", async () => {
+    await resetDatabase();
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // Net 30 invoice, issued 45 days ago, due 15 days ago: 15 days overdue.
+      await order({
+        id: 1,
+        at: "2026-08-16T10:00:00Z",
+        total: "500.00",
+        dueAt: "2026-09-15T00:00:00Z",
+      });
+      // Net 30 invoice, issued 100 days ago: 70 days overdue.
+      await order({
+        id: 2,
+        at: "2026-06-22T10:00:00Z",
+        total: "900.00",
+        dueAt: "2026-07-22T00:00:00Z",
+      });
+
+      const ledger = await ledgerPage({ now: NOW, currencyCode: "USD" });
+      const chart = await load(30);
+      // eslint-disable-next-line no-console
+      console.info("ledger", ledger.summary.buckets.map((b) => [b.bucket, b.outstanding.amount, b.invoiceCount]));
+      // eslint-disable-next-line no-console
+      console.info("chart ", chart.aging.map((b) => [b.bucket, b.amount.amount, b.count]));
+
+      expect(chart.aging.map((row) => [row.bucket, row.amount.amount, row.count])).toEqual(
+        ledger.summary.buckets.map((b) => [b.bucket, b.outstanding.amount, b.invoiceCount]),
+      );
+    });
+  });
+});
+
+describe("PROBE D — the funnel's third step", () => {
+  it("does not count an order the buyer placed before they applied", async () => {
+    await resetDatabase();
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      const form = await db.registrationForm.create({
+        data: {
+          ...tenant(),
+          name: "Trade",
+          slug: "trade",
+          status: "LIVE",
+          fields: [],
+          appearance: {},
+          emails: {},
+          publish: {},
+        },
+      });
+      await db.formSubmission.create({
+        data: {
+          ...tenant(),
+          formId: form.id,
+          status: "APPROVED",
+          customerId: "gid://shopify/Customer/1",
+          email: "one@acme.test",
+          answers: {},
+          createdAt: new Date("2026-09-25T10:00:00Z"),
+        },
+      });
+      // The only order this buyer ever placed: eight months before applying,
+      // and cancelled.
+      await order({
+        id: 1,
+        at: "2026-01-05T10:00:00Z",
+        total: "100.00",
+        customerId: "gid://shopify/Customer/1",
+        cancelled: "2026-01-06T10:00:00Z",
+      });
+
+      const funnel = (await load()).funnel;
+      // eslint-disable-next-line no-console
+      console.info("funnel", funnel);
+      expect(funnel[2]!.value).toBe(0);
+    });
+  });
+});
+
+describe("PROBE E — the first bucket of the window", () => {
+  it("does not draw a part-day as a whole one", async () => {
+    await resetDatabase();
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // 07:00 on the first day of a 7-day window that starts at 12:00 — before
+      // the window opens, so it is not counted, but its bar is drawn full width.
+      await order({ id: 1, at: "2026-09-23T07:00:00Z", total: "100.00" });
+      const data = await load(7);
+      // eslint-disable-next-line no-console
+      console.info(
+        "points",
+        data.revenue.wholesale.points.map((p) => `${p.day}:${p.value}`).join(" "),
+        "start",
+        data.window.start.toISOString(),
+      );
+      expect(data.revenue.wholesale.points).toHaveLength(7);
+    });
+  });
+});
