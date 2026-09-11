@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-10T20:30:00Z
+Updated: 2026-09-11T05:40:00Z
 Current milestone: 6 — Analytics
-Current task: 6.1 Mirroring order lines [done] · 6.2 the Analytics page [next]
+Current task: 6.2 the Analytics page [done] · 6.3 ✦ ask-your-data + monthly review [next]
 
 ## Done
 
@@ -30,13 +30,12 @@ Current task: 6.1 Mirroring order lines [done] · 6.2 the Analytics page [next]
 - [x] 5.3 Guardrails panel, test mode, conversation log, publish flow — commits `baeb811` + fix round — QA: `qa/5.3/REPORT.md` (cold read returned FAIL on 17 findings; the worst was that "Take over" recorded a merchant's reply with no route to the buyer while both sides were told it arrived — `qa/5.3/COLD-READ.md`. All fixed, gate re-run clean.)
 - [x] 6.1 Order lines mirrored, with discount allocations — commits `1c2cafb` + fix round — QA: `qa/6.1/REPORT.md` (cold read returned FAIL on 7 findings: revenue over-reported after any refund, a truncation flag that could never be true, and a query ~100× over Shopify's cost ceiling. All fixed — `qa/6.1/COLD-READ.md`.)
 - [x] shop facts — the store's own currency and timezone are finally read from Shopify — commit `0dbc09a` (they never had been; every money figure fell back to USD)
-- [~] 6.2 the Analytics page — data layer committed (`3d34fa8`); the page, its states, CSV per chart and the footer are next
+- [x] 6.2 the Analytics page — seven charts, their states, CSV per chart, the currency/timezone footer — QA: `qa/6.2/REPORT.md` (12 captures; palette validated against both surfaces)
 
 ## Next up
 
-- 6.2, the rest: SVG chart geometry, the page and its states (empty with a
-  watermarked example, partial under 7 days, annotations, gating), CSV per
-  chart, the timezone/currency footer. Renumbered — see `DECISIONS.md`
+- **Run the cold read on 6.2** — it has not had one
+- 6.3 ✦ ask-your-data + ✦ monthly review, both gated on `merchant_agent`
 - 6.3 ✦ ask-your-data + ✦ monthly review · 6.4 Settings · 6.5 polish
 - 5.2 has one unfinished piece: the widget's greeting is personalised by name
   only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
@@ -149,13 +148,21 @@ Neither is blocking; both would change product decisions if answered.
 
 ## Notes for my next self
 
+- **Postgres does not survive a container recycle.** `service postgresql start`,
+  then `pg_isready`. The symptom is every vitest run failing in global setup.
+- **Charts are server-rendered inline SVG, no library.** Geometry lives in
+  `app/lib/analytics/geometry.ts` so it is testable; the palette in
+  `app/components/analytics/palette.ts` was chosen with the `dataviz` skill's
+  validator against `#ffffff` and `#1a1a1a`, not by eye. Re-run it before
+  changing a hex. **Look at the rendered PNG** — the label-overflow bug in 6.2
+  was invisible to every test and obvious in the screenshot.
 - **A "validated" GraphQL query is not a query that runs.** 6.1's shipped with
   `lineItems(first: 100)` nested inside `orders(first: 100)` — schema-valid,
-  and about a hundred times over Shopify's 1,000-point *calculated cost*
+  and about a hundred times over Shopify's 1,000-point _calculated cost_
   ceiling, so every page of the backfill would have been rejected. Cost is
   roughly the product of the `first` values. Check it whenever a connection
   goes inside another one.
-- **Shopify's `quantity` and line totals are *before* returns.** `Order` is
+- **Shopify's `quantity` and line totals are _before_ returns.** `Order` is
   written from the `current_*` fields, so anything read off a line has to use
   `currentQuantity` / `currentTotal` or it will disagree with the order it
   belongs to. Charts read `currentTotal`.

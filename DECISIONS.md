@@ -8,6 +8,28 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-11 — The analytics page is not plan-gated
+
+`feature-checklist.md` §7 lists the charts, the CSV exports and the aging report
+under parity features, not under a paid tier, and `FEATURE_KEYS` has no
+`analytics` entry. So the page is available on every plan, including free. The
+reasoning that settled it: a merchant cannot decide whether to pay for wholesale
+features without being able to see what their wholesale is doing. The two ✦
+analytics features in 6.3 gate on `merchant_agent`, like every other Merchant
+Agent surface. I wrote the gating first and removed it rather than leaving two
+dead view fields behind — dead view data was a cold-read finding on 5.3.
+
+## 2026-09-11 — Chart colour is chosen against a validator, not a token
+
+Polaris tokens dress the card, the type and the rules around a chart; the marks
+themselves take a separate, validated palette — which is why Shopify ships
+Polaris Viz rather than colouring charts from UI tokens. Every set was run
+through the six checks against `#ffffff` and `#1a1a1a`; the first ordered ramp I
+tried failed the adjacent-lightness check and was re-stepped rather than argued
+with. Only one chart is categorical (wholesale vs retail); the nominal charts
+are one colour each, because shading bars darker-where-bigger encodes the bar's
+length twice. Recorded in `qa/6.2/REPORT.md` §5 with the measured numbers.
+
 ## 2026-09-10 — A merchant's reply is delivered, not just recorded
 
 5.3's cold read found that "Take over" wrote a reply the buyer could never see,

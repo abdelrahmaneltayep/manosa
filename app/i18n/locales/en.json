@@ -2423,5 +2423,91 @@
       "error": "Something went wrong reaching Claude.",
       "invented_figure": "The reply stated a figure this app hadn't computed, so it was thrown away."
     }
+  },
+  "analytics": {
+    "heading": "Analytics",
+    "description": "What your wholesale side is doing. Every figure below comes from orders Shopify has already charged — nothing here is a price this app worked out.",
+    "range_one": "Last day",
+    "range_other": "Last {{count}} days",
+    "noData": "Nothing in this window.",
+    "rest": "Everyone else",
+    "ungrouped": "No group",
+    "exportChart": "Export this chart (CSV)",
+    "colName": "Name",
+    "colRevenue": "Revenue",
+    "partial_one": "This shop has {{count}} day of history, so these are daily totals with no trend line through them. A line drawn through this little data is a shape, not a trend.",
+    "partial_other": "This shop has {{count}} days of history, so these are daily totals with no trend line through them. A line drawn through this little data is a shape, not a trend.",
+    "excluded_one": "{{count}} order in this window is in another currency and is not counted below. Every figure here is in {{currency}}; adding two currencies together produces a third number that is not money.",
+    "excluded_other": "{{count}} orders in this window are in another currency and are not counted below. Every figure here is in {{currency}}; adding two currencies together produces a third number that is not money.",
+    "missingLines_one": "{{count}} order has more lines than Shopify returned to us, so this chart is missing some of it.",
+    "missingLines_other": "{{count}} orders have more lines than Shopify returned to us, so this chart is missing some of them.",
+    "example": {
+      "heading": "Example — your data appears after your first wholesale order",
+      "body": "These are made-up numbers, shown so you can see what this page will tell you. Nothing here is yours, and the CSV exports are empty until it is."
+    },
+    "annotation": {
+      "installed": "Mannon installed",
+      "agent_published": "Buyer Agent published"
+    },
+    "revenue": {
+      "heading": "Wholesale and retail revenue",
+      "alt": "Daily revenue, wholesale against retail, over the selected window.",
+      "wholesale": "Wholesale · {{total}}",
+      "retail": "Retail · {{total}}",
+      "retailLabel": "Retail"
+    },
+    "byGroup": {
+      "heading": "Wholesale revenue by group"
+    },
+    "topBuyers": {
+      "heading": "Top wholesale buyers"
+    },
+    "topProducts": {
+      "heading": "Top wholesale products"
+    },
+    "rules": {
+      "heading": "Pricing rule performance",
+      "colRule": "Rule",
+      "colLines": "Lines",
+      "colDiscounted": "Given away",
+      "colRevenue": "Revenue",
+      "lines_one": "{{count}} line",
+      "lines_other": "{{count}} lines",
+      "gone": "Renamed or removed",
+      "note": "A rule is matched by the name the buyer saw at checkout, so renaming one does not rewrite what it earned before. Rows marked “renamed or removed” no longer match a rule you have today."
+    },
+    "funnel": {
+      "heading": "Registration funnel",
+      "alt": "Applications submitted, approved, and followed by a first wholesale order.",
+      "submitted": "Applied",
+      "approved": "Approved",
+      "ordered": "Ordered",
+      "colStep": "Step",
+      "colCount": "Buyers",
+      "colOfPrevious": "Of the step before"
+    },
+    "aging": {
+      "heading": "Net terms aging",
+      "alt": "What is owed on net terms, by how late it is.",
+      "colBucket": "Age",
+      "colOwed": "Owed",
+      "colInvoices": "Invoices"
+    },
+    "footer": {
+      "currency": "Every figure on this page is in {{currency}}. Orders in other currencies are counted separately, never converted.",
+      "timezone": "Days are your store's days, in {{zone}}.",
+      "timezoneUnknown": "Days are counted in UTC — we have not read your store's timezone from Shopify yet.",
+      "reach": "Shopify lets this app read the last 60 days of orders, so anything older is not here."
+    },
+    "csv": {
+      "day": "Day",
+      "wholesale": "Wholesale",
+      "retail": "Retail",
+      "amount": "Amount (minor units)",
+      "formatted": "Amount",
+      "currency": "Currency",
+      "discounted": "Given away",
+      "stillExists": "Still a current rule"
+    }
   }
 }

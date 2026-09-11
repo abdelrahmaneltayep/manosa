@@ -169,6 +169,10 @@ test.describe("Buyer Agent guardrails, test mode and conversation states", () =>
   captureSuite("5.3");
 });
 
+test.describe("Analytics chart states", () => {
+  captureSuite("6.2");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)
