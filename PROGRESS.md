@@ -2,7 +2,7 @@
 
 Updated: 2026-09-11T18:30:00Z
 Current milestone: 6 — Analytics
-Current task: 7.1 [done] · 7.3 app-store readiness [next]
+Current task: 7.1 / 7.2 / 7.3 [done] — milestone 7 complete. Submission is stop condition #1.
 
 ## Done
 
@@ -46,6 +46,8 @@ Current task: 7.1 [done] · 7.3 app-store readiness [next]
 - [x] 7.2 (part) Privacy — Shopify's three mandatory topics (`customers/data_request`, `customers/redact`, `shop/redact`), which this app subscribed to **none** of, and a shop purge that finally reaches the buyers — commit `89de3d3` — QA: `qa/7.2/REPORT.md`. The purge cleared the *merchant's* two contact fields and left every buyer's name, address, phone, VAT number, form answers, uploaded documents and every message sent to them behind, under copy promising deletion within 48 hours. **The cold read returned FAIL on three P0s and seven P1s** (`qa/7.2/COLD-READ.md`) — fixed in `390523c`. The worst: `shop/redact` wrote the very `uninstalledAt` the purge checks before deleting, so one delivery for a shop whose uninstall we had missed wiped a **live, trading merchant**; a reinstall never cleared `piiPurgedAt`, so a shop that had ever been purged could never be purged again; and the three topics were declared as `topics` rather than `compliance_topics`, which means Shopify is never told where to send them and the whole feature ships inert. Plus the retention sweep for the five tables that only ever grew.
 
 - [x] 7.1 A deployment that says what is wrong with it — a boot-time environment check, `/healthz/ready`, and a drift guard holding the variable list, the code and `.env.example` together — commit `806d591` — QA: `qa/7.1/REPORT.md`. **The app booted happily without `SHOPIFY_API_SECRET`**, which does not refuse a webhook — it verifies it against an empty key, so a forged delivery for any shop is accepted. And **nothing anywhere said the job runner had stopped**: every promise this app makes on a schedule, the 48-hour GDPR purge included, runs only because an external cron POSTs `/internal/jobs/run`, and a cron that is never set up looks exactly like one that is. The drift guard found `SHOPIFY_DISCOUNT_FUNCTION_ID` documented nowhere — without it wholesale prices are right in the admin and never applied at checkout.
+
+- [x] 7.3 Submission readiness — `npm run release:check` — commit `PENDING` — QA: `qa/7.3/REPORT.md`. **Shopify's own self-review requirements could not be fetched**: `shopify.dev` is blocked by this environment's network policy (`shopify doc fetch` → 403), and the skill that runs that review says never to work from a remembered list. So this is explicitly *not* a compliance report — it is the subset a machine can check from inside the repo. It found one real blocker: every URL in `shopify.app.toml` is still `https://localhost:3000`, which Shopify calls for OAuth, webhooks and the App Proxy, so a submission on that file is rejected before anybody reads the listing. Known since 3.4 and never checked.
 
 ## Next up
 
@@ -550,3 +552,13 @@ Neither is blocking; both would change product decisions if answered.
   quiet app.** `/healthz/ready` names `runnerStalled` because nothing else in
   the product ever would — and everything this app promises on a schedule
   (the 48-hour GDPR purge above all) depends on it.
+- **`shopify.dev` is unreachable from here, and the App Store self-review
+  cannot be run.** `shopify doc fetch` returns 403 through the agent proxy, as
+  does a direct request. The skill that performs that review says never to work
+  from a remembered list, so 7.3 did not produce one. `npm run release:check`
+  is the local subset instead, and it is careful to say what it is not.
+- **Every URL in `shopify.app.toml` is still localhost.** This is the one thing
+  standing between the repo and a submission that a person could make.
+  `npm run release:check` exits non-zero on it. It is deliberately **not** part
+  of `npm test`: the blocker is real and outstanding, and a red suite everybody
+  learns to ignore is worse than no check.

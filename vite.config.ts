@@ -26,7 +26,9 @@ export default defineConfig({
     hmr: hmrConfig,
     fs: {
       // Let Vite read files from the project root and node_modules.
-      allow: ["app", "node_modules", "packages"],
+      // `scripts` is here for `npm run release:check`, which runs a repo
+      // script through vite-node so it can import the app's own modules.
+      allow: ["app", "node_modules", "packages", "scripts"],
     },
   },
   plugins: [
