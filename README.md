@@ -291,6 +291,33 @@ never happens — a GDPR obligation, not a nice-to-have.
 
 See `docs/adr/0004-webhooks-and-jobs.md`.
 
+## Before a deploy is a deploy
+
+Two endpoints answer two different questions, and the second is the one that
+matters after the first week.
+
+`GET /healthz` — **is the server up?** Deliberately does not touch the
+database, so a blip cannot take the app out of rotation. Point a load balancer
+at this one.
+
+`GET /healthz/ready` — **can this deployment do its job?** It answers 200 or
+503 and names what is wrong:
+
+- `configured` — every required variable is set. Missing ones are listed.
+  `SHOPIFY_API_SECRET` is the one to care about: empty, it does not refuse a
+  webhook, it verifies it against an empty key. The app refuses to boot in
+  production without it.
+- `missingOptional` — the parts of the product switched off in this
+  environment, each named. Not a failure; `ANTHROPIC_API_KEY` unset means every
+  ✦ feature is unavailable and the rest works.
+- `runnerStalled` — **a job was due more than thirty minutes ago and is still
+  pending.** That means the cron below is not running, and everything this app
+  promises on a schedule — the 48-hour GDPR purge above all — is silently not
+  happening. Nothing else in the product would ever tell you.
+
+It hands out counts and booleans only: no shop name, no job payload, no error
+body, because it is unauthenticated and read by machines.
+
 ## Adding a webhook
 
 1. Add the topic, URI and handler to `app/lib/webhooks/registry.ts`.

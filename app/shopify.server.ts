@@ -11,6 +11,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 
 import { prismaBase } from "~/db.server";
+import { assertEnvironment } from "~/lib/config/environment.server";
 import {
   billingPlanId,
   PLAN_LIST,
@@ -50,6 +51,11 @@ const billing = Object.fromEntries(
     ]),
   ),
 );
+
+// Before anything reads a variable with a `!` or a `?? ""` behind it. In
+// production this throws with the whole list rather than booting an app that
+// verifies webhook signatures against an empty key.
+assertEnvironment();
 
 const shopifyConfig = {
   apiKey: process.env.SHOPIFY_API_KEY!,

@@ -2,7 +2,7 @@
 
 Updated: 2026-09-11T18:30:00Z
 Current milestone: 6 — Analytics
-Current task: 7.2 privacy [done] · 7.1 / 7.3 release [next]
+Current task: 7.1 [done] · 7.3 app-store readiness [next]
 
 ## Done
 
@@ -44,6 +44,8 @@ Current task: 7.2 privacy [done] · 7.1 / 7.3 release [next]
 - [x] 6.7 (part two) The three things that were registered and never built — the reorder chip (hardcoded `false` since 2.1), the net-terms risk signal (`terms_risk`: a prompt version, no prompt, no caller, no screen) and the widget greeting's tier and last order (open since 5.2) — commit `e9b2703` — QA: `qa/6.7/REPORT.md`. **Neither chip needed a model**: both are arithmetic on rows this app already stores, so `reorder_prediction` and `terms_risk` are deleted from the AI registry rather than left as names for features that do not exist. Found on the way: the Buyer Agent block was at **99.2% of its byte budget** because the guard counted `{% comment %}` and `{% schema %}`, neither of which Shopify ever serves — so the budget was pushing against documenting storefront code.
 
 - [x] 7.2 (part) Privacy — Shopify's three mandatory topics (`customers/data_request`, `customers/redact`, `shop/redact`), which this app subscribed to **none** of, and a shop purge that finally reaches the buyers — commit `89de3d3` — QA: `qa/7.2/REPORT.md`. The purge cleared the *merchant's* two contact fields and left every buyer's name, address, phone, VAT number, form answers, uploaded documents and every message sent to them behind, under copy promising deletion within 48 hours. **The cold read returned FAIL on three P0s and seven P1s** (`qa/7.2/COLD-READ.md`) — fixed in `390523c`. The worst: `shop/redact` wrote the very `uninstalledAt` the purge checks before deleting, so one delivery for a shop whose uninstall we had missed wiped a **live, trading merchant**; a reinstall never cleared `piiPurgedAt`, so a shop that had ever been purged could never be purged again; and the three topics were declared as `topics` rather than `compliance_topics`, which means Shopify is never told where to send them and the whole feature ships inert. Plus the retention sweep for the five tables that only ever grew.
+
+- [x] 7.1 A deployment that says what is wrong with it — a boot-time environment check, `/healthz/ready`, and a drift guard holding the variable list, the code and `.env.example` together — commit `PENDING` — QA: `qa/7.1/REPORT.md`. **The app booted happily without `SHOPIFY_API_SECRET`**, which does not refuse a webhook — it verifies it against an empty key, so a forged delivery for any shop is accepted. And **nothing anywhere said the job runner had stopped**: every promise this app makes on a schedule, the 48-hour GDPR purge included, runs only because an external cron POSTs `/internal/jobs/run`, and a cron that is never set up looks exactly like one that is. The drift guard found `SHOPIFY_DISCOUNT_FUNCTION_ID` documented nowhere — without it wholesale prices are right in the admin and never applied at checkout.
 
 ## Next up
 
@@ -540,3 +542,11 @@ Neither is blocking; both would change product decisions if answered.
 - **`piiPurgedAt` is cleared on reinstall.** It was not, and the purge skips any
   shop that has one: install → uninstall → purge → reinstall → trade a year →
   uninstall deleted nothing, for ever, under copy promising 48 hours.
+- **An empty secret is worse than a missing one.** `SHOPIFY_API_SECRET ?? ""`
+  does not make verification fail; it makes it succeed against an empty key.
+  Anywhere a credential has a `?? ""` behind it, the question is not "does it
+  still work" but "what does it now accept".
+- **The job runner is an external cron, and a cron that never ran looks like a
+  quiet app.** `/healthz/ready` names `runnerStalled` because nothing else in
+  the product ever would — and everything this app promises on a schedule
+  (the 48-hour GDPR purge above all) depends on it.
