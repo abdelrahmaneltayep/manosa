@@ -85,8 +85,10 @@ model Shop {
   briefingFailedReason String?
   installedAt          DateTime  @default(now())
   uninstalledAt        DateTime?
-  /// Set by the Danger zone "pause app" control (Settings, Phase 6.2).
-  /// While paused, pricing rules stop applying but nothing is deleted.
+  /// Set by the Danger zone "pause app" control (Settings, phase 6.4).
+  /// While paused an empty ruleset is published, so the Function stops
+  /// discounting at checkout, and the App Proxy refuses. Nothing is
+  /// deleted: every rule stays here and resume republishes them.
   pausedAt             DateTime?
   /// Set when the post-uninstall PII purge has run (GDPR, within 48h).
   piiPurgedAt          DateTime?
@@ -182,6 +184,37 @@ model Shop {
   /// pages, and a restart in the middle must not start again from the top.
   customersBackfillCursor String?
   customerCount           Int       @default(0)
+
+  // --- Settings (phase 6.4) ------------------------------------------------
+  /// Show the retail price struck through beside the wholesale one. Off for
+  /// merchants whose trade buyers should never see retail at all.
+  showCompareAt          Boolean @default(true)
+  /// "Log in to see prices" — a signed-out visitor sees no price and no
+  /// add-to-cart, rather than a retail price the buyer would never pay.
+  hidePricesFromGuests   Boolean @default(false)
+  /// Whether storefront prices read as tax-inclusive or tax-exclusive. Display
+  /// only: Shopify still decides what is charged.
+  taxDisplay             String  @default("excl")
+  /// Whether a wholesale price may stack with a Shopify discount code. Off by
+  /// default — stacking is how a trade price accidentally becomes a giveaway.
+  /// Per-rule `combinable` still applies; this is the store-wide gate.
+  allowShopifyDiscounts  Boolean @default(false)
+  /// Whether marking a buyer tax-exempt needs a second pair of eyes.
+  taxExemptNeedsApproval Boolean @default(true)
+
+  /// The address the app sends from, and the domain it belongs to.
+  ///
+  /// Unverified means mail goes out on the app's own domain with the merchant
+  /// told so — never "verified" for a domain nobody has checked.
+  senderEmail      String?
+  senderDomain     String?
+  senderVerifiedAt DateTime?
+  /// The DNS records the merchant has to add, as the provider gave them.
+  senderDnsRecords Json?
+  /// When the records were last checked, and what came back. Null means never
+  /// checked, which the page says rather than implying a failure.
+  senderCheckedAt  DateTime?
+  senderCheckError String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
