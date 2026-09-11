@@ -44,6 +44,15 @@ export function SettingsPage({ view }: { view: SettingsView }) {
       <Tax view={view} />
       <Orders view={view} />
       <AgentControls view={view} />
+      <s-section heading={t("settings.translationsHeading")}>
+        <s-stack direction="block" gap="small">
+          <s-paragraph color="subdued">{t("settings.translationsBody")}</s-paragraph>
+          <s-link href="/app/settings/translations">
+            {t("settings.translationsLink")}
+          </s-link>
+        </s-stack>
+      </s-section>
+
       <Notifications view={view} />
       <DangerZone view={view} />
     </s-page>

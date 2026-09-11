@@ -151,3 +151,60 @@ export interface SettingsView {
   failedSection: string | null;
   issues: SettingsIssueView[];
 }
+
+/* -------------------------------------------------------------------------- */
+
+/** One editable string, as the table shows it. */
+export interface TranslationRowView {
+  key: string;
+  /** What the app ships in this language. Empty when it ships nothing. */
+  shipped: string;
+  /** The merchant's own wording, or null when they have not changed it. */
+  value: string | null;
+  needsReview: boolean;
+  /** `{{count}}` and the like, which a translation has to keep. */
+  placeholders: string[];
+  /** Why this row could not be saved, beside the field that caused it. */
+  error: string | null;
+}
+
+export interface TranslationsView {
+  locale: string;
+  locales: { code: string; name: string }[];
+  search: string;
+  missingOnly: boolean;
+  reviewOnly: boolean;
+  /** True when any filter is set, so "no rows" can say which. */
+  filtered: boolean;
+
+  rows: TranslationRowView[];
+  total: number;
+  page: number;
+  pages: number;
+  nextHref: string | null;
+  previousHref: string | null;
+  /** The current filter state, for an "accept" link to come back to. */
+  acceptHrefBase: string;
+
+  /** The last import, if this render is answering one. */
+  imported: {
+    applied: number;
+    unchanged: number;
+    rejected: { key: string; reason: "unknownKey" | "placeholders" | "empty" }[];
+  } | null;
+  /** Why a file was refused whole, before any string was read from it. */
+  importIssue:
+    "noFile" | "tooBig" | "notJson" | "wrongShape" | "wrongLocale" | "tooMany" | null;
+
+  fill: {
+    /** Strings the merchant has not written themselves, in this language. */
+    pending: number;
+    /** How many the last run wrote. */
+    filled: number;
+    /** Why ✦ is unavailable: the merchant's choice, the plan, or no key. */
+    locked: "permission" | "plan" | "no_key" | null;
+    requiredPlan: string | null;
+    failure: string | null;
+    running: boolean;
+  };
+}

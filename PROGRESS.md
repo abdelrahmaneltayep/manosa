@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-11T16:00:00Z
+Updated: 2026-09-11T18:30:00Z
 Current milestone: 6 — Analytics
-Current task: 6.5 ✦ Agent controls [done] · 6.6 Translations [next]
+Current task: 6.6 Translations [done] · 6.7 polish [next]
 
 ## Done
 
@@ -37,20 +37,11 @@ Current task: 6.5 ✦ Agent controls [done] · 6.6 Translations [next]
 
 - [x] 6.5 ✦ Agent controls — permission toggles wired through every ✦ surface, brand-voice samples, the muted-briefing list, the audit log filterable by actor/action/date, and the twelve-month retention job — commit `5babb43` + fix round — QA: `qa/6.5/REPORT.md` (cold read returned FAIL on 25 findings, 1 P0 — **the gate did not gate the POST**: every call site put `aiGate(...).allowed` in a _view_ and never read it as a condition, so four ✦ surfaces still called Claude after a merchant switched it off. All fixed — `qa/6.5/COLD-READ.md`. `docs/adr/0027`. **There was no AI permission control anywhere before this** — every ✦ surface gated on `isAiAvailable()` alone — and **nothing enforced the audit retention** the schema has promised since 0.2.)
 
+- [x] 6.6 Translations — every buyer-facing string editable per language, ✦ wording suggested in the merchant's own voice, a review flag per string, export **and** import — commit `PENDING` — QA: `qa/6.6/REPORT.md` (`docs/adr/0028`). The ✦ half nearly shipped inert for the fourth time: both catalogues ship complete, so "fill what is missing" would have had nothing to do on any store. It suggests wording over the strings a merchant has **not** written instead, which is also the first thing to read the 6.5 brand-voice samples. `StorefrontString` was not in the uninstall purge — the lesson from 6.4, applied before the cold read this time.
+
 ## Next up
 
-- 6.6 Translations — the storefront strings a merchant cannot currently
-  change, per language, with the ✦ fill for missing ones, a `needsReview`
-  flag per string, and export/import. Brand-voice samples are stored but read
-  by no prompt yet; wiring them into the drafting prompts is 6.6 too.
-  - Scope it to what a buyer actually reads and the merchant cannot touch:
-    `limit` (8 strings), `approval` (31), and the buyer-facing part of `forms`
-    (198) and `quotes` (100). **Not** the theme blocks' own headings — those
-    are `block.settings` in the liquid, already editable in the theme editor,
-    and taking them over would be wrong.
-  - `LimitsPage` currently says "this wording is not editable yet", which 6.4
-    put there. That is a promise to keep.
-- **API keys are NOT in 6.6, and the reason matters.** §8 lists "public API
+- **API keys were not in 6.6, and the reason matters.** §8 lists "public API
   keys, webhooks, ERP sync". **There is no public API.** All 53 routes are the
   admin, the App Proxy, two public-by-design pages (`f.$publicId`,
   `q.$publicId`), Shopify's inbound `webhooks.$`, a bearer-token
@@ -445,3 +436,27 @@ Neither is blocking; both would change product decisions if answered.
   relation, so no cascade touched it, under copy promising deletion in 48
   hours. `purge-shop-pii.server.ts` now names it. **7.2 must check every table
   against that file**, not just the two already listed.
+- **An i18next override is only real where the instance is built.** A flat
+  `{"forms.submit": …}` bundle does not work: i18next reads a dot as a path, so
+  it creates a literal dotted key that nothing ever looks up. `createI18n` adds
+  each override with `addResource(locale, ns, key, value)`, which is also the
+  only place an instance is made — so no surface can translate without a
+  merchant's wording. The test that matters is not "the row saved" but "the
+  buyer reads it": `getFixedT` before and after.
+- **The capture guard now has one per-element exemption, and it is tested.**
+  Settings → Translations shows catalog keys on purpose, so an element may opt
+  out with `data-string-key`. Per element, never per page — that page is
+  exactly where a genuine i18next fallback would be hardest to spot.
+  `tests/unit/capture-guard.test.ts` puts a real leak beside an exempt element
+  and expects a failure.
+- **An `s-*` field is not a form control in a capture.** `s-text-area
+  name="value"` never reaches `FormData` in the browser here, because Polaris
+  never upgrades it. The e2e form-parser checks (the 6.4 nested-form net) can
+  see hidden inputs and form *count*, and cannot see what a merchant's typing
+  posts. Assert `s-*` fields as markup and say so in the report.
+- **The fourth inert control was caught before shipping, not after.** "✦ Fill
+  missing translations" would have had nothing to do on any store, because both
+  catalogues ship complete. Whenever a ✦ button acts on "what is missing",
+  compute the count on a fresh install first: if it is zero, the button is
+  decoration. The three before it were `taxExemptNeedsApproval`, the
+  auto-approve toggle and the API keys page.

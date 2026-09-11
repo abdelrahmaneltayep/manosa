@@ -254,6 +254,31 @@ describe("the uninstall PII purge", () => {
     expect(second.piiPurgedAt?.getTime()).toBe(first.piiPurgedAt?.getTime());
   });
 
+  it("takes the merchant's own storefront wording with it", async () => {
+    await uninstalledShop(ALPHA);
+    await shopScope.run(ALPHA, () =>
+      db.storefrontString.create({
+        data: { ...tenant(), key: "forms.submit", locale: "en", value: "Apply now" },
+      }),
+    );
+    await shopScope.run(BETA, async () => {
+      await db.shop.create({ data: { ...tenant() } });
+      await db.storefrontString.create({
+        data: { ...tenant(), key: "forms.submit", locale: "en", value: "Join us" },
+      });
+    });
+    await shopScope.run(ALPHA, () =>
+      enqueueJob({ kind: "shop.purge_pii", runAt: PAST() }),
+    );
+
+    await runDueJobs();
+
+    // Settings promises everything stored about a shop goes within 48 hours. A
+    // table that nothing names here outlives that promise silently.
+    expect(await shopScope.run(ALPHA, () => db.storefrontString.count())).toBe(0);
+    expect(await shopScope.run(BETA, () => db.storefrontString.count())).toBe(1);
+  });
+
   it("never reaches another tenant's data", async () => {
     await uninstalledShop(ALPHA);
     await shopScope.run(BETA, () =>

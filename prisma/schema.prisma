@@ -1676,3 +1676,37 @@ model BrandVoiceSample {
 
   @@index([shop, createdAt])
 }
+
+// ---------------------------------------------------------------------------
+// Storefront translations (phase 6.6)
+// ---------------------------------------------------------------------------
+
+/// One string a buyer reads, in the merchant's own words.
+///
+/// Checklist §8: "Translations: table of strings, ✦ fill missing with AI per
+/// language, human-review flag per string, export/import."
+///
+/// Overrides the shipped catalogue, never replaces it: a key with no row here
+/// falls through to `app/i18n/locales/*.json`, so a merchant who edits three
+/// strings is not suddenly responsible for five hundred.
+model StorefrontString {
+  id     String @id @default(cuid())
+  shop   String
+  /// Dotted catalogue key, e.g. "forms.submit".
+  key    String
+  locale String
+  value  String
+
+  /// True when ✦ wrote this rather than a person. Kept separate from
+  /// `needsReview` because a merchant may accept a fill and still want to come
+  /// back to it — and because "who wrote this" is the thing Invariant 5 says a
+  /// merchant must be able to see.
+  aiFilled    Boolean @default(false)
+  needsReview Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@unique([shop, key, locale])
+  @@index([shop, locale])
+}

@@ -7,6 +7,17 @@ export const SUPPORTED_LOCALES = ["en", "ar"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "en";
+
+/**
+ * What to call each language when asking a model to translate into it.
+ *
+ * Endonyms rather than codes: "Arabic" is what the prompt should say, and a
+ * two-letter code is a thing a model has to guess about.
+ */
+export const LANGUAGE_NAMES: Record<Locale, string> = {
+  en: "English",
+  ar: "Arabic",
+};
 export const DEFAULT_NAMESPACE = "common";
 
 /** Locales written right-to-left. */

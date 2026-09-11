@@ -7,6 +7,7 @@ import {
   type Locale,
 } from "~/i18n/config";
 import { createI18n } from "~/i18n/i18next";
+import { overridesFor } from "~/lib/i18n/strings.server";
 
 /**
  * Work out which language to render in.
@@ -43,7 +44,11 @@ export function detectLocale(request: Request): Locale {
 
 /** A `t` bound to one locale, for translating on the server. */
 export async function getFixedT(locale: Locale): Promise<TFunction> {
-  const instance = await createI18n(locale);
+  // The shop's own wording, when there is a shop. `overridesFor` returns
+  // nothing outside a tenant scope — the login page and the error boundary
+  // both translate without one — so this is the same call everywhere rather
+  // than two paths, one of which would eventually forget.
+  const instance = await createI18n(locale, await overridesFor(locale));
   return instance.getFixedT(locale, DEFAULT_NAMESPACE);
 }
 

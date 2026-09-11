@@ -826,3 +826,28 @@ tests a different application. `docs/adr/0001`.
 `remix-i18next`'s Remix-2 release pins i18next 23; this app is on 26. A fresh
 instance per server request, so two shops rendering in different languages
 cannot race. `docs/adr/0003`.
+
+## 2026-09-11 — Import refuses a file whose language disagrees with the page
+
+`importStrings` refuses a whole file when its `locale` is not the language
+selected on the page, rather than importing it into the selected language or
+switching the page to the file's. A merchant who exports Arabic, edits it, and
+imports it while English is selected would otherwise put Arabic wording on the
+English storefront one string at a time, with nothing on the screen to say it
+had happened — the kind of failure only a buyer finds. Rejected: importing by
+the file's own locale regardless of the page (silently doing something the
+merchant did not ask for) and ignoring the field (the same, with extra steps).
+The error names the fix: switch the language above, then import again.
+
+## 2026-09-11 — "✦ Fill missing" became "✦ Suggest wording in your voice"
+
+Checklist §8 asks for *"✦ Fill missing with AI per language"*. Both catalogues
+this app ships are complete in both languages, so a button that fills what is
+missing would have had nothing to do on any store that ever installs it. The
+mechanism is unchanged — the same model call, the same batch, the same
+`needsReview` flag — but it is pointed at the strings the merchant has not
+written themselves, in their own voice, using the brand-voice samples 6.5
+stored and no prompt had read. It is still "fill missing per language" when a
+future locale ships incomplete: `unwrittenIn` returns untranslated keys first
+for exactly that case. Rejected: shipping the literal reading as an inert
+button, which is the mistake this repo has caught three times already.

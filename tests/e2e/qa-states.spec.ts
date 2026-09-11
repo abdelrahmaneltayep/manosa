@@ -184,6 +184,10 @@ test.describe("Settings page states", () => {
   captureSuite("6.4");
 });
 
+test.describe("Translations page states", () => {
+  captureSuite("6.6");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)

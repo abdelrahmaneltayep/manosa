@@ -15,7 +15,18 @@ import { resources } from "~/i18n/resources";
  * Server-side must not share an instance across requests: two shops rendering
  * in different languages at the same time would race on the global language.
  */
-export async function createI18n(locale: Locale): Promise<I18n> {
+export async function createI18n(
+  locale: Locale,
+  /**
+   * The shop's own wording for storefront strings, flat: `{"forms.submit": …}`.
+   *
+   * Applied on top of the shipped catalogue rather than instead of it, so a
+   * merchant who rewrites three strings is not suddenly responsible for five
+   * hundred — and applied **here**, in the one place an instance is built, so
+   * there is no surface that can translate without them.
+   */
+  overrides: Record<string, string> = {},
+): Promise<I18n> {
   const instance = createInstance();
 
   await instance.use(initReactI18next).init({
@@ -31,6 +42,13 @@ export async function createI18n(locale: Locale): Promise<I18n> {
     },
     react: { useSuspense: false },
   });
+
+  for (const [key, value] of Object.entries(overrides)) {
+    // Dotted keys are a path in i18next's own tree, so each is set on its own
+    // rather than merged as an object — a flat `{"forms.submit": …}` bundle
+    // would create a literal key with dots in it and silently never match.
+    instance.addResource(locale, DEFAULT_NAMESPACE, key, value);
+  }
 
   return instance;
 }

@@ -215,10 +215,10 @@ function Preview({ view }: { view: LimitsView }) {
             <s-text>{view.preview.message}</s-text>
           </s-stack>
         </s-box>
-        {/* This used to link to Settings, which has no limit-message editor.
-            It was a forward reference before 6.4; once Settings existed it
-            became a dead end. Editing this wording is 6.5 (translations). */}
-        <s-text color="subdued">{t("limits.previewEdit")}</s-text>
+        {/* The promise 6.4 made — "not editable yet" — kept. */}
+        <s-link href="/app/settings/translations?locale=en&search=limit">
+          {t("limits.previewEdit")}
+        </s-link>
       </s-stack>
     </s-section>
   );

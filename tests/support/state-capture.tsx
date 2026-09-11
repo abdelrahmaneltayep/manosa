@@ -134,7 +134,20 @@ const STYLES = `
  */
 const CATALOG_ROOTS = Object.keys(en as Record<string, unknown>);
 
-export function expectNoRawCatalogKeys(html: string, name: string) {
+/**
+ * Text that is deliberately a catalog key.
+ *
+ * Settings → Translations shows a merchant the key of every string they may
+ * rewrite, so on that one page `forms.submit` as visible text is the feature
+ * rather than a leak. An element opts out by carrying `data-string-key`, and
+ * only the text inside that element is exempt — the rest of the page is still
+ * checked, which is what switching the guard off per page would have thrown
+ * away.
+ */
+const LITERAL_KEY_TEXT = /(<[a-z-]+[^>]*\sdata-string-key="[^"]*"[^>]*>)[^<]*/g;
+
+export function expectNoRawCatalogKeys(rendered: string, name: string) {
+  const html = rendered.replace(LITERAL_KEY_TEXT, "$1");
   for (const root of CATALOG_ROOTS) {
     expect(html, `${name}: a raw "${root}." catalog key reached the markup`).not.toMatch(
       new RegExp(`>[^<]*\\b${root}\\.[a-zA-Z_]`),

@@ -22,29 +22,35 @@ export async function purgeShopPii() {
   if (!record.uninstalledAt) return { skipped: "reinstalled" as const };
   if (record.piiPurgedAt) return { skipped: "already purged" as const };
 
-  const [, redactedAudit, deletedConversations, deletedSamples] = await db.$transaction([
-    db.shop.update({
-      where: { shop },
-      data: { name: null, email: null, piiPurgedAt: new Date() },
-    }),
-    // Keep the audit trail's shape — who did what, when — without the
-    // identifiers that make it personal data.
-    db.auditLog.updateMany({
-      where: { shop },
-      data: { actorId: null, actorLabel: null, ip: null },
-    }),
-    // Buyer Agent conversations are a buyer's own words to a merchant who no
-    // longer has this app. Deleted rather than redacted: there is nothing left
-    // in them worth keeping once the names are gone, and the messages go with
-    // them by cascade.
-    db.agentConversation.deleteMany({ where: { shop } }),
-    // The merchant's own messages to their buyers, pasted in as writing
-    // samples: names, order references, whatever they happened to contain.
-    // Same reasoning as the conversations above, and the same promise — the
-    // Settings page says everything stored about a shop goes within 48 hours.
-    // It has no relation and so is in no cascade; it has to be named here.
-    db.brandVoiceSample.deleteMany({ where: { shop } }),
-  ]);
+  const [, redactedAudit, deletedConversations, deletedSamples, deletedStrings] =
+    await db.$transaction([
+      db.shop.update({
+        where: { shop },
+        data: { name: null, email: null, piiPurgedAt: new Date() },
+      }),
+      // Keep the audit trail's shape — who did what, when — without the
+      // identifiers that make it personal data.
+      db.auditLog.updateMany({
+        where: { shop },
+        data: { actorId: null, actorLabel: null, ip: null },
+      }),
+      // Buyer Agent conversations are a buyer's own words to a merchant who no
+      // longer has this app. Deleted rather than redacted: there is nothing left
+      // in them worth keeping once the names are gone, and the messages go with
+      // them by cascade.
+      db.agentConversation.deleteMany({ where: { shop } }),
+      // The merchant's own messages to their buyers, pasted in as writing
+      // samples: names, order references, whatever they happened to contain.
+      // Same reasoning as the conversations above, and the same promise — the
+      // Settings page says everything stored about a shop goes within 48 hours.
+      // It has no relation and so is in no cascade; it has to be named here.
+      db.brandVoiceSample.deleteMany({ where: { shop } }),
+      // The merchant's own wording for the strings a buyer reads. Not personal
+      // data, but the Settings page promises everything stored about a shop goes
+      // within 48 hours, and a table nobody names here is a table that outlives
+      // the promise. It has no relation, so it is in no cascade.
+      db.storefrontString.deleteMany({ where: { shop } }),
+    ]);
 
   // Defence in depth: sessions are deleted the moment the uninstall webhook
   // lands, so this should always be zero.
@@ -53,13 +59,14 @@ export async function purgeShopPii() {
   await recordAudit({
     actor: SYSTEM_ACTOR,
     action: "shop.pii_purged",
-    summary: `Removed merchant contact details, redacted ${redactedAudit.count} audit entries and deleted ${deletedConversations.count} agent conversations and ${deletedSamples.count} writing samples after uninstall.`,
+    summary: `Removed merchant contact details, redacted ${redactedAudit.count} audit entries and deleted ${deletedConversations.count} agent conversations, ${deletedSamples.count} writing samples and ${deletedStrings.count} translated strings after uninstall.`,
     subject: { type: "Shop", id: shop },
     metadata: {
       redactedAuditEntries: redactedAudit.count,
       deletedSessions: sessions,
       deletedConversations: deletedConversations.count,
       deletedSamples: deletedSamples.count,
+      deletedStrings: deletedStrings.count,
     },
   });
 
@@ -68,5 +75,6 @@ export async function purgeShopPii() {
     deletedSessions: sessions,
     deletedConversations: deletedConversations.count,
     deletedSamples: deletedSamples.count,
+    deletedStrings: deletedStrings.count,
   };
 }
