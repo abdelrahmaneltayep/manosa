@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { readDataQuestion } from "~/lib/ai/prompts/ask-data.server";
+import {
+  ASK_DATA_SYSTEM,
+  CHART_MENU,
+  readDataQuestion,
+} from "~/lib/ai/prompts/ask-data.server";
+import { CHART_KEYS } from "~/components/analytics/types";
 import {
   MAX_SECTIONS,
   readReview,
@@ -68,6 +73,26 @@ describe("routing a question to a chart", () => {
 });
 
 /* -------------------------------------------------------------------------- */
+
+describe("the chart menu the model is given", () => {
+  it("names every chart the app has, so a new one can be routed to", () => {
+    // The list used to be typed out inside the prompt template while the
+    // validator read `CHART_KEYS`, so a chart added to the page passed
+    // validation and the model was never told it existed — the hand-kept-list
+    // failure this repo has now had four times.
+    for (const key of CHART_KEYS) {
+      expect(ASK_DATA_SYSTEM, key).toContain(key);
+      expect(CHART_MENU[key].length).toBeGreaterThan(10);
+    }
+  });
+
+  it("offers the model nothing the app cannot draw", () => {
+    const offered = [...ASK_DATA_SYSTEM.matchAll(/^ {2}([a-z]+) {2,}—/gmu)].map(
+      (match) => match[1]!,
+    );
+    expect(offered.sort()).toEqual([...CHART_KEYS].sort());
+  });
+});
 
 describe("reading a monthly review", () => {
   const slots = { f1: "$12,400.00", q1: "42", n1: "Café trade price" };

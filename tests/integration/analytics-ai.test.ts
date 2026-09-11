@@ -222,6 +222,36 @@ describe("asking your data", () => {
     });
   });
 
+  it("answers the orders chart in counts, never in money", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order(1, "2026-09-20T10:00:00Z", "100.00");
+      await order(2, "2026-09-20T14:00:00Z", "250.00");
+      await order(3, "2026-09-22T09:00:00Z", "80.00");
+      const data = await loadAnalytics({ range: 30, now: NOW, labels });
+
+      expect(chartsWithData(data)).toContain("orders");
+
+      const answer = answerFrom(
+        data,
+        { chart: "orders", range: 30, focus: null },
+        { locale: "en", t },
+      );
+
+      // Every figure is a count. A "$" here would be this app's own number
+      // being wrong, not the model's — the slot guard would never catch it,
+      // because the slot values are ours.
+      expect(answer.empty).toBe(false);
+      expect(answer.slots.q1).toBe("3");
+      expect(Object.values(answer.slots).join(" ")).not.toContain("$");
+      expect(answer.href).toContain("#orders");
+      // The busiest day is a day the orders actually fell on.
+      expect(answer.slots.d1).toBe("2026-09-20");
+      expect(answer.slots.q3).toBe("2");
+    });
+  });
+
   it("says a focus matched nothing rather than answering about somebody else", async () => {
     await installShop(ALPHA);
 

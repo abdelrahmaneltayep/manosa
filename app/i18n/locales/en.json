@@ -2544,14 +2544,25 @@
       "currency": "Currency",
       "discounted": "Given away",
       "stillExists": "Still a current rule",
-      "minorUnits": "minor units"
+      "minorUnits": "minor units",
+      "wholesaleOrders": "Wholesale orders",
+      "retailOrders": "Retail orders"
     },
     "loading": "Reading your numbers…",
     "lineLevel": "Line totals, before shipping and tax — so this will not add up to the revenue chart above.",
     "capped": "This window has more orders than one view reads, so the charts below cover the most recent of them. Narrow the window for a complete picture.",
     "aov_one": "Average wholesale order: {{value}}, across {{count}} order.",
     "aov_other": "Average wholesale order: {{value}}, across {{count}} orders.",
-    "monthlyReview": "✦ Monthly review"
+    "monthlyReview": "✦ Monthly review",
+    "orders": {
+      "heading": "Orders over time",
+      "alt": "Orders a day, wholesale against retail, over the selected window.",
+      "wholesale_one": "Wholesale · {{count}} order",
+      "wholesale_other": "Wholesale · {{count}} orders",
+      "retail_one": "Retail · {{count}} order",
+      "retail_other": "Retail · {{count}} orders",
+      "note": "Cancelled orders are not counted, here or anywhere else on this page."
+    }
   },
   "review": {
     "heading": "✦ Monthly review",

@@ -41,6 +41,7 @@ export interface DataAnswer {
 
 const ANCHOR: Record<ChartKey, string> = {
   revenue: "revenue",
+  orders: "orders",
   groups: "groups",
   buyers: "buyers",
   products: "products",
@@ -55,6 +56,9 @@ export function chartsWithData(data: AnalyticsData): ChartKey[] {
 
   if (data.revenue.wholesale.total.amount > 0 || data.revenue.retail.total.amount > 0) {
     filled.push("revenue");
+  }
+  if (data.orderCounts.wholesale.total > 0 || data.orderCounts.retail.total > 0) {
+    filled.push("orders");
   }
   if (data.byGroup.length > 0) filled.push("groups");
   if (data.topBuyers.length > 0) filled.push("buyers");
@@ -164,6 +168,30 @@ export function answerFrom(
           f1: cash(wholesale.total.amount),
           f2: cash(retail.total.amount),
           ...(best && best.value > 0 ? { d1: best.day, f3: cash(best.value) } : {}),
+        },
+      };
+    }
+
+    case "orders": {
+      const wholesale = data.orderCounts.wholesale;
+      const retail = data.orderCounts.retail;
+      const best = [...wholesale.points].sort((a, b) => b.value - a.value)[0];
+
+      // Counts, never `cash()`: this chart has no currency, and an answer that
+      // said "you took $14.00 in orders" would be a number that is not money.
+      return {
+        ...base,
+        facts: [
+          `wholesale placed {{q1}} orders over the window`,
+          `retail placed {{q2}}`,
+          ...(best && best.value > 0
+            ? [`the busiest single day was {{d1}}, with {{q3}}`]
+            : []),
+        ],
+        slots: {
+          q1: String(wholesale.total),
+          q2: String(retail.total),
+          ...(best && best.value > 0 ? { d1: best.day, q3: String(best.value) } : {}),
         },
       };
     }

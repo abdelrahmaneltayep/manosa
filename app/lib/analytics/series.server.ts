@@ -116,6 +116,39 @@ export function bucketByDay(
   };
 }
 
+export interface CountSeries {
+  points: SeriesPoint[];
+  total: number;
+}
+
+/**
+ * How many rows fell on each day, including the days with none.
+ *
+ * Separate from `bucketByDay` rather than a flag on it: a count is not money,
+ * has no currency, and formatting one as money is how a chart ends up telling
+ * a merchant they took "$14.00" in orders.
+ */
+export function countByDay(
+  rows: readonly { at: Date }[],
+  options: { start: Date; end: Date; timeZone: string | null },
+): CountSeries {
+  const days = daysBetween(options.start, options.end, options.timeZone);
+  const totals = new Map(days.map((day) => [day, 0]));
+
+  let total = 0;
+  for (const row of rows) {
+    const day = localDay(row.at, options.timeZone);
+    const running = totals.get(day);
+    // Outside the window, and dropped rather than clamped into the first
+    // bucket — the same rule as the money series above.
+    if (running === undefined) continue;
+    totals.set(day, running + 1);
+    total += 1;
+  }
+
+  return { points: days.map((day) => ({ day, value: totals.get(day) ?? 0 })), total };
+}
+
 /**
  * The biggest few, and everything else added up.
  *

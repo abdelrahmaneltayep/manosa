@@ -5,8 +5,10 @@ import { db } from "~/db.server";
 import { orderRevenue } from "~/lib/orders/totals";
 import {
   bucketByDay,
+  countByDay,
   localDay,
   topWithRest,
+  type CountSeries,
   type MoneySeries,
   type RankedRow,
 } from "~/lib/analytics/series.server";
@@ -133,6 +135,16 @@ export interface AnalyticsData {
    * chart — a one-bar bar chart of an average would say less than the number.
    */
   aov: { value: Money; orders: number };
+  /**
+   * How many orders a day, wholesale beside retail.
+   *
+   * `pages-features.md` §7 asks for "orders over time" and the checklist does
+   * not list it — deferred from 6.2 with a written decision rather than bolted
+   * onto the revenue chart. It is its own chart because a count and an amount
+   * are different measures on different scales, and drawing them on one pair
+   * of axes makes whichever is smaller look like nothing happened.
+   */
+  orderCounts: { wholesale: CountSeries; retail: CountSeries };
   byGroup: RankedRow[];
   topBuyers: RankedRow[];
   topProducts: RankedRow[];
@@ -249,6 +261,7 @@ export async function loadAnalytics(options: {
   if (ordersCapped) orders.length = MAX_ORDERS;
 
   const wholesaleOrders = orders.filter((order) => order.isWholesale);
+  const retailOrders = orders.filter((order) => !order.isWholesale);
 
   const [lines, activeRuleNames] = await Promise.all([
     wholesaleOrders.length === 0
@@ -287,6 +300,12 @@ export async function loadAnalytics(options: {
       { start, end: now, timeZone, currencyCode },
     );
 
+  const counts = (rows: typeof orders) =>
+    countByDay(
+      rows.map((order) => ({ at: order.processedAt })),
+      { start, end: now, timeZone },
+    );
+
   return {
     window,
     excludedOrders,
@@ -295,7 +314,11 @@ export async function loadAnalytics(options: {
     annotations: annotationsFor(shop?.installedAt ?? null, agentPublishedAt, window),
     revenue: {
       wholesale: series(wholesaleOrders),
-      retail: series(orders.filter((order) => !order.isWholesale)),
+      retail: series(retailOrders),
+    },
+    orderCounts: {
+      wholesale: counts(wholesaleOrders),
+      retail: counts(retailOrders),
     },
     aov: {
       value: money(

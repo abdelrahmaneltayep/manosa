@@ -67,6 +67,27 @@ export function chartCsv(
       );
     }
 
+    case "orders": {
+      // Counts, with no currency column: this file has no money in it, and a
+      // "Currency" heading over a column of order counts would invite exactly
+      // the reading it should prevent.
+      const header = [
+        t("analytics.csv.day"),
+        t("analytics.csv.wholesaleOrders"),
+        t("analytics.csv.retailOrders"),
+      ];
+      if (!view) return table(header, []);
+
+      return table(
+        header,
+        view.orderCounts.wholesale.points.map((point, index) => [
+          point.day,
+          point.value,
+          view.orderCounts.retail.points[index]?.value ?? 0,
+        ]),
+      );
+    }
+
     case "groups":
     case "buyers":
     case "products": {

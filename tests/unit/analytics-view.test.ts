@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chartCsv, csvCell, isChartKey } from "~/lib/analytics/csv.server";
+import { CHART_KEYS, chartCsv, csvCell, isChartKey } from "~/lib/analytics/csv.server";
 import { dayLabel, shareOfPrevious } from "~/lib/analytics/view-model.server";
 import type { AnalyticsView } from "~/components/analytics/types";
 
@@ -82,6 +82,19 @@ const view = (): AnalyticsView => ({
       total: money(250),
     },
   },
+  countTicks: [4, 3, 2, 1, 0],
+  orderCounts: {
+    wholesale: {
+      key: "wholesale",
+      points: [{ day: "2026-09-01", label: "1 Sep", value: 2 }],
+      total: 2,
+    },
+    retail: {
+      key: "retail",
+      points: [{ day: "2026-09-01", label: "1 Sep", value: 1 }],
+      total: 1,
+    },
+  },
   byGroup: [{ key: "g", label: "Cafés", value: 1000, money: money(1000), isRest: false }],
   topBuyers: [
     // A buyer's own company name, which is untrusted text.
@@ -150,6 +163,15 @@ describe("a chart as a file", () => {
     expect(rows[0]).toContain("analytics.csv.minorUnits");
   });
 
+  it("writes counts for the orders chart, and no currency column", () => {
+    const rows = chartCsv("orders", view(), t).split("\n");
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toBe(`"2026-09-01","2","1"`);
+    // A "Currency" heading over a column of order counts invites exactly the
+    // reading this chart exists to prevent.
+    expect(rows[0]).not.toContain("currency");
+  });
+
   it("leaves a rate computed from nothing blank in the file too", () => {
     const rows = chartCsv("funnel", view(), t).split("\n");
     expect(rows[1]).toContain(`""`);
@@ -158,7 +180,7 @@ describe("a chart as a file", () => {
   it("exports a header and nothing else for a shop with no data", () => {
     // The screen shows a worked example there. A CSV cannot be watermarked,
     // so somebody else's numbers must never reach one.
-    for (const chart of ["revenue", "buyers", "rules", "funnel", "aging"] as const) {
+    for (const chart of CHART_KEYS) {
       const rows = chartCsv(chart, null, t).split("\n");
       expect(rows).toHaveLength(1);
       expect(rows[0]!.length).toBeGreaterThan(0);

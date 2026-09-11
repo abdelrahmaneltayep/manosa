@@ -2,7 +2,7 @@
 
 Updated: 2026-09-11T18:30:00Z
 Current milestone: 6 — Analytics
-Current task: 6.6 Translations [done] · 6.7 polish [next]
+Current task: 6.7 polish [in progress — orders-over-time done]
 
 ## Done
 
@@ -37,7 +37,9 @@ Current task: 6.6 Translations [done] · 6.7 polish [next]
 
 - [x] 6.5 ✦ Agent controls — permission toggles wired through every ✦ surface, brand-voice samples, the muted-briefing list, the audit log filterable by actor/action/date, and the twelve-month retention job — commit `5babb43` + fix round — QA: `qa/6.5/REPORT.md` (cold read returned FAIL on 25 findings, 1 P0 — **the gate did not gate the POST**: every call site put `aiGate(...).allowed` in a _view_ and never read it as a condition, so four ✦ surfaces still called Claude after a merchant switched it off. All fixed — `qa/6.5/COLD-READ.md`. `docs/adr/0027`. **There was no AI permission control anywhere before this** — every ✦ surface gated on `isAiAvailable()` alone — and **nothing enforced the audit retention** the schema has promised since 0.2.)
 
-- [x] 6.6 Translations — every buyer-facing string editable per language, ✦ wording suggested in the merchant's own voice, a review flag per string, export **and** import — commit `PENDING` — QA: `qa/6.6/REPORT.md` (`docs/adr/0028`). The ✦ half nearly shipped inert for the fourth time: both catalogues ship complete, so "fill what is missing" would have had nothing to do on any store. It suggests wording over the strings a merchant has **not** written instead, which is also the first thing to read the 6.5 brand-voice samples. `StorefrontString` was not in the uninstall purge — the lesson from 6.4, applied before the cold read this time.
+- [x] 6.6 Translations — every buyer-facing string editable per language, ✦ wording suggested in the merchant's own voice, a review flag per string, export **and** import — commit `2ecabba` — QA: `qa/6.6/REPORT.md` (`docs/adr/0028`). The ✦ half nearly shipped inert for the fourth time: both catalogues ship complete, so "fill what is missing" would have had nothing to do on any store. It suggests wording over the strings a merchant has **not** written instead, which is also the first thing to read the 6.5 brand-voice samples. `StorefrontString` was not in the uninstall purge — the lesson from 6.4, applied before the cold read this time.
+
+- [x] 6.7 (part) Orders over time — an eighth chart, counts not money, with its own whole-number axis — commit `PENDING` — QA: `qa/6.7/REPORT.md`. Closes the `pages-features.md` §7 line deferred at 6.2. The ✦ chart menu was a hand-kept list **inside the prompt**: adding a chart to `CHART_KEYS` satisfied the validator while the model was never told it existed, so nothing could route to it. Generated from an exhaustive record now, with a test.
 
 ## Next up
 
@@ -51,9 +53,7 @@ Current task: 6.6 Translations [done] · 6.7 polish [next]
   (6.4, caught by the cold read) and the auto-approve toggle (6.5, avoided) a
   third time. A read API is its own task: auth, scopes, rate limits,
   versioning, pagination. Then the keys page.
-- 6.7 polish (including orders-over-time, below) — see `DECISIONS.md` for the splits
-- **Orders-over-time** — `pages-features.md` §7 asks for it and the checklist
-  does not; deferred to 6.7 with a written decision, not forgotten
+- 6.7 polish — the rest; see `DECISIONS.md` for the splits
 - 5.2 has one unfinished piece: the widget's greeting is personalised by name
   only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
 - 7.1–7.3 Release
@@ -460,3 +460,15 @@ Neither is blocking; both would change product decisions if answered.
   compute the count on a fresh install first: if it is zero, the button is
   decoration. The three before it were `taxExemptNeedsApproval`, the
   auto-approve toggle and the API keys page.
+- **A closed list given to a model is a registration step too.** The ✦ ask
+  router validated the chart name against `CHART_KEYS` while the *menu* the
+  model chose from was typed out inside the prompt template. Adding a chart
+  passed every test and could never be routed to. Both now come from one
+  exhaustive `Record<ChartKey, string>`, checked by
+  `tests/unit/analytics-ai.test.ts`. When a prompt lists anything the app also
+  enumerates, generate it — and bump `PROMPT_VERSIONS`.
+- **A count is not money, and a chart borrows more than you think.** The orders
+  chart had to be kept away from four things the revenue chart beside it does:
+  currency formatting, a 1/2/5 axis (`niceMax` makes three orders a scale of
+  five, labelled 3.75), a trend line between whole numbers, and a "Currency"
+  column in the CSV. `wholeMax` exists for the axis half of that.

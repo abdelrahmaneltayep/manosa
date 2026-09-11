@@ -99,7 +99,9 @@ export const PROMPT_VERSIONS: Readonly<Record<AiFeature, string>> = {
   buyer_agent: "1",
   reorder_prediction: "1",
   terms_risk: "1",
-  ask_data: "1",
+  // 2: the chart menu gained "orders", so a cached "1" answer would route to
+  // a list the model was never shown.
+  ask_data: "2",
   monthly_review: "1",
   translate_strings: "1",
 };

@@ -3,6 +3,7 @@ import { money } from "@mannon/pricing-engine";
 import type {
   AnalyticsView,
   AgingRowView,
+  CountSeriesView,
   FunnelStepView,
   PointView,
   RankedRowView,
@@ -13,7 +14,7 @@ import { db } from "~/db.server";
 import type { AnalyticsData, Range } from "~/lib/analytics/charts.server";
 import { RANGES } from "~/lib/analytics/charts.server";
 import type { Translate } from "~/i18n/translate";
-import { gridlines, niceMax } from "~/lib/analytics/geometry";
+import { gridlines, niceMax, wholeMax } from "~/lib/analytics/geometry";
 import { formatCurrency } from "~/lib/money";
 import type { MoneySeries } from "~/lib/analytics/series.server";
 
@@ -60,6 +61,20 @@ function seriesView(
     total: formatCurrency(series.total, options.locale),
   };
 }
+
+const countSeriesView = (
+  key: string,
+  series: AnalyticsData["orderCounts"]["wholesale"],
+  options: { locale: string },
+): CountSeriesView => ({
+  key,
+  points: series.points.map((point) => ({
+    day: point.day,
+    label: dayLabel(point.day, options.locale),
+    value: point.value,
+  })),
+  total: series.total,
+});
 
 const rankedView = (
   rows: AnalyticsData["byGroup"],
@@ -125,6 +140,21 @@ export function analyticsView(data: AnalyticsData, options: ViewOptions): Analyt
     ...data.revenue.retail.points.map((point) => point.value),
   ]);
   const bands = gridlines().length - 1;
+  // Counts get their own scale and their own ticks: rounding a currency axis
+  // to whole numbers, or a count axis to 1/2/5, gets one of them wrong.
+  const countTicks = (() => {
+    const top = wholeMax(
+      [
+        ...data.orderCounts.wholesale.points.map((point) => point.value),
+        ...data.orderCounts.retail.points.map((point) => point.value),
+      ],
+      bands,
+    );
+    return Array.from(
+      { length: bands + 1 },
+      (_, index) => (top * (bands - index)) / bands,
+    );
+  })();
   const axisTicks = Array.from({ length: bands + 1 }, (_, index) =>
     formatCurrency(
       money(Math.round((axisMax * (bands - index)) / bands), currencyCode),
@@ -160,6 +190,11 @@ export function analyticsView(data: AnalyticsData, options: ViewOptions): Analyt
       wholesale: seriesView("wholesale", data.revenue.wholesale, { locale }),
       retail: seriesView("retail", data.revenue.retail, { locale }),
     },
+    countTicks,
+    orderCounts: {
+      wholesale: countSeriesView("wholesale", data.orderCounts.wholesale, { locale }),
+      retail: countSeriesView("retail", data.orderCounts.retail, { locale }),
+    },
     byGroup: rankedView(data.byGroup, currencyCode, locale),
     topBuyers: rankedView(data.topBuyers, currencyCode, locale),
     topProducts: rankedView(data.topProducts, currencyCode, locale),
@@ -191,6 +226,13 @@ export async function hasAnyData(data: AnalyticsData): Promise<boolean> {
   ]);
 
   return orders > 0 || submissions > 0;
+}
+
+/** The same whole-number axis the real page uses, for the example's counts. */
+function exampleCountTicks(values: number[]): number[] {
+  const bands = gridlines().length - 1;
+  const top = wholeMax(values, bands);
+  return Array.from({ length: bands + 1 }, (_, index) => (top * (bands - index)) / bands);
 }
 
 /**
@@ -233,6 +275,25 @@ export function exampleView(base: AnalyticsView, locale: string): AnalyticsView 
     };
   };
 
+  // The example's own order counts. Inheriting the real ones from `base` would
+  // draw a flat zero chart in the middle of a page of invented numbers, which
+  // reads as "and you have no orders" rather than as an example.
+  const countSeries = (key: string, divisor: number): CountSeriesView => {
+    const points = Array.from({ length: days }, (_, index) => {
+      const day = base.revenue.wholesale.points[index]?.day ?? `2026-01-${index + 1}`;
+      return {
+        day,
+        label: base.revenue.wholesale.points[index]?.label ?? dayLabel(day, locale),
+        value: Math.max(1, Math.round((shape[index % shape.length] ?? 5) / divisor)),
+      };
+    });
+    return {
+      key,
+      points,
+      total: points.reduce((sum, entry) => sum + entry.value, 0),
+    };
+  };
+
   const ranked = (labels: string[], scale: number): RankedRowView[] =>
     labels.map((label, index) => ({
       key: `example-${index}`,
@@ -254,6 +315,11 @@ export function exampleView(base: AnalyticsView, locale: string): AnalyticsView 
     annotations: [],
     aov: { value: formatCurrency(money(42_000, currencyCode), locale), orders: 26 },
     revenue: { wholesale: series("wholesale", 12_000), retail: series("retail", 4_000) },
+    orderCounts: {
+      wholesale: countSeries("wholesale", 1),
+      retail: countSeries("retail", 3),
+    },
+    countTicks: exampleCountTicks(countSeries("wholesale", 1).points.map((p) => p.value)),
     byGroup: ranked(["Cafés", "Restaurants", "Hotels"], 250_000),
     topBuyers: ranked(["Café Aroma", "Bean There Ltd", "The Roastery"], 180_000),
     topProducts: ranked(

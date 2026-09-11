@@ -90,6 +90,11 @@ const analytics = (): AnalyticsView => ({
     wholesale: { key: "wholesale", points: [], total: money(1_060_000) },
     retail: { key: "retail", points: [], total: money(315_000) },
   },
+  countTicks: [4, 3, 2, 1, 0],
+  orderCounts: {
+    wholesale: { key: "wholesale", points: [], total: 35 },
+    retail: { key: "retail", points: [], total: 12 },
+  },
   // The charts an answer cites must have something in them. A capture whose
   // answer quotes $6,200 from a chart rendering "Nothing in this window" three
   // inches below is a state the product cannot produce.

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   AgingChart,
   FunnelChart,
+  OrdersChart,
   RankedChart,
   RevenueChart,
 } from "~/components/analytics/Charts";
@@ -75,6 +76,27 @@ export function AnalyticsPage({
               annotations={view.annotations}
               axisTicks={view.axisTicks}
             />
+          </s-stack>
+        </Card>
+
+        <Card
+          heading={t("analytics.orders.heading")}
+          csv="orders"
+          view={view}
+          empty={view.orderCounts.wholesale.points.length === 0}
+        >
+          <s-stack direction="block" gap="base">
+            <OrdersChart
+              wholesale={view.orderCounts.wholesale}
+              retail={view.orderCounts.retail}
+              ticks={view.countTicks}
+              alt={t("analytics.orders.alt")}
+            />
+            {/* Cancelled orders are excluded everywhere on this page; saying
+                so beside a count matters more than beside an amount, because a
+                merchant counts orders in their head and gets a different
+                number. */}
+            <s-text color="subdued">{t("analytics.orders.note")}</s-text>
           </s-stack>
         </Card>
 

@@ -851,3 +851,30 @@ stored and no prompt had read. It is still "fill missing per language" when a
 future locale ships incomplete: `unwrittenIn` returns untranslated keys first
 for exactly that case. Rejected: shipping the literal reading as an inert
 button, which is the mistake this repo has caught three times already.
+
+## 2026-09-11 — Orders over time ships as its own chart, in counts
+
+The deferral above is now closed. `pages-features.md` §7 asked for "orders over
+time"; it is an eighth card on the Analytics page, wholesale beside retail.
+
+Three choices inside it, each the smaller of two evils:
+
+**Its own chart, never a second axis on revenue.** A count and an amount are
+different measures on different scales; drawn against one pair of axes,
+whichever is smaller reads as "nothing happened".
+
+**Bars at every window width**, where the revenue chart draws a line above a
+week of history. A line between two orders and three draws two and a half,
+which cannot have happened.
+
+**Its own whole-number axis** (`wholeMax`), because `niceMax` rounds to 1, 2 or
+5 times a power of ten — and five split into four bands labels the axis 5,
+3.75, 2.5, 1.25. There is no such thing as 3.75 orders. The CSV has no currency
+column for the same reason.
+
+The ✦ ask bar's chart menu is now generated from a `Record<ChartKey, string>`
+rather than typed out inside the prompt. It was a hand-kept list: adding
+`orders` to `CHART_KEYS` would have satisfied the validator while the model was
+never told the chart existed, so no question could ever route to it. That is the
+same failure as `CATALOG_ROOTS`, `qa:capture`'s file list and the audit action
+picker. `PROMPT_VERSIONS.ask_data` goes to "2" because the prompt changed.

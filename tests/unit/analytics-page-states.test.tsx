@@ -72,6 +72,13 @@ const points = (values: number[]) =>
     money: money(value),
   }));
 
+const counts = (values: number[]) =>
+  values.map((value, index) => ({
+    day: `2026-09-${String(index + 1).padStart(2, "0")}`,
+    label: `${index + 1} Sep`,
+    value,
+  }));
+
 const ranked = (entries: [string, number][]) =>
   entries.map(([label, value], index) => ({
     key: `k${index}`,
@@ -107,6 +114,13 @@ const view = (overrides: Partial<AnalyticsView> = {}): AnalyticsView => ({
       points: points([40_000, 55_000, 30_000, 60_000, 45_000, 50_000, 35_000]),
       total: money(315_000),
     },
+  },
+  // Whole numbers, because a count axis labelled 3.75 is a count axis that
+  // has been formatted by the money one.
+  countTicks: [8, 6, 4, 2, 0],
+  orderCounts: {
+    wholesale: { key: "wholesale", points: counts([4, 3, 5, 2, 7, 6, 8]), total: 35 },
+    retail: { key: "retail", points: counts([1, 2, 1, 3, 2, 2, 1]), total: 12 },
   },
   byGroup: ranked([
     ["Cafés", 620_000],
@@ -161,7 +175,7 @@ const view = (overrides: Partial<AnalyticsView> = {}): AnalyticsView => ({
 /* -------------------------------------------------------------------------- */
 
 describe("the analytics page", () => {
-  it("draws all seven charts, with a legend and both totals", () => {
+  it("draws all eight charts, with a legend and both totals", () => {
     const html = render(<AnalyticsPage view={view()} />);
 
     expect(html).toContain("Wholesale and retail revenue");
@@ -171,9 +185,42 @@ describe("the analytics page", () => {
     expect(html).toContain("Pricing rule performance");
     expect(html).toContain("Registration funnel");
     expect(html).toContain("Net terms aging");
+    expect(html).toContain("Orders over time");
     // A line, not bars, once there is enough history to draw one.
     expect(html).toContain("<polyline");
     capture("01-analytics-full", html);
+  });
+
+  it("counts orders without ever formatting one as money", () => {
+    const html = render(<AnalyticsPage view={view()} />);
+    const from = html.indexOf('id="orders"');
+    const to = html.indexOf('id="groups"');
+    // Without this, a missing card makes `from` -1 and every assertion below
+    // runs against a slice of somebody else's markup — or nothing at all.
+    expect(from).toBeGreaterThan(0);
+    expect(to).toBeGreaterThan(from);
+    const chart = html.slice(from, to);
+
+    // The legend of the chart next to it reads "Wholesale · $10,600.00". This
+    // one counts things, and a count wearing a currency symbol is the number
+    // this page exists to stop a merchant from mis-reading.
+    expect(chart).toContain("Wholesale · 35 orders");
+    expect(chart).toContain("Retail · 12 orders");
+    expect(chart).not.toContain("$");
+    // Whole numbers up the axis — never 3.75 orders.
+    for (const tick of ["8", "6", "4", "2", "0"]) {
+      expect(chart).toContain(`>${tick}</text>`);
+    }
+    // Bars at every width: a line between two and three orders draws two and
+    // a half, which cannot have happened.
+    expect(chart).not.toContain("<polyline");
+  });
+
+  it("says the orders it is not counting", () => {
+    const html = render(<AnalyticsPage view={view()} />);
+    // A merchant counts orders in their head and gets a different number
+    // otherwise — which reads as the chart being wrong.
+    expect(html).toContain("Cancelled orders are not counted");
   });
 
   it("says what currency and which timezone every number is in", () => {

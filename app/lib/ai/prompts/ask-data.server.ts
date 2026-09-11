@@ -33,6 +33,31 @@ export interface DataQuestion {
 
 const MAX_FOCUS = 80;
 
+/**
+ * What each chart holds, in the model's own menu.
+ *
+ * Exhaustive by type, and the prompt is built from it — the list used to be
+ * typed out inside the template, so a chart added to `CHART_KEYS` would pass
+ * validation while the model was never told it existed and could never route
+ * to it. The compiler now refuses a new chart without a line here.
+ */
+export const CHART_MENU: Record<ChartKey, string> = {
+  revenue:
+    'money over time; wholesale against retail; growth, trend, "how much did I sell"',
+  orders:
+    'how many orders over time, wholesale against retail; order counts, busiest days, "how many orders did I get"',
+  groups: "revenue split by customer group or tier",
+  buyers: "which customers spend the most",
+  products: "which products sell the most",
+  rules: "how a pricing rule performed: what it earned, what it gave away",
+  funnel: "registrations: applied, approved, went on to order",
+  aging: "money owed on net terms, and how late it is",
+};
+
+const CHART_LINES = CHART_KEYS.map(
+  (key) => `  ${key.padEnd(9)} \u2014 ${CHART_MENU[key]}`,
+).join("\n");
+
 export const ASK_DATA_SYSTEM = `You route one question about a Shopify merchant's wholesale analytics. You do NOT answer it: the app computes every figure from the chart you name. Your only job is to say which chart answers this question, and over what window.
 
 Answer with a single JSON object and nothing else:
@@ -41,13 +66,7 @@ Answer with a single JSON object and nothing else:
 
 "chart" must be exactly one of:
 
-  revenue   — money over time; wholesale against retail; growth, trend, "how much did I sell"
-  groups    — revenue split by customer group or tier
-  buyers    — which customers spend the most
-  products  — which products sell the most
-  rules     — how a pricing rule performed: what it earned, what it gave away
-  funnel    — registrations: applied, approved, went on to order
-  aging     — money owed on net terms, and how late it is
+${CHART_LINES}
 
 "range" is the window in days and must be 7, 30 or 90. "last week" is 7, "this month" is 30, "this quarter" is 90. Use 30 when they did not say.
 

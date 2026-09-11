@@ -16,6 +16,7 @@ import {
 } from "~/lib/analytics/geometry";
 import type {
   AgingRowView,
+  CountSeriesView,
   FunnelStepView,
   RankedRowView,
   SeriesView,
@@ -286,6 +287,125 @@ export function RevenueChart({
             aria-hidden="true"
           />
           {t("analytics.revenue.retail", { total: retail.total })}
+        </s-text>
+      </s-stack>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How many orders a day, wholesale beside retail.
+ *
+ * Bars at every window width, where the revenue chart draws a line above a
+ * week of history. An order count is a whole thing that either happened or did
+ * not, and a line between two and three orders draws a value — two and a half
+ * — that cannot exist. The axis is whole numbers for the same reason.
+ *
+ * Its own chart rather than a second axis on revenue: a count and an amount
+ * are different measures on different scales, and one pair of axes makes
+ * whichever is smaller look like nothing happened.
+ */
+export function OrdersChart({
+  wholesale,
+  retail,
+  ticks,
+  alt,
+}: {
+  wholesale: CountSeriesView;
+  retail: CountSeriesView;
+  /** Whole counts, top to bottom. The first is the top of the scale. */
+  ticks: readonly number[];
+  alt: string;
+}) {
+  const { t } = useTranslation();
+  const days = wholesale.points.map((point) => point.label);
+  // The same number the axis is labelled with, never a second computation:
+  // marks scaled against one max under labels printed from another is the way
+  // a chart lies without any figure on it being wrong.
+  const max = ticks[0] ?? 1;
+
+  const bars = columns(
+    wholesale.points.map((point) => point.value),
+    { max },
+  );
+  const retailBars = columns(
+    retail.points.map((point) => point.value),
+    { max },
+  );
+
+  return (
+    <div className="mn-viz" dir="ltr">
+      <svg viewBox={`0 0 ${PLOT.width} ${PLOT.height}`} role="img" aria-label={alt}>
+        <Frame ticks={ticks.map((tick) => String(tick))} />
+
+        {bars.map((bar, index) => (
+          <rect
+            key={`w${index}`}
+            className="mn-s1"
+            x={round(bar.x)}
+            y={round(bar.y)}
+            width={round(bar.width / 2)}
+            height={round(bar.height)}
+            rx="0.4"
+          >
+            <title>
+              {`${days[index]} · ${t("analytics.orders.wholesale", {
+                count: wholesale.points[index]?.value ?? 0,
+              })}`}
+            </title>
+          </rect>
+        ))}
+        {retailBars.map((bar, index) => (
+          <rect
+            key={`r${index}`}
+            className="mn-s2"
+            x={round(bar.x + bar.width / 2 + 0.2)}
+            y={round(bar.y)}
+            width={round(bar.width / 2)}
+            height={round(bar.height)}
+            rx="0.4"
+          >
+            <title>
+              {`${days[index]} · ${t("analytics.orders.retail", {
+                count: retail.points[index]?.value ?? 0,
+              })}`}
+            </title>
+          </rect>
+        ))}
+
+        {days.map((label, index) =>
+          shouldLabel(index, days.length) ? (
+            <text
+              key={index}
+              className="mn-label"
+              x={round(dayX(index, days.length))}
+              y={round(PLOT.height - 2)}
+              textAnchor="middle"
+            >
+              {label}
+            </text>
+          ) : null,
+        )}
+      </svg>
+
+      <s-stack direction="inline" gap="base" alignItems="center">
+        <s-text>
+          <span
+            className="mn-swatch"
+            style={{ backgroundColor: "var(--mn-series-1)" }}
+            aria-hidden="true"
+          />
+          {t("analytics.orders.wholesale", { count: wholesale.total })}
+        </s-text>
+        <s-text>
+          <span
+            className="mn-swatch"
+            style={{ backgroundColor: "var(--mn-series-2)" }}
+            aria-hidden="true"
+          />
+          {t("analytics.orders.retail", { count: retail.total })}
         </s-text>
       </s-stack>
     </div>

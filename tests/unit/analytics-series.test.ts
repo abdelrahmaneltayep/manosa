@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   bucketByDay,
+  countByDay,
   daysBetween,
   localDay,
   topWithRest,
@@ -150,6 +151,65 @@ describe("bucketing rows into days", () => {
 
     // 6am on the 2nd in Sydney.
     expect(series.points.find((point) => point.day === "2026-09-02")?.value).toBe(700);
+  });
+});
+
+describe("counting rows into days", () => {
+  const window = {
+    start: new Date("2026-09-01T00:00:00Z"),
+    end: new Date("2026-09-03T23:59:59Z"),
+    timeZone: "UTC",
+  };
+
+  it("counts one per row and keeps the quiet day at zero", () => {
+    const series = countByDay(
+      [
+        { at: new Date("2026-09-01T09:00:00Z") },
+        { at: new Date("2026-09-01T18:00:00Z") },
+        { at: new Date("2026-09-03T09:00:00Z") },
+      ],
+      window,
+    );
+
+    expect(series.points).toEqual([
+      { day: "2026-09-01", value: 2 },
+      { day: "2026-09-02", value: 0 },
+      { day: "2026-09-03", value: 1 },
+    ]);
+    expect(series.total).toBe(3);
+  });
+
+  it("ignores a row outside the window rather than clamping it in", () => {
+    const series = countByDay(
+      [
+        { at: new Date("2026-08-01T09:00:00Z") },
+        { at: new Date("2026-12-01T09:00:00Z") },
+        { at: new Date("2026-09-02T09:00:00Z") },
+      ],
+      window,
+    );
+
+    // A month of history piled into the first bar is the same defect the
+    // money series guards against.
+    expect(series.total).toBe(1);
+    expect(series.points[0]!.value).toBe(0);
+  });
+
+  it("counts by the store's day, not the server's", () => {
+    // 23:30 UTC on the 1st is already the 2nd in Auckland, and a merchant
+    // there counts it on the 2nd.
+    const series = countByDay([{ at: new Date("2026-09-01T23:30:00Z") }], {
+      ...window,
+      timeZone: "Pacific/Auckland",
+    });
+
+    expect(series.points.find((point) => point.value > 0)?.day).toBe("2026-09-02");
+  });
+
+  it("has no currency, because a count is not money", () => {
+    const series = countByDay([{ at: new Date("2026-09-02T09:00:00Z") }], window);
+    expect(series).not.toHaveProperty("currencyCode");
+    expect(typeof series.total).toBe("number");
   });
 });
 

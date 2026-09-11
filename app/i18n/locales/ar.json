@@ -3078,7 +3078,9 @@
       "currency": "العملة",
       "discounted": "ما تُنُوزل عنه",
       "stillExists": "ما زالت قاعدة حالية",
-      "minorUnits": "وحدات صغرى"
+      "minorUnits": "وحدات صغرى",
+      "wholesaleOrders": "طلبات الجملة",
+      "retailOrders": "طلبات التجزئة"
     },
     "loading": "نقرأ أرقامك…",
     "lineLevel": "إجماليات الأسطر، قبل الشحن والضريبة — لذا لن تطابق رسم الإيراد أعلاه.",
@@ -3089,7 +3091,24 @@
     "aov_few": "متوسط طلب الجملة: {{value}}، من {{count}} طلبات.",
     "aov_many": "متوسط طلب الجملة: {{value}}، من {{count}} طلبًا.",
     "aov_other": "متوسط طلب الجملة: {{value}}، من {{count}} طلب.",
-    "monthlyReview": "✦ المراجعة الشهرية"
+    "monthlyReview": "✦ المراجعة الشهرية",
+    "orders": {
+      "heading": "الطلبات عبر الزمن",
+      "alt": "عدد الطلبات يومياً، الجملة مقابل التجزئة، خلال المدة المختارة.",
+      "wholesale_zero": "الجملة · لا طلبات",
+      "wholesale_one": "الجملة · طلب واحد",
+      "wholesale_two": "الجملة · طلبان",
+      "wholesale_few": "الجملة · {{count}} طلبات",
+      "wholesale_many": "الجملة · {{count}} طلباً",
+      "wholesale_other": "الجملة · {{count}} طلب",
+      "retail_zero": "التجزئة · لا طلبات",
+      "retail_one": "التجزئة · طلب واحد",
+      "retail_two": "التجزئة · طلبان",
+      "retail_few": "التجزئة · {{count}} طلبات",
+      "retail_many": "التجزئة · {{count}} طلباً",
+      "retail_other": "التجزئة · {{count}} طلب",
+      "note": "الطلبات الملغاة غير محسوبة، هنا ولا في أي مكان آخر في هذه الصفحة."
+    }
   },
   "review": {
     "heading": "✦ المراجعة الشهرية",

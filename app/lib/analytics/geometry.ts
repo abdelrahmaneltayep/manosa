@@ -73,6 +73,20 @@ export function niceMax(values: readonly number[]): number {
   return step * magnitude;
 }
 
+/**
+ * The top of a value axis that counts things.
+ *
+ * `niceMax` rounds to 1, 2 or 5 times a power of ten, which for a peak of
+ * three orders gives five — and five split into four bands labels the axis
+ * 5, 3.75, 2.5, 1.25, 0. There is no such thing as 3.75 orders. This rounds up
+ * to the next whole multiple of the band count instead, so every label is a
+ * number of orders and the marks are scaled by the same figure.
+ */
+export function wholeMax(values: readonly number[], bands = 4): number {
+  const peak = Math.max(0, ...values);
+  return Math.max(bands, Math.ceil(peak / bands) * bands);
+}
+
 export interface Bar {
   /** Inline-start edge, in viewBox units. */
   x: number;

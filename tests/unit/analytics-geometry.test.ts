@@ -7,6 +7,7 @@ import {
   inner,
   line,
   niceMax,
+  wholeMax,
   PLOT,
   polyline,
   rows,
@@ -37,6 +38,28 @@ describe("the top of the value axis", () => {
     expect(niceMax([])).toBe(1);
     expect(niceMax([0, 0, 0])).toBe(1);
     expect(niceMax([-5])).toBe(1);
+  });
+});
+
+describe("the top of an axis that counts things", () => {
+  it("is a whole number of bands, so every label is a whole count", () => {
+    // `niceMax` would make three orders a scale of five, and five over four
+    // bands labels the axis 5, 3.75, 2.5, 1.25 — there is no such thing as
+    // 3.75 orders.
+    for (const peak of [1, 2, 3, 5, 7, 9, 11, 23, 100, 101]) {
+      const top = wholeMax([peak]);
+      expect(top % 4, `peak ${peak} → ${top}`).toBe(0);
+      expect(top).toBeGreaterThanOrEqual(peak);
+      for (let band = 0; band <= 4; band += 1) {
+        expect(Number.isInteger((top * band) / 4)).toBe(true);
+      }
+    }
+  });
+
+  it("is never zero, and never smaller than the peak", () => {
+    expect(wholeMax([])).toBe(4);
+    expect(wholeMax([0, 0])).toBe(4);
+    expect(wholeMax([13])).toBe(16);
   });
 });
 

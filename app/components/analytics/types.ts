@@ -24,6 +24,20 @@ export interface SeriesView {
   total: string;
 }
 
+export interface CountPointView {
+  /** The store-local day, `YYYY-MM-DD`. */
+  day: string;
+  label: string;
+  /** A count, not money. Nothing here is ever currency-formatted.  */
+  value: number;
+}
+
+export interface CountSeriesView {
+  key: string;
+  points: CountPointView[];
+  total: number;
+}
+
 export interface RankedRowView {
   key: string;
   label: string;
@@ -100,6 +114,9 @@ export interface AnalyticsView {
   /** Average wholesale order value, and how many orders it averages. */
   aov: { value: string; orders: number };
   revenue: { wholesale: SeriesView; retail: SeriesView };
+  /** Value-axis labels for the orders chart — whole counts, top to bottom. */
+  countTicks: number[];
+  orderCounts: { wholesale: CountSeriesView; retail: CountSeriesView };
   byGroup: RankedRowView[];
   topBuyers: RankedRowView[];
   topProducts: RankedRowView[];
@@ -111,14 +128,15 @@ export interface AnalyticsView {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The seven charts, by key.
+ * The eight charts, by key.
  *
  * Lives here rather than beside the CSV writer because the *page* needs it:
  * `AskView.chart` is one of these, and typing it `string` is what let the ask
- * bar cite `analytics.groups.heading` to a merchant for three of the seven.
+ * bar cite `analytics.groups.heading` to a merchant for three of them.
  */
 export const CHART_KEYS = [
   "revenue",
+  "orders",
   "groups",
   "buyers",
   "products",
@@ -140,6 +158,7 @@ export const isChartKey = (value: string): value is ChartKey =>
  */
 export const CHART_HEADING: Record<ChartKey, string> = {
   revenue: "analytics.revenue.heading",
+  orders: "analytics.orders.heading",
   groups: "analytics.byGroup.heading",
   buyers: "analytics.topBuyers.heading",
   products: "analytics.topProducts.heading",
