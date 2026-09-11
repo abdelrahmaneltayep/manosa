@@ -338,6 +338,7 @@
       "previewWas": "Was",
       "previewNow": "Now",
       "previewNoChange": "This rule does not change this product's price.",
+      "previewNotYet": "Fill the rule in and a sample price will appear here.",
       "previewUnavailable": "Preview unavailable — this does not stop you saving.",
       "previewDesktop": "Desktop",
       "previewMobile": "Mobile"

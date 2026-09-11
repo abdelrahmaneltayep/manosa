@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-11T06:25:00Z
+Updated: 2026-09-11T09:35:00Z
 Current milestone: 6 — Analytics
-Current task: 6.2 [done, cold read fixed] · 6.3 ✦ ask-your-data + monthly review [in progress — server half done]
+Current task: 6.3 ✦ ask-your-data + monthly review [done] · 6.4 Settings [next]
 
 ## Done
 
@@ -31,15 +31,14 @@ Current task: 6.2 [done, cold read fixed] · 6.3 ✦ ask-your-data + monthly rev
 - [x] 6.1 Order lines mirrored, with discount allocations — commits `1c2cafb` + fix round — QA: `qa/6.1/REPORT.md` (cold read returned FAIL on 7 findings: revenue over-reported after any refund, a truncation flag that could never be true, and a query ~100× over Shopify's cost ceiling. All fixed — `qa/6.1/COLD-READ.md`.)
 - [x] shop facts — the store's own currency and timezone are finally read from Shopify — commit `0dbc09a` (they never had been; every money figure fell back to USD)
 - [x] 6.2 the Analytics page — seven charts, their states, CSV per chart, the currency/timezone footer — commits `ad7a048` + fix round — QA: `qa/6.2/REPORT.md` (cold read returned FAIL on 20 findings, 3 of them P0 — `qa/6.2/COLD-READ.md`. All fixed; 16 captures from 13 distinct renders.)
-- [~] 6.3 ✦ ask-your-data + ✦ monthly review — server half committed `7a05849`; screens, the 1st-of-month job, i18n and captures still to do
+- [x] 6.3 ✦ ask-your-data + ✦ monthly review — commits `7a05849` + this one — QA: `qa/6.3/REPORT.md` (14 captures; `docs/adr/0025`. The gate's step 3 found `11-review-why.png` byte-identical to `10-review.png`; chasing it found the same defect in 1.3, 2.3, 3.2, 4.4 and 6.2 — one of them a real product bug — and a guard now fails any two captures in a set that render the same.)
 
 ## Next up
 
-- 6.3, the rest: the ask box on the analytics page, the review list and detail,
-  the 1st-of-month job, i18n, captures. Both gated on `merchant_agent`
+- **Run the cold read on 6.3** — it has not had one
+- 6.4 Settings · 6.5 polish (including orders-over-time, below)
 - **Orders-over-time** — `pages-features.md` §7 asks for it and the checklist
   does not; deferred to 6.5 with a written decision, not forgotten
-- 6.3 ✦ ask-your-data + ✦ monthly review · 6.4 Settings · 6.5 polish
 - 5.2 has one unfinished piece: the widget's greeting is personalised by name
   only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
 - 7.1–7.3 Release
@@ -334,3 +333,19 @@ Neither is blocking; both would change product decisions if answered.
   checksum error. Fix by updating the recorded checksum, not by resetting.
 - **GitHub is reachable** even though shopify.dev is not — `Shopify/function-examples`
   was cloned for the authoritative Function schema rather than working from memory.
+
+- **A capture is read as a picture; its assertions are not.** Two captures in
+  one set that render identically mean one of them does not show the state its
+  name claims — and every test still passes, because each asserts against the
+  one page they share. This had happened six times across five milestones
+  before anybody looked at the PNGs side by side. `expectDistinct` in
+  `tests/support/state-capture.tsx` now fails it, naming both files. **Do not
+  switch it off to get a set to build.**
+- **The capture stand-in only shows what it has a CSS rule for.** Field errors
+  were invisible in every capture for nine tasks because nothing styled
+  `[error]`, so a screenshot taken to prove "errors are red, inline, beside the
+  field" proved nothing. Before trusting a capture of an attribute-driven
+  state, check `STYLES` renders that attribute.
+- `qa:capture` globs `tests/unit/*-states.test.tsx` now rather than listing the
+  files. A hand-kept list is a registration step to forget — this is the third
+  one found (after `CATALOG_ROOTS`).

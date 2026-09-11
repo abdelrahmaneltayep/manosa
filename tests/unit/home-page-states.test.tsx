@@ -411,6 +411,30 @@ describe("the KPI cards", () => {
     expect(html).toContain("Wholesale revenue");
     expect(html).toContain("▲ 33%");
     expect(html).toContain("/app?period=7");
+  });
+
+  it("marks a period that fell as a fall, not as a rise with a minus", () => {
+    const html = render(
+      <HomePage
+        view={view({
+          kpis: kpis({
+            cards: kpis().cards.map((card) =>
+              card.deltaPercent === null
+                ? card
+                : {
+                    ...card,
+                    value: "$7,100.00",
+                    previous: "$12,400.00",
+                    deltaPercent: -43,
+                  },
+            ),
+          }),
+        })}
+      />,
+    );
+
+    expect(html).toContain("▼ 43%");
+    expect(html).toContain('tone="critical"');
     capture("15-kpi-cards", html);
   });
 
@@ -483,6 +507,24 @@ describe("the setup checklist", () => {
     expect(html).toContain("Publish a registration form");
     expect(html).toContain("/app/pricing/new");
     expect(html).toContain("Let Claude set this up for you");
+  });
+
+  it("still shows the six once they are all done, until it is dismissed", () => {
+    const html = render(
+      <HomePage
+        view={view({
+          setup: setup({
+            items: setup().items.map((item) => ({ ...item, done: true })),
+            done: 6,
+            complete: true,
+          }),
+        })}
+      />,
+    );
+
+    expect(html).toContain("6 of 6 done");
+    // Not yet the pill: the merchant sees the finished list before it collapses.
+    expect(html).toContain("Publish a registration form");
     capture("19-setup-checklist", html);
   });
 
@@ -531,7 +573,9 @@ describe("recent activity", () => {
     expect(html).toContain("2 hours ago");
     expect(html).toContain("✦");
     expect(html).toContain("/app/activity");
-    capture("21-activity", html);
+    // No capture: this is the default page, already captured whole as
+    // "01-briefing-ready". A second copy of it under a section's name makes the
+    // set look like it covers a state it does not.
   });
 
   it("says what will appear here, before anything has", () => {

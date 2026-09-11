@@ -183,7 +183,9 @@ describe("the analytics page", () => {
     // reading UTC days is looking at the wrong week with no way to tell.
     expect(html).toContain("Every figure on this page is in USD");
     expect(html).toContain("Europe/London");
-    capture("02-analytics-footer", html);
+    // No capture: this is the default page, captured whole as
+    // "01-analytics-full". A second copy of it under a section's name makes the
+    // set look like it covers a state it does not.
   });
 
   it("says so when it has not read the store's timezone", () => {
@@ -249,7 +251,9 @@ describe("the analytics page", () => {
 
     expect(html).toContain("Renamed or removed");
     expect(html).toContain("renaming one does not rewrite what it earned");
-    capture("07-analytics-rules", html);
+    // No capture: this is the default page, captured whole as
+    // "01-analytics-full". A second copy of it under a section's name makes the
+    // set look like it covers a state it does not.
   });
 
   it("leaves a funnel's first step without a share of nothing", () => {
@@ -258,7 +262,9 @@ describe("the analytics page", () => {
     // The first step has nothing to be a share of, so it shows a dash — not
     // "0%", and not "100%".
     expect(html).toContain("—");
-    capture("08-analytics-funnel", html);
+    // No capture: this is the default page, captured whole as
+    // "01-analytics-full". A second copy of it under a section's name makes the
+    // set look like it covers a state it does not.
   });
 
   it("says a window is empty rather than drawing an empty chart", () => {

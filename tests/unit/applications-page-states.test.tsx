@@ -141,7 +141,27 @@ describe("queue states", () => {
 
   it("ideal — company, contact, how long they have waited, and the actions", () => {
     const html = render(
-      <ApplicationsPage view={view({ rows: [row()], total: 1, totalWaiting: 1 })} />,
+      <ApplicationsPage
+        view={view({
+          // The ideal queue is the one with screening working, not the one with
+          // it switched off — that is the state below, and for one commit both
+          // captures were the same picture.
+          rows: [
+            row({
+              screening: {
+                status: "recommend",
+                reasons: [
+                  { signal: "vat_valid", detail: null },
+                  { signal: "years_established", detail: 12 },
+                ],
+              },
+            }),
+          ],
+          total: 1,
+          totalWaiting: 1,
+          aiScreening: true,
+        })}
+      />,
     );
     capture("04-queue-ideal", html);
 
@@ -149,13 +169,16 @@ describe("queue states", () => {
     expect(html).toContain("2 days ago");
     expect(html).toContain("Approve");
     expect(html).toContain("Reject");
+    expect(html).toContain("Nothing here looks wrong");
   });
 
   it("screening is off, and says so without blocking approval", () => {
     const html = render(
       <ApplicationsPage view={view({ rows: [row()], total: 1, totalWaiting: 1 })} />,
     );
-    capture("05-queue-screening-unavailable", html);
+    // Named for what it is: the whole feature switched off. The per-row
+    // "could not screen this one" verdict is `ai-04-screening-unavailable`.
+    capture("05-queue-screening-off", html);
 
     expect(html).toContain("Screening is off");
     // The checklist's rule: it has never blocked approving anybody.

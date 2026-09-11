@@ -51,6 +51,18 @@
  s-select::after,s-text-area::after,s-date-field::after{
    content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
    padding:.35rem .5rem;min-height:1.1em;background:#fff;color:#444}
+ /* Errors are red, inline, beside the field — a convention a capture cannot
+    show unless the stand-in renders the attribute. "terms-settings-error" was
+    byte-identical to "terms-settings" for three milestones because of this. */
+ s-text-field[error],s-number-field[error],s-money-field[error],
+ s-select[error],s-text-area[error],s-date-field[error],s-checkbox[error]{
+   border-inline-start:3px solid #d64545;padding-inline-start:.5rem}
+ s-text-field[error]::after,s-number-field[error]::after,s-money-field[error]::after,
+ s-select[error]::after,s-text-area[error]::after,s-date-field[error]::after{
+   content:attr(value) "\A⚠ " attr(error);white-space:pre-wrap;
+   border-color:#d64545;background:#fdeaea;color:#8a1f1f}
+ s-checkbox[error]::after{content:"⚠ " attr(error);display:block;
+   color:#8a1f1f;font-size:12px}
  s-ordered-list{display:block;padding-inline-start:1.2rem}
  s-unordered-list{display:block;padding-inline-start:1.1rem}
  s-list-item{display:list-item;margin:.3rem 0}

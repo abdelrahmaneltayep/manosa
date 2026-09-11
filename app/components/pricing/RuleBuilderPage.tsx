@@ -462,8 +462,13 @@ function PreviewPanel({ view }: { view: RuleBuilderView }) {
       <s-stack direction="block" gap="small">
         <s-paragraph color="subdued">{t("pricing.builder.previewBody")}</s-paragraph>
 
-        {/* A preview that fails must never stop a merchant saving their work. */}
-        {!view.preview || view.preview.unavailable ? (
+        {/* A form with nothing in it yet has nothing to preview. Saying the
+            preview is *unavailable* there reports a failure that never
+            happened — and made an empty new form indistinguishable from a
+            broken one, in the product and in its capture alike. */}
+        {!view.preview ? (
+          <s-text color="subdued">{t("pricing.builder.previewNotYet")}</s-text>
+        ) : view.preview.unavailable ? (
           <s-text color="subdued">{t("pricing.builder.previewUnavailable")}</s-text>
         ) : view.preview.changed ? (
           <s-stack direction="inline" gap="base" alignItems="center">

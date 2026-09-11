@@ -375,6 +375,15 @@ describe("rule builder states", () => {
     expect(html).toContain("Live preview");
   });
 
+  it("says there is nothing to preview yet, not that the preview broke", () => {
+    const html = render(<RuleBuilderPage view={builderView()} />);
+
+    // A new form has nothing to price. Reporting a failure that never happened
+    // is the same defect as claiming a success that never happened.
+    expect(html).toContain("a sample price will appear here");
+    expect(html).not.toContain("Preview unavailable");
+  });
+
   /** A broken preview must never stop a merchant saving their work. */
   it("preview unavailable, and saving still offered", () => {
     const html = render(

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -72,6 +73,18 @@ const STYLES = `
  s-select::after,s-text-area::after,s-date-field::after{
    content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
    padding:.35rem .5rem;min-height:1.1em;background:#fff;color:#444}
+ /* Errors are red, inline, beside the field — a convention a capture cannot
+    show unless the stand-in renders the attribute. "terms-settings-error" was
+    byte-identical to "terms-settings" for three milestones because of this. */
+ s-text-field[error],s-number-field[error],s-money-field[error],
+ s-select[error],s-text-area[error],s-date-field[error],s-checkbox[error]{
+   border-inline-start:3px solid #d64545;padding-inline-start:.5rem}
+ s-text-field[error]::after,s-number-field[error]::after,s-money-field[error]::after,
+ s-select[error]::after,s-text-area[error]::after,s-date-field[error]::after{
+   content:attr(value) "\\A⚠ " attr(error);white-space:pre-wrap;
+   border-color:#d64545;background:#fdeaea;color:#8a1f1f}
+ s-checkbox[error]::after{content:"⚠ " attr(error);display:block;
+   color:#8a1f1f;font-size:12px}
  s-ordered-list{display:block;padding-inline-start:1.2rem}
  s-unordered-list{display:block;padding-inline-start:1.1rem}
  s-list-item{display:list-item;margin:.3rem 0}
@@ -109,6 +122,33 @@ export function expectNoRawCatalogKeys(html: string, name: string) {
       new RegExp(`>[^<]*\\b${root}\\.[a-zA-Z_]`),
     );
   }
+}
+
+/**
+ * Two captures in a set must not be the same render.
+ *
+ * A capture set is read as a set: a reader opening `05-queue-screening-
+ * unavailable.png` believes it shows something `04-queue-ideal.png` does not.
+ * When both were rendered from the same props, the set claims more states than
+ * it contains — and nobody notices, because each test still passes its own
+ * assertion against the one page they share.
+ *
+ * This has happened six times across five milestones. It is checked here
+ * rather than by eye.
+ */
+export function expectDistinct(
+  seen: Map<string, string>,
+  name: string,
+  html: string,
+  locale: Locale,
+) {
+  const key = createHash("sha256").update(`${locale}\u0000${html}`).digest("hex");
+  const first = seen.get(key);
+  expect(
+    first,
+    `${name}: identical to "${first}" — one of them does not show the state its name claims`,
+  ).toBeUndefined();
+  seen.set(key, name);
 }
 
 export interface CaptureHarness {
@@ -150,6 +190,8 @@ export async function createCaptureHarness(options: {
 }): Promise<CaptureHarness> {
   const enabled = options.enabled ?? process.env.QA_CAPTURE === "1";
   const instances = new Map<Locale, Awaited<ReturnType<typeof createI18n>>>();
+  /** Markup already captured in this set, by name — see `expectDistinct`. */
+  const seen = new Map<string, string>();
 
   for (const locale of ["en", "ar"] as Locale[]) {
     instances.set(locale, await createI18n(locale));
@@ -170,6 +212,7 @@ export async function createCaptureHarness(options: {
       // Checked whether or not captures are being written: a raw key is a bug
       // in the page, not in the capture.
       expectNoRawCatalogKeys(html, name);
+      expectDistinct(seen, name, html, locale);
       if (!enabled) return;
       writeFileSync(
         resolve(options.outFor(name), `${name}.html`),
