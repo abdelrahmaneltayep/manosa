@@ -8,6 +8,41 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-11 — Settings is two tasks, and polish moves to 6.6
+
+Checklist §8 asks for eight areas — display, discount combinations, tax,
+notifications with email-domain verification, translations with a ✦ fill, API
+keys, agent controls with the audit log, and a danger zone. That is not one
+task, and pretending it is would mean a QA gate that walks a tenth of the
+states it claims.
+
+Split: **6.4** takes the merchant's own settings (the section shell and save
+bar, display, discount combinations with the "affects 3 active rules" warning,
+tax, notifications and email-domain verification, danger zone) and brings the
+settings already scattered across other pages — wholesale tag, order tag, POS
+bypass, terms method, quote expiry — into one place. **6.5** takes the
+technical and ✦ half (API keys, translations with the AI fill, agent controls:
+permission toggles, brand-voice samples, briefing mutes, the filtered audit
+log). Polish and orders-over-time become **6.6**.
+
+Rejected: one giant 6.4, and dropping the ✦ half into 7.x — the agent
+permission toggles are the one place a merchant can say what Claude may do on
+its own, and shipping the agents without it would leave Invariant 3 resting
+entirely on code nobody can see.
+
+## 2026-09-11 — A capture that renders like another is a capture of nothing
+
+Two captures in one set that produce identical markup were, six times across
+five milestones, one page under two names — and every test passed, because
+each asserted against the page they shared. Rather than re-checking by eye,
+`expectDistinct` in the capture harness fails the second one and names the
+first. It runs whether or not `QA_CAPTURE` is set, so CI catches it.
+
+Rejected: comparing screenshots after the fact (too late, and it would have
+needed a byte-comparison step nobody would keep), and allowing an opt-out for
+"sections of the same page" — that opt-out is exactly the door the six
+duplicates came through. A section worth a capture is worth props that differ.
+
 ## 2026-09-11 — `Order.totalPrice` is already net of refunds, and there is now one place that says so
 
 The cold read on 6.2 found `totalPrice - refundedAmount` in seven places across

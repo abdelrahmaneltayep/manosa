@@ -36,9 +36,19 @@ Current task: 6.3 ✦ ask-your-data + monthly review [done] · 6.4 Settings [nex
 ## Next up
 
 - **Run the cold read on 6.3** — it has not had one
-- 6.4 Settings · 6.5 polish (including orders-over-time, below)
+- 6.4 Settings, part one — the section shell and save bar, display, discount
+  combinations (with "affects 3 active rules"), tax, notifications and email
+  domain verification, danger zone; and the settings scattered across other
+  pages brought into one place. **Five `Shop` fields are written by nothing
+  today and a merchant cannot change them at all:** `requireVatForTaxExempt`,
+  `wholesaleOrderTag`, `quoteExpiryDays`, `quoteReminderDays`, `pausedAt`.
+  `wholesaleTag` is only ever set by the setup wizard.
+- 6.5 Settings, part two — API keys, translations with the ✦ fill, agent
+  controls (permission toggles, brand voice, briefing mutes, filtered audit log)
+- 6.6 polish (including orders-over-time, below) — see `DECISIONS.md` for why §8
+  is two tasks
 - **Orders-over-time** — `pages-features.md` §7 asks for it and the checklist
-  does not; deferred to 6.5 with a written decision, not forgotten
+  does not; deferred to 6.6 with a written decision, not forgotten
 - 5.2 has one unfinished piece: the widget's greeting is personalised by name
   only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
 - 7.1–7.3 Release
