@@ -1407,6 +1407,43 @@ model MerchantBriefing {
 /// `customInstructions` is the one free-text field, and it is bounded and
 /// linted: it cannot switch an ability back on, because the abilities are
 /// checked in our code before a tool runs, not asked of the model.
+/// One month's written review of a shop's wholesale numbers.
+///
+/// Kept forever, unlike the daily briefing, because the checklist says so and
+/// because the point of a monthly review is the run of them: a merchant reads
+/// March against February. The month it covers is stored as a plain
+/// `YYYY-MM` string in the shop's own timezone — the month a merchant means is
+/// their month, and a `DateTime` would put a Sydney shop's January into
+/// December for anyone reading it back in UTC.
+model MonthlyReview {
+  id   String @id @default(cuid())
+  shop String
+
+  /// `YYYY-MM`, in the shop's timezone at the time it was generated.
+  month String
+
+  /// `ReviewSection[]` from app/lib/ai/prompts/monthly-review.server.ts.
+  sections Json
+  /// The figures the sections were written from, so the "why" expander shows
+  /// the data rather than asking the model to remember it.
+  facts    Json
+  /// What moved since the month before. Null for a shop's first review, which
+  /// has nothing to be a diff of.
+  diff     Json?
+
+  /// True when the month had nothing in it worth writing about — different
+  /// from a month that was never reviewed.
+  quiet Boolean @default(false)
+
+  generatedAt     DateTime @default(now())
+  aiModel         String?
+  aiPromptVersion String?
+  aiRequestId     String?
+
+  @@unique([shop, month])
+  @@index([shop, generatedAt])
+}
+
 model AgentGuardrails {
   shop String @id
 

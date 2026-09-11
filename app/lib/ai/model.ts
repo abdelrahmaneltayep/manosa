@@ -51,6 +51,8 @@ export const AI_FEATURES = [
   "reorder_prediction",
   "terms_risk",
   "setup_wizard",
+  "ask_data",
+  "monthly_review",
 ] as const;
 
 export type AiFeature = (typeof AI_FEATURES)[number];
@@ -96,4 +98,6 @@ export const PROMPT_VERSIONS: Readonly<Record<AiFeature, string>> = {
   buyer_agent: "1",
   reorder_prediction: "1",
   terms_risk: "1",
+  ask_data: "1",
+  monthly_review: "1",
 };
