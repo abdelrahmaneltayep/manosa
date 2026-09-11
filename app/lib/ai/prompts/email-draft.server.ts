@@ -34,6 +34,13 @@ export interface EmailDraftFacts {
   note: string | null;
   /** Locale of the merchant's admin, so the draft comes back in their language. */
   locale: string;
+  /**
+   * The merchant's own writing, from Settings → ✦ Agent controls.
+   *
+   * Optional because a shop with none still drafts — in a plain, neutral tone,
+   * which is what the Settings card says happens without them.
+   */
+  voiceSamples?: { label: string; body: string }[];
 }
 
 export interface EmailDraft {
@@ -75,6 +82,18 @@ export function emailDraftUser(facts: EmailDraftFacts): string {
     "The merchant's existing template, which is the voice to match:",
     `Subject: ${facts.template.subject}`,
     facts.template.body,
+    // The merchant's own messages, from Settings → ✦ Agent controls. The card
+    // there says "Claude will match your tone", which was true of nothing
+    // until this line: the samples were stored, shown and read by no prompt.
+    ...(facts.voiceSamples && facts.voiceSamples.length > 0
+      ? [
+          "",
+          "Messages this merchant has actually sent buyers. Match how they write — the greeting, the sign-off, how formal they are. Never copy their content.",
+          ...facts.voiceSamples.map(
+            (sample) => `--- ${sample.label} ---\n${sample.body}`,
+          ),
+        ]
+      : []),
   ]
     .filter((line): line is string => line !== null)
     .join("\n");

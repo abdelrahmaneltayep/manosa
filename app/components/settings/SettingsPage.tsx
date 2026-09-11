@@ -427,7 +427,7 @@ function AgentControls({ view }: { view: SettingsView }) {
       <s-stack direction="block" gap="small-100">
         <s-link href={agent.auditHref}>{t("settings.agent.auditLink")}</s-link>
         <s-text color="subdued">
-          {t("settings.agent.retention", { count: agent.retentionDays })}
+          {t("settings.agent.retention", { count: agent.retentionMonths })}
         </s-text>
       </s-stack>
     </Section>
@@ -460,14 +460,33 @@ function BrandVoice({ view }: { view: SettingsView }) {
               <s-text color="subdued">
                 {t("settings.agent.voiceAdded", { when: sample.added })}
               </s-text>
-              <form method="post">
-                <input type="hidden" name="section" value="agent" />
-                <input type="hidden" name="intent" value="removeSample" />
-                <input type="hidden" name="sampleId" value={sample.id} />
-                <s-button type="submit" variant="tertiary">
+              {/* Confirmed, because it is a hard delete of the merchant's own
+                  writing with no undo — and the Danger Zone on this same page
+                  confirms for less. */}
+              {agent.removing === sample.id ? (
+                <form method="post">
+                  <input type="hidden" name="section" value="agent" />
+                  <input type="hidden" name="intent" value="removeSample" />
+                  <input type="hidden" name="sampleId" value={sample.id} />
+                  <input type="hidden" name="confirm" value="remove" />
+                  <s-stack direction="inline" gap="small" alignItems="center">
+                    <s-text>{t("settings.agent.voiceRemoveConfirm")}</s-text>
+                    <s-button type="submit" variant="primary">
+                      {t("settings.agent.voiceRemoveYes")}
+                    </s-button>
+                    <s-button href="/app/settings" variant="tertiary">
+                      {t("settings.danger.cancel")}
+                    </s-button>
+                  </s-stack>
+                </form>
+              ) : (
+                <s-button
+                  href={`/app/settings?removeSample=${sample.id}`}
+                  variant="tertiary"
+                >
                   {t("settings.agent.voiceRemove")}
                 </s-button>
-              </form>
+              )}
             </s-stack>
           </s-box>
         ))
@@ -480,18 +499,21 @@ function BrandVoice({ view }: { view: SettingsView }) {
           <input type="hidden" name="section" value="agent" />
           <input type="hidden" name="intent" value="addSample" />
           <s-stack direction="block" gap="small">
+            {/* Echoed back, like every other field on this page. Hard-coding
+                `value=""` meant a rejected 3,000-character email was simply
+                gone, with the error message where it used to be. */}
             <s-text-field
               name="label"
               label={t("settings.agent.voiceLabelLabel")}
               details={t("settings.agent.voiceLabelHelp")}
-              value=""
+              value={agent.draft.label}
               {...withError(issueFor(view.issues, "label"))}
             />
             <s-text-area
               name="body"
               label={t("settings.agent.voiceBodyLabel")}
               details={t("settings.agent.voiceBodyHelp")}
-              value=""
+              value={agent.draft.body}
               {...withError(issueFor(view.issues, "body"))}
             />
             <s-button type="submit">{t("settings.agent.voiceAdd")}</s-button>

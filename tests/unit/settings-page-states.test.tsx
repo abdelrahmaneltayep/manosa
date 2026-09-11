@@ -72,11 +72,13 @@ const view = (overrides: Partial<SettingsView> = {}): SettingsView => ({
       },
     ],
     samplesWanted: 3,
+    draft: { label: "", body: "" },
+    removing: null,
     mutedBriefings: [
       { kind: "rules_unused", label: "Pricing rules that priced nothing" },
     ],
     auditHref: "/app/activity",
-    retentionDays: 365,
+    retentionMonths: 12,
   },
   sender: {
     senderEmail: "",
@@ -359,7 +361,7 @@ describe("the settings page", () => {
     expect(html).toContain("Nothing here lets Claude change a price");
     // Muted from the home page and readable nowhere until now.
     expect(html).toContain("Pricing rules that priced nothing");
-    expect(html).toContain("kept for 365 days");
+    expect(html).toContain("kept for 12 months");
     // No capture: the agent card is part of the default page, already
     // captured whole as "01-settings". A second copy of it under a section's
     // name would make the set look like it covers a state it does not.
@@ -385,8 +387,10 @@ describe("the settings page", () => {
             samples: [],
             samplesWanted: 3,
             mutedBriefings: [],
+            draft: { label: "", body: "" },
+            removing: null,
             auditHref: "/app/activity",
-            retentionDays: 365,
+            retentionMonths: 12,
           },
         })}
       />,
@@ -395,6 +399,66 @@ describe("the settings page", () => {
     expect(html).toContain("nothing here runs whichever way these are set");
     expect(html).toContain("No samples yet");
     capture("15-agent-no-key", html);
+  });
+
+  it("says that is as many samples as Claude reads, and hides the form", () => {
+    const html = render(
+      <SettingsPage
+        view={view({
+          agent: {
+            ...view().agent,
+            samples: Array.from({ length: 5 }, (_, index) => ({
+              id: `s${index}`,
+              label: `Sample ${index + 1}`,
+              body: `Message ${index + 1}, as the merchant wrote it.`,
+              added: "2026-08-14",
+            })),
+          },
+        })}
+      />,
+    );
+
+    expect(html).toContain("as many samples as Claude reads");
+    expect(html).not.toContain("Add this sample");
+    capture("16-voice-full", html);
+  });
+
+  it("keeps the pasted message when the sample is rejected", () => {
+    const html = render(
+      <SettingsPage
+        view={view({
+          failedSection: "agent",
+          agent: {
+            ...view().agent,
+            draft: { label: "", body: "Hi Sam — your trade prices are live now." },
+          },
+          issues: [
+            {
+              field: "label",
+              message: "Give the sample a name, so you can tell your samples apart.",
+            },
+          ],
+        })}
+      />,
+    );
+
+    // The body used to be hard-coded `value=""`, so a rejected 3,000-character
+    // email was simply gone with the error where it had been.
+    expect(html).toContain("your trade prices are live now");
+    expect(html).toContain("Give the sample a name");
+    capture("17-voice-rejected", html);
+  });
+
+  it("confirms before deleting the merchant's own writing", () => {
+    const html = render(
+      <SettingsPage view={view({ agent: { ...view().agent, removing: "s1" } })} />,
+    );
+
+    // A hard delete with no undo, on the same page whose danger zone confirms
+    // for less.
+    expect(html).toContain("Remove this sample for good?");
+    expect(html).toContain("Yes, remove it");
+    capture("18-voice-confirm-remove", html);
   });
 
   it("states the uninstall policy rather than linking to it", () => {

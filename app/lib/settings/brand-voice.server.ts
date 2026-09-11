@@ -17,7 +17,10 @@ export const SAMPLES_WANTED = 3;
 export const MAX_SAMPLES = 5;
 export const MAX_SAMPLE_CHARS = 4_000;
 
-export type BrandVoiceIssue = "label" | "body" | "tooLong" | "tooMany";
+export type BrandVoiceIssue = "label" | "labelTooLong" | "body" | "tooLong" | "tooMany";
+
+/** A label has to fit on one line beside the sample. */
+export const MAX_LABEL_CHARS = 120;
 
 export class BrandVoiceInvalid extends Error {
   constructor(readonly issue: BrandVoiceIssue) {
@@ -40,20 +43,32 @@ export async function addSample(
   const label = input.label.trim();
   const body = input.body.trim();
   if (label === "") throw new BrandVoiceInvalid("label");
+  // Said, not silently cut. `slice(0, 120)` threw away a merchant's words
+  // without a syllable about it.
+  if (label.length > MAX_LABEL_CHARS) throw new BrandVoiceInvalid("labelTooLong");
   if (body === "") throw new BrandVoiceInvalid("body");
   if (body.length > MAX_SAMPLE_CHARS) throw new BrandVoiceInvalid("tooLong");
 
-  const existing = await db.brandVoiceSample.count();
-  if (existing >= MAX_SAMPLES) throw new BrandVoiceInvalid("tooMany");
+  // Count and create in one transaction. `count()` then `create()` is
+  // check-then-act, and eight concurrent adds stored seven — after which the
+  // page hides the add form and says "that is as many as Claude reads" beside
+  // seven of them.
+  const sample = await db.$transaction(
+    async (tx) => {
+      const existing = await tx.brandVoiceSample.count();
+      if (existing >= MAX_SAMPLES) throw new BrandVoiceInvalid("tooMany");
 
-  const sample = await db.brandVoiceSample.create({
-    data: {
-      ...tenant(),
-      label: label.slice(0, 120),
-      body,
-      createdBy: actor.id ?? null,
+      return tx.brandVoiceSample.create({
+        data: { ...tenant(), label, body, createdBy: actor.id ?? null },
+      });
     },
-  });
+    // Serializable, because the count and the insert have to see the same
+    // world: at the default level eight concurrent adds each counted four and
+    // all eight inserted, and the page then said "that is as many as Claude
+    // reads" beside seven samples. A loser gets a write conflict, which is a
+    // failed add — the honest outcome — rather than a silent overshoot.
+    { isolationLevel: "Serializable" },
+  );
 
   await recordAudit({
     actor,
@@ -86,4 +101,16 @@ export async function removeSample(id: string, { actor }: { actor: AuditActor })
     subject: { type: "Shop", id: shop },
     metadata: { sampleId: id },
   });
+}
+
+/**
+ * The samples as a prompt reads them.
+ *
+ * Separate from `listSamples` so a prompt cannot accidentally carry the ids,
+ * timestamps or the staff id that added them — none of which is any of the
+ * model's business.
+ */
+export async function voiceForPrompt(): Promise<{ label: string; body: string }[]> {
+  const samples = await listSamples();
+  return samples.map((sample) => ({ label: sample.label, body: sample.body }));
 }

@@ -261,7 +261,7 @@ function ApplicationCard({
 function Screening({ row, view }: { row: ApplicationRowView; view: ApplicationsView }) {
   return (
     <s-stack direction="block" gap="small-100">
-      <AiScreening row={row} />
+      <AiScreening row={row} blockedBy={view.screeningBlockedBy} />
       <Criteria row={row} view={view} />
     </s-stack>
   );
@@ -275,7 +275,13 @@ const SCREENING_TONE = {
   off: "info",
 } as const;
 
-function AiScreening({ row }: { row: ApplicationRowView }) {
+function AiScreening({
+  row,
+  blockedBy,
+}: {
+  row: ApplicationRowView;
+  blockedBy: ApplicationsView["screeningBlockedBy"];
+}) {
   const { t } = useTranslation();
   const { status, reasons } = row.screening;
 
@@ -297,7 +303,7 @@ function AiScreening({ row }: { row: ApplicationRowView }) {
         <s-paragraph>
           {t(
             status === "off"
-              ? "applications.screening.off"
+              ? `applications.screening.off.${blockedBy ?? "no_key"}`
               : "applications.screeningUnavailable",
           )}
         </s-paragraph>

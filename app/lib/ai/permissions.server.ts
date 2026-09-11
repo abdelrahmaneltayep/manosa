@@ -90,3 +90,36 @@ export async function aiPermissions(): Promise<Record<AiPermission, boolean>> {
     draft: record?.aiMayDraft ?? true,
   };
 }
+
+/**
+ * The same gate, as a guard rather than a fact.
+ *
+ * `aiGate` returns *whether*; a loader puts that in a view and a component
+ * disables a button with it. That is a courtesy. **This** is the enforcement,
+ * and it exists because four ✦ actions shipped with the courtesy and nothing
+ * else: the button rendered disabled, and a POST straight to the route still
+ * sent the merchant's data to Anthropic — data they had just declined to
+ * share, on a call they pay for.
+ *
+ * Every ✦ action calls this before it reaches a prompt. The rule is written
+ * in this repo already, in `app.storefront-agent.test.tsx`: *a disabled button
+ * is a courtesy, not enforcement.*
+ */
+export async function requireAi(
+  permission: AiPermission,
+  options: { feature?: Parameters<typeof hasFeature>[1]; now?: Date } = {},
+): Promise<void> {
+  const gate = await aiGate(permission, options);
+  if (gate.allowed) return;
+
+  // 403 for a permission the merchant themselves withdrew, 402 for a plan.
+  // Different things, and the status says which without a body to read.
+  throw new Response(
+    gate.blockedBy === "permission"
+      ? "This shop has switched this off in Settings"
+      : gate.blockedBy === "plan"
+        ? "This plan does not include this"
+        : "No Anthropic API key is configured",
+    { status: gate.blockedBy === "plan" ? 402 : 403 },
+  );
+}

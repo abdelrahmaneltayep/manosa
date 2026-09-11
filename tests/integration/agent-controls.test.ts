@@ -1,20 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "~/db.server";
-import { aiGate, aiPermissions } from "~/lib/ai/permissions.server";
-import { loadActivity, recordedActions } from "~/lib/activity/feed.server";
+import { aiGate, aiPermissions, requireAi } from "~/lib/ai/permissions.server";
+import { actionLabel, loadActivity, recordedActions } from "~/lib/activity/feed.server";
 import { recordAudit } from "~/lib/audit/record.server";
 import {
-  AUDIT_RETENTION_DAYS,
+  AUDIT_RETENTION_MONTHS,
   purgeAudit,
   retentionCutoff,
 } from "~/lib/jobs/handlers/purge-audit.server";
+import { emailDraftUser } from "~/lib/ai/prompts/email-draft.server";
 import {
   addSample,
   BrandVoiceInvalid,
   listSamples,
   MAX_SAMPLES,
   removeSample,
+  voiceForPrompt,
 } from "~/lib/settings/brand-voice.server";
 import { saveSettings } from "~/lib/settings/settings.server";
 import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
@@ -107,6 +109,62 @@ describe("the permission gate", () => {
 
 /* -------------------------------------------------------------------------- */
 
+describe("enforcement, not the disabled button", () => {
+  /**
+   * The gate has to close on the path that calls Anthropic.
+   *
+   * 6.5 shipped with every converted call site assigning `aiGate(...).allowed`
+   * into a **view** and never reading it as a condition, so four ✦ actions
+   * still sent the merchant's data to the model after they had switched it
+   * off — from a form the loader had already decided not to offer. The suite
+   * was green throughout, because not one test posted to a ✦ action with a
+   * permission off. These do.
+   */
+  it("throws 403 rather than reaching the model, for every permission", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await saveSettings("agent", body({}), { actor: ACTOR });
+
+      for (const permission of ["screen", "draft"] as const) {
+        const refused = await requireAi(permission).catch((error: unknown) => error);
+        expect(refused, permission).toBeInstanceOf(Response);
+        if (refused instanceof Response) {
+          expect(refused.status, permission).toBe(403);
+          // The merchant switched it off; do not send them hunting for a key.
+          expect(await refused.text()).toContain("switched this off");
+        }
+      }
+    });
+  });
+
+  it("says 402 for a plan and 403 for a choice — different problems", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await db.shop.update({ where: { shop: ALPHA }, data: { planKey: "free" } });
+
+      const plan = await requireAi("draft", { feature: "merchant_agent" }).catch(
+        (error: unknown) => error,
+      );
+      expect(plan).toBeInstanceOf(Response);
+      if (plan instanceof Response) expect(plan.status).toBe(402);
+    });
+  });
+
+  it("lets the permitted one through", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await saveSettings("agent", body({ aiMayDraft: "on" }), { actor: ACTOR });
+      await expect(requireAi("draft")).resolves.toBeUndefined();
+      await expect(requireAi("screen")).rejects.toBeInstanceOf(Response);
+    });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
 describe("brand voice samples", () => {
   const sample = { label: "How I welcome a buyer", body: "Hi Sam — lovely to have you." };
 
@@ -146,7 +204,7 @@ describe("brand voice samples", () => {
     });
   });
 
-  it("stops at the number Claude actually reads", async () => {
+  it("stops at the number Claude actually reads, even under a race", async () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
@@ -156,6 +214,62 @@ describe("brand voice samples", () => {
       await expect(
         addSample({ label: "one more", body: "words" }, { actor: ACTOR }),
       ).rejects.toBeInstanceOf(BrandVoiceInvalid);
+    });
+  });
+
+  it("does not overshoot when several tabs add at once", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // `count()` then `create()` is check-then-act: eight concurrent adds
+      // stored seven, after which the page hid the add form and said "that is
+      // as many as Claude reads" beside seven of them.
+      await Promise.allSettled(
+        Array.from({ length: 8 }, (_, index) =>
+          addSample({ label: `race-${index}`, body: "words" }, { actor: ACTOR }),
+        ),
+      );
+      expect((await listSamples()).length).toBeLessThanOrEqual(MAX_SAMPLES);
+    });
+  });
+
+  it("says a label is too long rather than silently cutting it", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      const failed = await addSample(
+        { label: "x".repeat(300), body: "words" },
+        { actor: ACTOR },
+      ).catch((error: unknown) => error);
+
+      expect(failed).toBeInstanceOf(BrandVoiceInvalid);
+      if (failed instanceof BrandVoiceInvalid) expect(failed.issue).toBe("labelTooLong");
+    });
+  });
+
+  it("reaches the drafting prompt, which is what the card promises", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await addSample(sample, { actor: ACTOR });
+      // The card says "Claude will match your tone". Until this round that was
+      // true of nothing: the samples were stored, shown, and read by no prompt.
+      const forPrompt = await voiceForPrompt();
+      expect(forPrompt).toEqual([{ label: sample.label, body: sample.body }]);
+
+      const user = emailDraftUser({
+        intent: "approve",
+        template: { subject: "s", body: "b" },
+        shopName: ALPHA,
+        formName: "Trade",
+        groupName: null,
+        reason: null,
+        note: null,
+        locale: "en",
+        voiceSamples: forPrompt,
+      });
+      expect(user).toContain(sample.body);
+      expect(user).toContain("Never copy their content");
     });
   });
 
@@ -209,7 +323,10 @@ describe("the audit log", () => {
       // it: `purge-conversations` existed for AgentMessage, and this table
       // just grew. A retention promise with no job behind it is a sentence.
       const result = await purgeAudit({ now: NOW });
-      expect(result).toMatchObject({ deleted: 1, retentionDays: AUDIT_RETENTION_DAYS });
+      expect(result).toMatchObject({
+        deleted: 1,
+        retentionMonths: AUDIT_RETENTION_MONTHS,
+      });
       expect(await db.auditLog.count()).toBe(1);
 
       // And it keeps itself alive, like the other recurring work here.
@@ -218,6 +335,31 @@ describe("the audit log", () => {
           where: { kind: "audit.purge", status: "PENDING" },
         }),
       ).toBe(1);
+    });
+  });
+
+  it("never purges the record that a person approved an AI change", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      const row = await recordAudit({
+        actor: { type: "MERCHANT_AGENT", id: "claude" },
+        action: "pricing_rule.created",
+        summary: "Created a rule from a sentence.",
+        aiAssisted: true,
+        approval: { byId: "staff-1", at: new Date("2024-01-01") },
+      });
+      await db.auditLog.update({
+        where: { id: row.id },
+        data: { createdAt: new Date("2024-01-01T00:00:00Z") },
+      });
+
+      // §8 says twelve months; Invariant 3 says the approval must be recorded.
+      // The first version resolved that silently in the wrong direction: after
+      // a year the rule was still pricing every checkout with nothing saying
+      // who approved it.
+      await purgeAudit({ now: NOW });
+      expect(await db.auditLog.count({ where: { aiAssisted: true } })).toBe(1);
     });
   });
 
@@ -237,10 +379,15 @@ describe("the audit log", () => {
     });
   });
 
-  it("says how far back it goes, in days", () => {
-    const cutoff = retentionCutoff(NOW);
-    expect(Math.round((NOW.getTime() - cutoff.getTime()) / 86_400_000)).toBe(
-      AUDIT_RETENTION_DAYS,
+  it("counts twelve calendar months, leap year included", () => {
+    // The old version restated `retentionCutoff`'s own definition and could
+    // not fail for any implementation that subtracts a fixed number of days —
+    // which is exactly the implementation that is a day short across 29 Feb.
+    expect(retentionCutoff(new Date("2027-02-28T12:00:00Z")).toISOString()).toBe(
+      "2026-02-28T12:00:00.000Z",
+    );
+    expect(retentionCutoff(new Date("2026-09-11T12:00:00Z")).toISOString()).toBe(
+      "2025-09-11T12:00:00.000Z",
     );
   });
 
@@ -289,17 +436,34 @@ describe("the audit log", () => {
     });
   });
 
-  it("offers only the actions this shop has actually recorded", async () => {
+  it("offers only the actions this shop has actually recorded, told apart", async () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
       await entry(new Date("2026-09-01T09:00:00Z"), "pricing_rule.created", "STAFF");
-      await entry(new Date("2026-09-02T09:00:00Z"), "pricing_rule.created", "STAFF");
+      await entry(new Date("2026-09-02T09:00:00Z"), "pricing_rule.archived", "STAFF");
+      await entry(
+        new Date("2026-09-03T09:00:00Z"),
+        "settings.brand_voice_added",
+        "STAFF",
+      );
+
+      // Built from the producer, not from a hand-written label pair. The
+      // picker used to label each option with the *family* chip, so eleven
+      // options read "Pricing" and ten read "Activity" — a merchant could not
+      // tell `pricing_rule.created` from `pricing_rule.archived`.
+      const t = ((key: string) => key) as unknown as Parameters<typeof actionLabel>[1];
+      const labels = (await recordedActions()).map((value) => actionLabel(value, t));
+      expect(new Set(labels).size).toBe(labels.length);
 
       // A picker offering forty actions a shop has never performed is a picker
       // nobody uses — and a hand-kept list is the registration step this repo
       // has forgotten three times.
-      expect(await recordedActions()).toEqual(["pricing_rule.created"]);
+      expect(await recordedActions()).toEqual([
+        "pricing_rule.archived",
+        "pricing_rule.created",
+        "settings.brand_voice_added",
+      ]);
     });
   });
 });

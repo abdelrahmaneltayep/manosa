@@ -255,6 +255,15 @@ export interface ApplicationsView {
   rejectionReasons: RejectionReason[];
   /** True when there is a key, so screening can say anything at all. */
   aiScreening: boolean;
+  /**
+   * Why screening is off, when it is.
+   *
+   * The copy used to name the API key for every reason, so a merchant who had
+   * switched screening off in Settings was told a false fact about their
+   * deployment and sent to fix something that was not broken — which is the
+   * exact sentence `docs/adr/0027` exists to replace.
+   */
+  screeningBlockedBy: "permission" | "plan" | "no_key" | null;
   /** ✦ Claude drafted the email in the panel; the merchant edits and sends. */
   emailDraft: { drafted: boolean; failure: string | null };
   /** No mail provider is configured, so no applicant is being told anything. */

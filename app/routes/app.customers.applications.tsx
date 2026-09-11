@@ -7,6 +7,7 @@ import type { ApplicationsView } from "~/components/customers/types";
 import { db } from "~/db.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { aiGate } from "~/lib/ai/permissions.server";
+import { voiceForPrompt } from "~/lib/settings/brand-voice.server";
 import { draftEmail } from "~/lib/ai/prompts/email-draft.server";
 import { canSendEmail } from "~/lib/email/send.server";
 import { isRejectionReason, REJECTION_REASONS } from "~/lib/forms/approval";
@@ -86,8 +87,16 @@ async function buildView(request: Request): Promise<ApplicationsView> {
   // ✦ Drafting happens on a link the merchant followed, not on the way to a
   // send: nothing leaves this request. A draft that fails opens the merchant's
   // own template with a line saying the draft did not come.
+  //
+  // A link is still a request. `?draft=1` reached the model gated by nothing
+  // at all — not the permission, not the plan, not even a key check — so a
+  // merchant who had switched drafting off got it anyway from a URL.
+  const asked =
+    editing && template && panelIntent && url.searchParams.get("draft") === "1";
+  const mayDraft = asked ? (await aiGate("draft")).allowed : false;
+
   const draft =
-    editing && template && panelIntent && url.searchParams.get("draft") === "1"
+    mayDraft && editing && template && panelIntent
       ? await draftEmail({
           intent: panelIntent,
           template,
@@ -100,8 +109,11 @@ async function buildView(request: Request): Promise<ApplicationsView> {
           reason: null,
           note: null,
           locale: detectLocale(request),
+          voiceSamples: await voiceForPrompt(),
         })
       : null;
+
+  const screening = await aiGate("screen");
 
   const view: ApplicationsView = {
     rows: page.rows.map((row) => ({
@@ -169,7 +181,10 @@ async function buildView(request: Request): Promise<ApplicationsView> {
           }
         : null,
     rejectionReasons: [...REJECTION_REASONS],
-    aiScreening: (await aiGate("screen")).allowed,
+    aiScreening: screening.allowed,
+    // Which of the three is closed, so the page can say "you switched this
+    // off" rather than naming an API key that is not the reason.
+    screeningBlockedBy: screening.blockedBy,
     emailDraft: {
       drafted: draft?.ok === true,
       failure: draft && !draft.ok ? draft.reason : null,

@@ -88,16 +88,25 @@ const log = (overrides: Partial<ActivityLogView> = {}): ActivityLogView => ({
   ],
   filter: "all",
   filters: ["all", "orders", "registrations", "pricing"],
+  filterHrefs: {
+    all: "/app/activity?filter=all",
+    orders: "/app/activity?filter=orders",
+    registrations: "/app/activity?filter=registrations",
+    pricing: "/app/activity?filter=pricing",
+  },
   actor: "anyone",
   actors: ["anyone", "agent", "staff", "system"],
   action: "",
+  // Labels as `actionLabel` builds them — the picker used to render the family
+  // chip, so eleven options read "Pricing" and ten read "Activity".
   actions: [
-    { value: "pricing_rule.created", label: "Pricing" },
-    { value: "form.approved", label: "Registrations" },
+    { value: "pricing_rule.created", label: "Pricing rule created" },
+    { value: "pricing_rule.archived", label: "Pricing rule archived" },
+    { value: "form.approved", label: "Form approved" },
   ],
   from: "",
   to: "",
-  retentionDays: 365,
+  retentionMonths: 12,
   keptFrom: "2025-06-01",
   filtered: false,
   nextHref: "/app/activity?filter=all&before=2026-05-29T09%3A00%3A00.000Z",
@@ -105,6 +114,42 @@ const log = (overrides: Partial<ActivityLogView> = {}): ActivityLogView => ({
 });
 
 /* -------------------------------------------------------------------------- */
+
+describe("the activity log's filters", () => {
+  it("offers actor, action and date, and keeps them on every link", () => {
+    const html = render(<ActivityPage view={log()} />);
+
+    // §8: "filterable by actor, action, date". Each action reads as itself —
+    // the picker used to label every option with its family chip, so eleven
+    // read "Pricing".
+    expect(html).toContain("Pricing rule created");
+    expect(html).toContain("Pricing rule archived");
+    expect(html).toContain("Claude");
+    expect(html).toContain("Kept for 12 months");
+    // No capture: the filter row is part of the default log page, already
+    // captured whole as "09-activity-log".
+  });
+
+  it("says nothing matched the filter, not that nothing ever happened", () => {
+    const html = render(
+      <ActivityPage
+        view={log({
+          rows: [],
+          actor: "agent",
+          action: "pricing_rule.archived",
+          from: "2026-09-01",
+          to: "2026-09-07",
+          filtered: true,
+          nextHref: null,
+        })}
+      />,
+    );
+
+    expect(html).toContain("Clear filters");
+    expect(html).not.toContain("Nothing has happened yet");
+    capture("10-activity-filtered-empty", html);
+  });
+});
 
 describe("the setup wizard", () => {
   it("asks one question, with an example of an answer", () => {

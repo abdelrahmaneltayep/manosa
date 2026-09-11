@@ -1166,7 +1166,11 @@
       "waiting": "✦ Checking their details — this usually takes a few seconds. You can decide without it.",
       "recommend": "✦ Nothing here looks wrong",
       "look": "✦ Worth reading before you approve",
-      "off": "✦ Screening is off — this store has no Anthropic key. Review this one yourself; it has never blocked approving anybody.",
+      "off": {
+        "permission": "✦ Screening is off — you switched it off in Settings. Review this one yourself; screening has never blocked approving anybody.",
+        "plan": "✦ Screening is off — it is not part of your plan. Review this one yourself; screening has never blocked approving anybody.",
+        "no_key": "✦ Screening is off — this store has no Anthropic key. Review this one yourself; it has never blocked approving anybody."
+      },
       "footnote": "Claude's read on the facts you already hold. You decide."
     },
     "signal": {
@@ -2212,8 +2216,8 @@
       "staff": "Your staff",
       "system": "Mannon itself"
     },
-    "retention_one": "Kept for {{count}} day — this log goes back to {{from}}.",
-    "retention_other": "Kept for {{count}} days — this log goes back to {{from}}."
+    "retention_one": "Kept for {{count}} month — this log goes back to {{from}}.",
+    "retention_other": "Kept for {{count}} months — this log goes back to {{from}}."
   },
   "agent": {
     "scripted": {
@@ -2663,10 +2667,10 @@
       "draftHelp": "Everything it writes arrives as a draft with your name on the Save button.",
       "neverWrites": "Nothing here lets Claude change a price, a customer or an order on its own. Every change it suggests is one you press.",
       "mutedHeading": "Briefing items you asked not to see",
-      "mutedUndo": "Unmute one from the briefing on your home page the next time it would have appeared.",
+      "mutedUndo": "Unmute any of these from the briefing on your home page.",
       "auditLink": "Read the full activity log",
-      "retention_one": "Every action Claude or your staff take is recorded there, and kept for {{count}} day.",
-      "retention_other": "Every action Claude or your staff take is recorded there, and kept for {{count}} days.",
+      "retention_one": "Every action Claude or your staff take is recorded there, and kept for {{count}} month.",
+      "retention_other": "Every action Claude or your staff take is recorded there, and kept for {{count}} months.",
       "voiceHeading": "Your writing",
       "voiceBody_one": "Paste {{count}} message you have actually sent a buyer, and Claude will match your tone instead of inventing one.",
       "voiceBody_other": "Paste {{count}} messages you have actually sent a buyer, and Claude will match your tone instead of inventing one.",
@@ -2692,7 +2696,9 @@
         "wholesale_week": "How the wholesale week went",
         "form_never_opened": "A registration form nobody has opened",
         "uploads_unscanned": "Uploaded files that were never virus-scanned"
-      }
+      },
+      "voiceRemoveConfirm": "Remove this sample for good?",
+      "voiceRemoveYes": "Yes, remove it"
     },
     "notifications": {
       "heading": "Notifications",
@@ -2751,7 +2757,8 @@
         "email": "That does not look like an email address. Use one like orders@yourshop.com."
       },
       "label": {
-        "label": "Give the sample a name, so you can tell your samples apart."
+        "label": "Give the sample a name, so you can tell your samples apart.",
+        "labelTooLong": "That name is too long to sit beside the sample. Keep it under 120 characters."
       },
       "body": {
         "body": "Paste the message itself. An empty sample teaches Claude nothing.",

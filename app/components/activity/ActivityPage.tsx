@@ -18,7 +18,7 @@ export function ActivityPage({ view }: { view: ActivityLogView }) {
         <s-stack direction="block" gap="base">
           <s-stack direction="inline" gap="small" alignItems="center">
             {view.filters.map((filter) => (
-              <s-link key={filter} href={`/app/activity?filter=${filter}`}>
+              <s-link key={filter} href={view.filterHrefs[filter] ?? "/app/activity"}>
                 {filter === view.filter
                   ? t(`activity.filter.${filter}Current`)
                   : t(`activity.filter.${filter}`)}
@@ -112,7 +112,7 @@ export function ActivityPage({ view }: { view: ActivityLogView }) {
               price" needs to know how far back they can still ask. */}
           <s-text color="subdued">
             {t("activity.retention", {
-              count: view.retentionDays,
+              count: view.retentionMonths,
               from: view.keptFrom,
             })}
           </s-text>

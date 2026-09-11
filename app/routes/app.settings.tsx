@@ -11,6 +11,7 @@ import {
   BrandVoiceInvalid,
   removeSample,
 } from "~/lib/settings/brand-voice.server";
+import { ensureAuditPurgeScheduled } from "~/lib/jobs/handlers/purge-audit.server";
 import { pauseApp, resumeApp } from "~/lib/settings/pause.server";
 import { isSection, saveSettings, SettingsInvalid } from "~/lib/settings/settings.server";
 import { settingsView } from "~/lib/settings/view-model.server";
@@ -33,6 +34,10 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     const locale = detectLocale(request);
     const t = translate(await getFixedT(locale));
 
+    // Settings prints "kept for 365 days". The page that makes a promise is
+    // the page that has to schedule it.
+    await ensureAuditPurgeScheduled();
+
     return json({
       view: await settingsView({
         locale,
@@ -42,6 +47,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         // under a card where nothing had been.
         saved: savedSection(url.searchParams.get("saved")),
         confirming: url.searchParams.get("confirm") === "pause",
+        removing: url.searchParams.get("removeSample"),
       }),
     });
   });
@@ -81,6 +87,13 @@ export const action = ({ request }: ActionFunctionArgs) =>
     if (section === "agent" && (intent === "addSample" || intent === "removeSample")) {
       try {
         if (intent === "removeSample") {
+          // Confirmed server-side, not just in the UI — the same rule the
+          // danger zone learned when a plain POST could pause a shop.
+          if (form.get("confirm") !== "remove") {
+            return redirect(
+              `/app/settings?removeSample=${(form.get("sampleId") ?? "").toString()}`,
+            );
+          }
           await removeSample((form.get("sampleId") ?? "").toString(), { actor });
         } else {
           await addSample(

@@ -75,6 +75,7 @@ const view = (overrides: Partial<ApplicationsView> = {}): ApplicationsView => ({
   editing: null,
   rejectionReasons: [...REJECTION_REASONS],
   aiScreening: false,
+  screeningBlockedBy: null,
   emailDraft: { drafted: false, failure: null },
   emailUnavailable: false,
   ...overrides,

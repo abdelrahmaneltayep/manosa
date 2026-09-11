@@ -6,7 +6,7 @@ import { DescribeRulePage } from "~/components/pricing/DescribeRulePage";
 import type { DescribeRuleView } from "~/components/pricing/types";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate, type Translate } from "~/i18n/translate";
-import { aiGate } from "~/lib/ai/permissions.server";
+import { aiGate, requireAi } from "~/lib/ai/permissions.server";
 import { draftRuleFromSentence } from "~/lib/ai/prompts/rule-from-sentence.server";
 import { recordAudit } from "~/lib/audit/record.server";
 import { loadEntitlements } from "~/lib/billing/entitlements.server";
@@ -125,6 +125,9 @@ export const action = ({ request }: ActionFunctionArgs) =>
     const common = { aiAvailable, atRuleLimit: limited, t };
 
     if (intent === "draft") {
+      // Enforcement, not the disabled button. This route used to compute
+      // `aiAvailable` for the view and call the model regardless.
+      await requireAi("draft");
       const sentence = (form.get("sentence") ?? "").toString().trim();
 
       if (!sentence) {

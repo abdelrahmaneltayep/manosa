@@ -8,6 +8,31 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-11 — A spec contradiction: retention vs the approval record
+
+CLAUDE.md stop condition 6 asks for both lines quoted and one picked. 6.5
+shipped this resolved silently in the wrong direction; the cold read found it.
+
+`feature-checklist.md` §8: _"the audit log — … **Retention 12 months**."_
+`CLAUDE.md` Invariant 3: _"No AI write path may change live pricing, customers
+or orders without a merchant approval **recorded in `AuditLog`**."_
+
+They conflict for exactly one kind of row. After twelve months, a pricing rule
+Claude drafted and a merchant approved is still pricing every checkout, and
+the only record that anybody approved it has been deleted.
+
+**Invariant 3 wins.** `purgeAudit` now exempts `aiAssisted: true` rows.
+Retention is a storage promise about volume; the approval is the record that
+makes the whole AI story auditable, and it is a handful of rows per shop per
+year. The page says twelve months about everything else, which is what a
+merchant reading it is asking about.
+
+Rejected: purging them and keeping a redacted stub — a stub that says an
+approval happened without saying who approved it is worse than either
+alternative, because it looks like a record. Also rejected: making the
+exemption configurable; a merchant cannot meaningfully consent to losing the
+audit trail of a decision they made.
+
 ## 2026-09-11 — No API keys page until there is an API
 
 §8 asks for "public API keys, webhooks, ERP sync, POS toggle". A read of the

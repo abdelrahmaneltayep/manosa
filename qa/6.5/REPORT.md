@@ -3,7 +3,20 @@
 Hat: senior QA engineer who did not write this code and does not trust it.
 Date: 2026-09-11 · Branch: `claude/mannon-b2b-wholesale-oc5b18`
 
-> **Status: gate clean. The independent cold read has not run yet.**
+> **Status: clean pass, after a FAIL and a full fix round.** The independent
+> cold read returned **FAIL** on 25 findings — 1 P0, 4 P1, 11 P2, 9 P3. All
+> are fixed; `qa/6.5/COLD-READ.md` has the evidence and §9 below summarises.
+> This is the second run.
+>
+> **The P0 is the worst kind: the feature did not work at all on the paths that
+> matter.** Every converted call site assigned `aiGate(...).allowed` into a
+> *view* and never read it as a condition, so four ✦ surfaces still sent the
+> merchant's data to Anthropic after they had switched it off — from a form
+> the loader had already decided not to offer. The suite was green throughout
+> because not one test posted to a ✦ action with a permission off. The rule
+> that was broken is written in this repo, in
+> `app.storefront-agent.test.tsx`: *a disabled button is a courtesy, not
+> enforcement.*
 >
 > Two of the three things this task delivers are not new features. They are
 > **behaviour that was already running with no control** (every ✦ surface
@@ -147,3 +160,71 @@ stayed. This is the third time `expectDistinct` has earned its place.
   what they silenced, which they could not before.
 - The embedded admin, a real dev store, and Built for Shopify budgets at p75.
 - The independent cold read, which has not run yet.
+
+## 9. The cold read, and the round that followed
+
+**Verdict: FAIL** — 1 P0, 4 P1, 11 P2, 9 P3. All fixed.
+
+### P0 — the gate did not gate the POST
+
+`requireAi(permission)` now **throws** — 403 for a permission the merchant
+withdrew, 402 for a plan — and every ✦ action calls it before it reaches a
+prompt: `app.pricing.describe`, `app.customers.segments`, `app._index`'s ask
+(which had **no plan check either**, so a Free shop could drive the Merchant
+Agent by POST), and the drafted email that ran off `?draft=1` in a loader
+gated by nothing at all. Three new integration tests post with the permission
+off and assert the throw, the status and the copy.
+
+### The four P1s
+
+- **Screening off said "this store has no Anthropic key."** The one sentence
+  ADR 0027 exists to replace, made *false* rather than replaced.
+  `AiGate.blockedBy` now reaches the page and there are three strings, one per
+  reason.
+- **The brand-voice card promised tone-matching nothing did** — "Claude will
+  match your tone", beside samples no prompt read. The samples now reach the
+  email-drafting prompt through `voiceForPrompt`, which deliberately drops the
+  ids, timestamps and the staff id that added them. Asserted end to end.
+- **The action picker collapsed 65 actions into 15 labels**, eleven reading
+  "Pricing". `actionLabel` derives a sentence from the action itself, and the
+  test asserts the labels are *distinct* rather than hand-writing a pair.
+- **Five `isAiAvailable()` sites survived the sweep**, on the rehearsal page —
+  where a merchant types free text at Claude. `git grep isAiAvailable app/` is
+  the whole audit and it now returns only `client.server.ts` and
+  `permissions.server.ts`.
+
+### The P2s and P3s
+
+The retention job is scheduled at install and from Settings (the page that
+makes the promise), not only from the log. `keptFrom` is the later of the
+cutoff and the install, so the log stops claiming history it does not have.
+`BrandVoiceSample` — the merchant's real emails to buyers — is now deleted by
+the uninstall purge; it was in no cascade under copy promising deletion in 48
+hours. Category links keep the filters they sit inside. A rejected sample
+keeps its pasted body. Removing a sample confirms, server-side. `MAX_SAMPLES`
+is enforced in a `Serializable` transaction (eight concurrent adds stored
+seven). A long label is refused rather than silently cut. Twelve **calendar**
+months, not 365 days. `keeping()` no longer emits `?&`. The unmute copy no
+longer tells a merchant to wait for something they can do now. And
+`tests/e2e/settings-forms.spec.ts` covers the agent section, counting only
+each section's *save* form so a legitimate second form cannot hide a nested
+one.
+
+### The spec contradiction I should have flagged
+
+§8 says twelve months; Invariant 3 says an AI-assisted change's approval must
+be recorded. After a year a rule Claude drafted and a merchant approved was
+still pricing checkouts with nothing saying who approved it. CLAUDE.md stop
+condition 6 asks for both lines quoted and one picked; 6.5 resolved it
+silently. Invariant 3 wins — `aiAssisted` rows are exempt — and it is written
+up in `DECISIONS.md`.
+
+### Two tests that could not fail
+
+The cold read checked my own "watched fail" claim and found it was 4 of 13,
+not 3 — and that two specific tests were hollow. *"is one shop's choice and
+never another's"* exercised `aiPermissions()`, which nothing in production
+called; the enforcement tests above now cover that ground. *"says how far back
+it goes, in days"* restated `retentionCutoff`'s own definition and passed for
+any implementation that subtracts days — including the one that is a day short
+across a leap year. It now asserts two literal dates, one of them 29 February.

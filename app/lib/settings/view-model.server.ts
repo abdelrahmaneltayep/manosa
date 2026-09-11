@@ -9,7 +9,7 @@ import { db } from "~/db.server";
 import type { Translate } from "~/i18n/translate";
 import { emailSender } from "~/lib/email/send.server";
 import { isAiAvailable } from "~/lib/ai/client.server";
-import { AUDIT_RETENTION_DAYS } from "~/lib/jobs/handlers/purge-audit.server";
+import { AUDIT_RETENTION_MONTHS } from "~/lib/jobs/handlers/purge-audit.server";
 import { activeEngineRules } from "~/lib/pricing/rules.server";
 import { SAMPLES_WANTED, listSamples } from "~/lib/settings/brand-voice.server";
 import { previewFor } from "~/lib/pricing/view-model.server";
@@ -113,6 +113,8 @@ export async function settingsView(options: {
   failedSection?: string | null;
   issues?: SettingsIssue[];
   confirming?: boolean;
+  /** A writing sample whose removal is being confirmed. */
+  removing?: string | null;
   /**
    * The body that failed to save, echoed back into its fields.
    *
@@ -210,6 +212,8 @@ export async function settingsView(options: {
         added: sample.createdAt.toISOString().slice(0, 10),
       })),
       samplesWanted: SAMPLES_WANTED,
+      draft: { label: typed("label", ""), body: typed("body", "") },
+      removing: options.removing ?? null,
       // Muted from the home page and, until now, readable nowhere — so a
       // merchant who silenced a kind of briefing item could never find it
       // again to change their mind.
@@ -218,7 +222,7 @@ export async function settingsView(options: {
         label: t(`settings.agent.briefingKind.${kind}`),
       })),
       auditHref: "/app/activity",
-      retentionDays: AUDIT_RETENTION_DAYS,
+      retentionMonths: AUDIT_RETENTION_MONTHS,
     },
     sender: {
       senderEmail: typed("senderEmail", shop.senderEmail ?? ""),

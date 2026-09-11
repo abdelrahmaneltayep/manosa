@@ -8,7 +8,7 @@ import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate } from "~/i18n/translate";
 import { closeRehearsal, rehearsalView } from "~/lib/agent/buyer/rehearsal.server";
 import { answerBuyerTurn } from "~/lib/agent/buyer/turn.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate, requireAi } from "~/lib/ai/permissions.server";
 import { MAX_MESSAGE_CHARS } from "~/lib/ai/prompts/buyer-agent.server";
 import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { lowestPlanWithFeature } from "~/lib/billing/plans";
@@ -41,7 +41,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         requiredPlan: requiredPlan(entitled),
         buyerId: url.searchParams.get("buyer"),
         search: url.searchParams.get("search"),
-        hasKey: isAiAvailable(),
+        hasKey: (await aiGate("draft")).allowed,
       }),
     });
   });
@@ -58,7 +58,10 @@ export const action = ({ request }: ActionFunctionArgs) =>
     const entitled = hasFeature(entitlements, "buyer_agent");
 
     // Server-side, like every other gate in this app: a disabled button is a
-    // courtesy, not enforcement.
+    // courtesy, not enforcement. The rehearsal sends merchant-typed text
+    // through a real model call, so the permission applies here too — this
+    // page was the one ✦ surface the 6.5 sweep missed.
+    await requireAi("draft");
     if (!entitled) {
       return json({
         view: await rehearsalView({
@@ -66,7 +69,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
           entitled,
           requiredPlan: requiredPlan(entitled),
           buyerId: asked,
-          hasKey: isAiAvailable(),
+          hasKey: (await aiGate("draft")).allowed,
         }),
       });
     }
@@ -79,7 +82,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
           entitled,
           requiredPlan: requiredPlan(entitled),
           buyerId: asked,
-          hasKey: isAiAvailable(),
+          hasKey: (await aiGate("draft")).allowed,
         }),
       });
     }
@@ -96,7 +99,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
       entitled,
       requiredPlan: null,
       buyerId: asked,
-      hasKey: isAiAvailable(),
+      hasKey: (await aiGate("draft")).allowed,
     });
 
     if (!before.buyerId || message.trim() === "") return json({ view: before });
@@ -115,7 +118,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
         entitled,
         requiredPlan: null,
         buyerId: before.buyerId,
-        hasKey: isAiAvailable(),
+        hasKey: (await aiGate("draft")).allowed,
         cart: turn.cart,
         failure: turn.failure,
       }),

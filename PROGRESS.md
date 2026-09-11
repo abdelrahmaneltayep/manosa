@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-11T14:30:00Z
+Updated: 2026-09-11T16:00:00Z
 Current milestone: 6 — Analytics
-Current task: 6.5 ✦ Agent controls [done, cold read pending] · 6.6 API keys + translations [next]
+Current task: 6.5 ✦ Agent controls [done] · 6.6 Translations [next]
 
 ## Done
 
@@ -35,11 +35,10 @@ Current task: 6.5 ✦ Agent controls [done, cold read pending] · 6.6 API keys +
 
 - [x] 6.4 Settings, part one — sections with a save bar each, wholesale tags, display, discount combinations, tax, orders and quotes, notifications with sender verification, danger zone — commits `cf22fd7` + fix round — QA: `qa/6.4/REPORT.md` (cold read returned FAIL on 23 findings, 1 P0 — the Notifications section could not be saved at all, because its Verify form was nested inside the section's form. All fixed — `qa/6.4/COLD-READ.md`. Also found `pausedAt` had existed since 0.1 and stopped nothing at checkout; `docs/adr/0026`. Six `Shop` columns a merchant could not change are now editable. The capture stand-in had no rule for `details` or `checked`, so field help text and checkbox state were invisible in **every** capture in the repo.)
 
-- [x] 6.5 ✦ Agent controls — permission toggles wired through every ✦ surface, brand-voice samples, the muted-briefing list, the audit log filterable by actor/action/date, and the twelve-month retention job — commit `5babb43` — QA: `qa/6.5/REPORT.md` (`docs/adr/0027`. **There was no AI permission control anywhere before this** — every ✦ surface gated on `isAiAvailable()` alone — and **nothing enforced the audit retention** the schema has promised since 0.2.)
+- [x] 6.5 ✦ Agent controls — permission toggles wired through every ✦ surface, brand-voice samples, the muted-briefing list, the audit log filterable by actor/action/date, and the twelve-month retention job — commit `5babb43` + fix round — QA: `qa/6.5/REPORT.md` (cold read returned FAIL on 25 findings, 1 P0 — **the gate did not gate the POST**: every call site put `aiGate(...).allowed` in a _view_ and never read it as a condition, so four ✦ surfaces still called Claude after a merchant switched it off. All fixed — `qa/6.5/COLD-READ.md`. `docs/adr/0027`. **There was no AI permission control anywhere before this** — every ✦ surface gated on `isAiAvailable()` alone — and **nothing enforced the audit retention** the schema has promised since 0.2.)
 
 ## Next up
 
-- **Run the cold read on 6.5** — it has not had one
 - 6.6 Translations — the storefront strings a merchant cannot currently
   change, per language, with the ✦ fill for missing ones, a `needsReview`
   flag per string, and export/import. Brand-voice samples are stored but read
@@ -428,3 +427,21 @@ Neither is blocking; both would change product decisions if answered.
   clears, and restores the flag if the publish fails. `pausePublishedAt` exists
   because a derived signal could not tell "the pause landed" from "this shop
   has never published".
+
+- **`allowed` in a view is not a gate.** 6.5 converted fifteen call sites to
+  `aiGate` and four of them assigned the result into a view that disables a
+  button, while the POST handler behind it called Claude anyway. The rule was
+  already written in this repo — `app.storefront-agent.test.tsx`: _a disabled
+  button is a courtesy, not enforcement_ — and the suite was green because
+  **not one test posted to a ✦ action with the permission off.** `requireAi()`
+  throws; every ✦ action calls it before it reaches a prompt. When adding a ✦
+  surface, the test to write first is the POST with the thing switched off.
+- **A spec contradiction has to be written down, not resolved quietly.**
+  §8 wants twelve months of audit; Invariant 3 wants an AI approval recorded
+  forever. 6.5 deleted the approvals. CLAUDE.md stop condition 6 asks for both
+  lines quoted and one picked — see `DECISIONS.md`. Invariant 3 won.
+- **A new table is not reached by the uninstall purge unless it is named.**
+  `BrandVoiceSample` holds the merchant's real emails to buyers and had no
+  relation, so no cascade touched it, under copy promising deletion in 48
+  hours. `purge-shop-pii.server.ts` now names it. **7.2 must check every table
+  against that file**, not just the two already listed.

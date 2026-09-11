@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 
 import { ActivityPage } from "~/components/activity/ActivityPage";
+import { db } from "~/db.server";
 import type { ActivityLogView } from "~/components/activity/types";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate } from "~/i18n/translate";
@@ -11,12 +12,13 @@ import {
   ACTOR_FILTERS,
   isActivityFilter,
   isActorFilter,
+  actionLabel,
   loadActivity,
   readDay,
   recordedActions,
 } from "~/lib/activity/feed.server";
 import {
-  AUDIT_RETENTION_DAYS,
+  AUDIT_RETENTION_MONTHS,
   ensureAuditPurgeScheduled,
   retentionCutoff,
 } from "~/lib/jobs/handlers/purge-audit.server";
@@ -30,21 +32,28 @@ import { withAdmin } from "~/shopify.server";
  * it happened somewhere else and is recorded, not decided, here.
  */
 
+/** The earliest day this log can actually answer about. */
+const keptFrom = (cutoff: Date, installedAt: Date | null): string =>
+  (installedAt && installedAt > cutoff ? installedAt : cutoff).toISOString().slice(0, 10);
+
 /** "Show more" has to keep the filters, or page two is a different question. */
-function keeping(url: URL): string {
+function keeping(url: URL, overrides: Record<string, string> = {}): string {
   const kept = new URLSearchParams();
   for (const key of ["filter", "actor", "action", "from", "to"]) {
-    const value = url.searchParams.get(key);
+    const value = overrides[key] ?? url.searchParams.get(key);
     if (value) kept.set(key, value);
   }
-  return `/app/activity?${kept.toString()}`;
+  const query = kept.toString();
+  // No trailing "?&": an unfiltered log's "Show older" used to read
+  // `/app/activity?&before=...`.
+  return query ? `/app/activity?${query}` : "/app/activity";
 }
 
 /** Rows per page. Home shows eight; this is a page of a log. */
 const PAGE_SIZE = 50;
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
-  withAdmin(request, async () => {
+  withAdmin(request, async ({ session }) => {
     const url = new URL(request.url);
     const locale = detectLocale(request);
     const t = translate(await getFixedT(locale));
@@ -65,7 +74,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     // keeping the promise the first time somebody reads their history.
     await ensureAuditPurgeScheduled(now);
 
-    const [page, actions] = await Promise.all([
+    const [page, actions, shop] = await Promise.all([
       loadActivity({
         limit: PAGE_SIZE,
         before,
@@ -76,6 +85,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         to,
       }),
       recordedActions(),
+      db.shop.findUnique({ where: { shop: session.shop } }),
     ]);
 
     const view: ActivityLogView = {
@@ -91,20 +101,26 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       })),
       filter,
       filters: [...ACTIVITY_FILTERS],
+      // A merchant filtered to "Claude, 1-7 Sep" who clicks "Pricing" should
+      // still be filtered to Claude, 1-7 Sep. These links used to drop every
+      // filter but the category.
+      filterHrefs: Object.fromEntries(
+        ACTIVITY_FILTERS.map((one) => [one, keeping(url, { filter: one })]),
+      ),
       actor,
       actors: [...ACTOR_FILTERS],
       action,
-      actions: actions.map((value) => ({
-        value,
-        label: activityKindLabel(value, t),
-      })),
+      actions: actions.map((value) => ({ value, label: actionLabel(value, t) })),
       from: url.searchParams.get("from") ?? "",
       to: url.searchParams.get("to") ?? "",
-      retentionDays: AUDIT_RETENTION_DAYS,
-      keptFrom: retentionCutoff(now).toISOString().slice(0, 10),
+      retentionMonths: AUDIT_RETENTION_MONTHS,
+      // The later of the retention cutoff and the install: a shop installed
+      // last week does not have a log going back to last June, and saying so
+      // is the page claiming a history that does not exist.
+      keptFrom: keptFrom(retentionCutoff(now), shop?.installedAt ?? null),
       filtered: actor !== "anyone" || action !== "" || from !== null || to !== null,
       nextHref: page.nextCursor
-        ? `${keeping(url)}&before=${encodeURIComponent(page.nextCursor)}`
+        ? `${keeping(url)}${keeping(url).includes("?") ? "&" : "?"}before=${encodeURIComponent(page.nextCursor)}`
         : null,
     };
 

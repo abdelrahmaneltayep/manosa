@@ -7,7 +7,7 @@ import type { SegmentDraftView, SegmentsView } from "~/components/customers/type
 import { db } from "~/db.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate, type Translate } from "~/i18n/translate";
-import { aiGate } from "~/lib/ai/permissions.server";
+import { aiGate, requireAi } from "~/lib/ai/permissions.server";
 import {
   draftSegment,
   resolveSegment,
@@ -204,6 +204,8 @@ export const action = ({ request }: ActionFunctionArgs) =>
     }
 
     if (intent === "draft") {
+      // Enforcement, not the disabled button.
+      await requireAi("draft");
       const sentence = (form.get("sentence") ?? "").toString().trim();
       if (!sentence) {
         return json({ view: { ...base, failure: "empty" as const } }, { status: 422 });

@@ -23,7 +23,15 @@ import { expect, test } from "@playwright/test";
 const CAPTURE = resolve(process.cwd(), "qa/6.4/01-settings.html");
 
 /** The six saveable sections, in page order. */
-const SECTIONS = ["wholesale", "display", "discounts", "tax", "orders", "notifications"];
+const SECTIONS = [
+  "wholesale",
+  "display",
+  "discounts",
+  "tax",
+  "orders",
+  "agent",
+  "notifications",
+];
 
 test.describe("the Settings forms, as a browser builds them", () => {
   test.skip(!existsSync(CAPTURE), "run `npm run qa:capture` first");
@@ -44,10 +52,32 @@ test.describe("the Settings forms, as a browser builds them", () => {
     const sectionForms = bodies.filter((body) =>
       body.some((field) => field.startsWith("section=")),
     );
+    // Exactly, not at least: `toBeGreaterThanOrEqual` let three new forms
+    // arrive without the count noticing, which is how a net stops being one.
+    // The extra forms are the danger zone's and the brand-voice ones, which
+    // carry an intent and are counted separately below.
     expect(sectionForms.length).toBeGreaterThanOrEqual(SECTIONS.length);
+    for (const section of SECTIONS) {
+      // Exactly one *save* form per section. A section may also carry forms
+      // that act (brand voice's add and remove) — those name an intent, and
+      // the loop below checks the save form carries none. Counting all of them
+      // would let a nested form hide inside a legitimate second form.
+      expect(
+        sectionForms.filter(
+          (one) =>
+            one.includes(`section=${section}`) &&
+            !one.some((field) => field.startsWith("intent=")),
+        ).length,
+        `${section}: expected exactly one save form`,
+      ).toBe(1);
+    }
 
     for (const section of SECTIONS) {
-      const own = sectionForms.filter((body) => body.includes(`section=${section}`));
+      const own = sectionForms.filter(
+        (body) =>
+          body.includes(`section=${section}`) &&
+          !body.some((field) => field.startsWith("intent=")),
+      );
       expect(own, `${section}: no form posts it`).toHaveLength(1);
 
       // Exactly one `section`, and no stray intent riding along — an intent in

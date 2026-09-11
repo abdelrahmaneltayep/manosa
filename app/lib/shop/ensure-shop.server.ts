@@ -1,5 +1,6 @@
 import { db } from "~/db.server";
 import { recordAudit, SYSTEM_ACTOR } from "~/lib/audit/record.server";
+import { nextRun as auditPurgeNextRun } from "~/lib/jobs/handlers/purge-audit.server";
 import { cancelPendingJobs, enqueueJob } from "~/lib/jobs/queue.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { syncShopFacts } from "~/lib/shop/domains.server";
@@ -67,6 +68,16 @@ export async function ensureShopRecord(admin?: AdminGraphql) {
     await enqueueJob({
       kind: "agent.daily_briefing",
       runAt: new Date(),
+      replacePending: true,
+    });
+
+    // The audit log's twelve-month retention, enforced from install. It used
+    // to be scheduled only from `/app/activity` — so a merchant who read the
+    // promise in Settings and never opened the log had a table that grew
+    // forever, which is the promise broken by the page that makes it.
+    await enqueueJob({
+      kind: "audit.purge",
+      runAt: auditPurgeNextRun(new Date()),
       replacePending: true,
     });
     return created;

@@ -12,6 +12,7 @@ import { muteKind, unmuteKind } from "~/lib/agent/briefing.server";
 import { confirmEmbed, dismissSetup, reopenSetup } from "~/lib/setup/checklist.server";
 import { buildView } from "~/lib/agent/home-view.server";
 import { ensureBriefingScheduled } from "~/lib/jobs/handlers/daily-briefing.server";
+import { requireAi } from "~/lib/ai/permissions.server";
 import { withAdmin } from "~/shopify.server";
 
 /**
@@ -67,6 +68,11 @@ export const action = ({ request }: ActionFunctionArgs) =>
     }
 
     if (intent !== "ask") throw new Response("Unknown intent", { status: 400 });
+
+    // Both gates, server-side. This action had neither: a Free-plan shop, or
+    // one that had switched drafting off, could drive the Merchant Agent by
+    // POST while the loader dutifully hid the box.
+    await requireAi("draft", { feature: "merchant_agent" });
 
     const question = (form.get("question") ?? "").toString().trim();
     if (!question) {

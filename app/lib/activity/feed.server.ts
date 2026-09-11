@@ -1,6 +1,8 @@
 import type { AuditActorType } from "@prisma/client";
 
 import { db } from "~/db.server";
+import { activityKindLabel } from "~/lib/agent/home-view.server";
+import type { Translate } from "~/i18n/translate";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 
 /**
@@ -322,4 +324,34 @@ export async function recordedActions(): Promise<string[]> {
     take: 200,
   });
   return rows.map((row) => row.action);
+}
+
+/**
+ * An action, as a sentence rather than a family chip.
+ *
+ * `activityKindLabel` answers "what kind of thing is this" — `pricing_rule.*`
+ * → "Pricing". That is right for a chip beside a row and wrong for a picker
+ * of actions: it collapsed the 65 actions this app writes into 15 labels,
+ * eleven of them reading "Pricing" and ten reading "Activity", so a merchant
+ * could not tell `pricing_rule.created` from `pricing_rule.archived`.
+ *
+ * Built from the action string itself: the family, then the verb with its
+ * underscores opened out. `pricing_rule.archived` → "Pricing · rule archived".
+ * Derived rather than a catalogue of 65 entries, because a hand-kept list is
+ * the registration step this repo has now forgotten three times — and an
+ * action nobody translated would render as a raw key rather than as itself.
+ */
+export function actionLabel(action: string, t: Translate): string {
+  const [family = action, verb = ""] = action.split(".");
+  const words = `${family}_${verb}`
+    .replace(/_/g, " ")
+    .trim()
+    .replace(/^./, (first) => first.toUpperCase());
+
+  const chip = activityKindLabel(action, t);
+  // The chip when it says something the words do not, and the words always:
+  // together they read as "Pricing · Pricing rule created" at worst.
+  return chip && !words.toLowerCase().startsWith(chip.toLowerCase())
+    ? `${chip} · ${words}`
+    : words;
 }

@@ -112,9 +112,13 @@ export interface AgentControlsView {
   samplesWanted: number;
   /** Briefing kinds the merchant asked not to see, and their labels. */
   mutedBriefings: { kind: string; label: string }[];
+  /** What the merchant typed into the add form, echoed after a rejection. */
+  draft: { label: string; body: string };
+  /** The sample whose removal is being confirmed, if any. */
+  removing: string | null;
   /** Where the audit log lives, and how far back it goes. */
   auditHref: string;
-  retentionDays: number;
+  retentionMonths: number;
 }
 
 export interface DangerZoneView {

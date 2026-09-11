@@ -14,6 +14,8 @@ export interface ActivityLogView {
    * date**, not only by category. The first is the question a merchant opens
    * this page with: did a person do this, or did Claude?
    */
+  /** Each category link, carrying the filters the merchant already set. */
+  filterHrefs: Record<string, string>;
   actor: string;
   actors: string[];
   /** One exact action, e.g. "pricing_rule.created", or empty for any. */
@@ -23,7 +25,7 @@ export interface ActivityLogView {
   from: string;
   to: string;
   /** How far back the log goes, stated rather than left to be discovered. */
-  retentionDays: number;
+  retentionMonths: number;
   /** The oldest entry that will still be here tomorrow, as a date. */
   keptFrom: string;
   /** Whether any filter is set, so "no rows" can say which. */
