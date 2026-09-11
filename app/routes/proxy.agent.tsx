@@ -4,6 +4,8 @@ import { json } from "@remix-run/node";
 import { createHash } from "node:crypto";
 
 import { db } from "~/db.server";
+import { DEFAULT_LOCALE, isSupportedLocale } from "~/i18n/config";
+import { greetingFor } from "~/lib/agent/buyer/greeting.server";
 import { messagesForBuyer, overTurnLimit } from "~/lib/agent/buyer/conversation.server";
 import { answerBuyerTurn } from "~/lib/agent/buyer/turn.server";
 import { MAX_MESSAGE_CHARS } from "~/lib/ai/prompts/buyer-agent.server";
@@ -129,6 +131,28 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     }
 
     const url = new URL(request.url);
+
+    // The greeting, before the buyer has said anything. Their tier and their
+    // last order live in this app's tables; Liquid only knows their name, and
+    // 5.2 shipped with just that.
+    if (url.searchParams.get("hello") === "1") {
+      const record = await db.shop.findUnique({ where: { shop: context.shop } });
+      const locale = isSupportedLocale(context.locale)
+        ? context.locale
+        : isSupportedLocale(record?.primaryLocale)
+          ? record.primaryLocale
+          : DEFAULT_LOCALE;
+      const greeting = await greetingFor(context.customerId, locale);
+
+      return json(
+        greeting
+          ? { ok: true as const, greeting: greeting.text }
+          : { ok: false as const, failure: "empty" },
+        // A buyer's name and their order history, on a shared domain.
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
     const conversationId = (url.searchParams.get("conversation") ?? "").trim();
     if (!conversationId) {
       return json({ ok: false as const, failure: "empty" }, { status: 400 });

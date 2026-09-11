@@ -56,6 +56,7 @@ const row = (overrides: Partial<CustomerRowView> = {}): CustomerRowView => ({
   lastOrderAt: "2026-05-22T00:00:00.000Z",
   daysSinceLastOrder: 10,
   atRisk: false,
+  reorderReason: null,
   taxExempt: false,
   status: "APPROVED",
   tags: ["wholesale", "gold"],
@@ -208,9 +209,21 @@ describe("buyers list states", () => {
             row({ id: "c2", name: "Pending Co", status: "PENDING" }),
             row({ id: "c3", name: "Exempt Co", taxExempt: true }),
             row({ id: "c4", name: "Gone Ltd", deletedInShopify: true }),
+            row({
+              id: "c5",
+              name: "Regular Ltd",
+              // The row agrees with itself: "10 days ago" beside "it has been
+              // 24" is a row the loader cannot build, and both numbers come
+              // from the same buyer's last order.
+              lastOrderAt: "2026-05-08T00:00:00.000Z",
+              daysSinceLastOrder: 24,
+              dueToReorder: true,
+              reorderReason:
+                "Orders about every 21 days; it has been 24. Read from 6 orders.",
+            }),
           ],
-          total: 4,
-          totalUnfiltered: 4,
+          total: 5,
+          totalUnfiltered: 5,
         })}
       />,
     );
@@ -220,6 +233,15 @@ describe("buyers list states", () => {
     expect(html).toContain("Pending");
     expect(html).toContain("Tax-exempt");
     expect(html).toContain("Deleted in Shopify");
+
+    // The chip was a hardcoded `false` in the view model from 2.1 until 6.7:
+    // a badge that could not render, under a comment saying it needed a model
+    // it never got. It says what it counted, beside itself — Invariant 5, and
+    // a tooltip is not readable on a phone.
+    expect(html).toContain("Due to reorder");
+    expect(html).toContain("Orders about every 21 days; it has been 24");
+    // Not ✦: this is arithmetic on the buyer's own order dates.
+    expect(html).not.toContain("✦ Due to reorder");
   });
 
   it("a deleted buyer cannot be moved between groups", () => {

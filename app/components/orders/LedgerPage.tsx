@@ -183,11 +183,32 @@ function LedgerRow({ row, entitled }: { row: LedgerRowView; entitled: boolean })
         </s-stack>
       </s-table-cell>
       <s-table-cell>
-        {row.buyerHref ? (
-          <s-link href={row.buyerHref}>{row.buyer}</s-link>
-        ) : (
-          <s-text>{row.buyer}</s-text>
-        )}
+        <s-stack direction="block" gap="small-500">
+          {row.buyerHref ? (
+            <s-link href={row.buyerHref}>{row.buyer}</s-link>
+          ) : (
+            <s-text>{row.buyer}</s-text>
+          )}
+          {/* How they have paid before, counted off this ledger. A suggestion
+              for the merchant: nothing here changes anybody's terms or credit
+              limit, and the chip says what it counted rather than grading
+              somebody in a word they cannot check. */}
+          {row.risk ? (
+            <s-stack direction="inline" gap="small-500" alignItems="center">
+              <s-badge
+                tone={
+                  row.risk.level === "late"
+                    ? "critical"
+                    : row.risk.level === "watch"
+                      ? "warning"
+                      : "success"
+                }
+              >
+                {row.risk.label}
+              </s-badge>
+            </s-stack>
+          ) : null}
+        </s-stack>
       </s-table-cell>
       <s-table-cell>
         <s-stack direction="block" gap="small-500">

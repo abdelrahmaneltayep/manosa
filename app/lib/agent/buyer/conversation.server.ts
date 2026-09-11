@@ -276,7 +276,7 @@ export async function messagesForBuyer(options: {
   const after = options.afterId
     ? await db.agentMessage.findFirst({
         where: { id: options.afterId, conversationId: conversation.id },
-        select: { createdAt: true },
+        select: { seq: true },
       })
     : null;
 
@@ -284,9 +284,12 @@ export async function messagesForBuyer(options: {
     where: {
       conversationId: conversation.id,
       role: { in: ["AGENT", "MERCHANT"] },
-      ...(after ? { createdAt: { gt: after.createdAt } } : {}),
+      ...(after ? { seq: { gt: after.seq } } : {}),
     },
-    orderBy: { createdAt: "asc" },
+    // By insertion, never by `createdAt`: both halves of a turn are stamped
+    // with one `now`, so equal timestamps came back in whatever order
+    // Postgres chose — including the agent's reply above the question.
+    orderBy: { seq: "asc" },
     take: options.limit ?? HISTORY_LIMIT,
   });
 
@@ -314,7 +317,7 @@ export async function historyFor(
 ): Promise<{ role: string; text: string }[]> {
   const rows = await db.agentMessage.findMany({
     where: { conversationId },
-    orderBy: { createdAt: "desc" },
+    orderBy: { seq: "desc" },
     take: HISTORY_LIMIT,
     select: { role: true, text: true },
   });

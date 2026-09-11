@@ -1,5 +1,6 @@
 import { money } from "@mannon/pricing-engine";
 import type { Translate } from "~/i18n/translate";
+import type { Cadence } from "~/lib/customers/cadence.server";
 import { formatCurrency } from "~/lib/money";
 import type { Customer, CustomerGroup } from "@prisma/client";
 
@@ -29,9 +30,15 @@ export function displayName(
 
 export function toCustomerRowView(
   row: Customer & { group?: CustomerGroup | null },
-  options: { now: Date; t: Translate; locale?: string },
+  options: {
+    now: Date;
+    t: Translate;
+    locale?: string;
+    /** This buyer's ordering rhythm, when they have enough orders to have one. */
+    cadence?: Cadence | null;
+  },
 ): CustomerRowView {
-  const { now, t } = options;
+  const { now, t, cadence } = options;
   const group = row.group ?? null;
   const days = row.lastOrderAt ? daysSince(row.lastOrderAt, now) : null;
 
@@ -59,9 +66,17 @@ export function toCustomerRowView(
     status: row.status,
     tags: row.tags,
     deletedInShopify: row.deletedInShopifyAt !== null,
-    // ✦ A reorder prediction needs the AI layer (phase 4). Showing a guess
-    // dressed as a prediction would be worse than showing nothing.
-    dueToReorder: false,
+    // Arithmetic, not a model: a buyer who orders every three weeks and last
+    // ordered four weeks ago is due. Absent whenever they have too few orders
+    // to have a rhythm at all — see `cadence.server.ts`.
+    dueToReorder: cadence?.due ?? false,
+    reorderReason: cadence?.due
+      ? t("customers.list.dueToReorderWhy", {
+          every: cadence.everyDays,
+          days: cadence.daysSince,
+          count: cadence.orders,
+        })
+      : null,
   };
 }
 

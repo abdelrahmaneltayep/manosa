@@ -48,8 +48,6 @@ export const AI_FEATURES = [
   "po_to_order",
   "quote_response",
   "buyer_agent",
-  "reorder_prediction",
-  "terms_risk",
   "setup_wizard",
   "ask_data",
   "monthly_review",
@@ -97,8 +95,6 @@ export const PROMPT_VERSIONS: Readonly<Record<AiFeature, string>> = {
   quote_response: "1",
   setup_wizard: "1",
   buyer_agent: "1",
-  reorder_prediction: "1",
-  terms_risk: "1",
   // 2: the chart menu gained "orders", so a cached "1" answer would route to
   // a list the model was never shown.
   ask_data: "2",

@@ -10,6 +10,7 @@ import { translate } from "~/i18n/translate";
 import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { lowestPlanWithFeature } from "~/lib/billing/plans";
 import { toBucketViews, toLedgerRowView } from "~/lib/orders/view-model.server";
+import { riskFor } from "~/lib/terms/risk.server";
 import { ledgerPage, LEDGER_PAGE_SIZE } from "~/lib/terms/ledger-query.server";
 import {
   parseAmount,
@@ -82,6 +83,8 @@ async function buildView(
       })
     : [];
   const buyerRowIds = new Map(buyers.map((buyer) => [buyer.customerId, buyer.id]));
+  // One query for the page's buyers, not one per row.
+  const risk = await riskFor(customerIds, now);
 
   return {
     rows: ledger.rows.map((row) =>
@@ -91,7 +94,14 @@ async function buildView(
           buyerRowId: row.customerId ? (buyerRowIds.get(row.customerId) ?? null) : null,
           error: errors.payment?.orderId === row.id ? errors.payment.message : null,
         },
-        { shop, now, t, locale, canRemind: canRemind(row, now) },
+        {
+          shop,
+          now,
+          t,
+          locale,
+          canRemind: canRemind(row, now),
+          risk: row.customerId ? (risk.get(row.customerId) ?? null) : null,
+        },
       ),
     ),
     buckets: toBucketViews(ledger.summary, { locale }),

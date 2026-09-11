@@ -12,6 +12,7 @@ import type {
   PlacedVia,
 } from "~/components/orders/types";
 import type { Translate } from "~/i18n/translate";
+import type { TermsRisk } from "~/lib/terms/risk.server";
 import { formatCurrency } from "~/lib/money";
 import {
   daysUntilDue,
@@ -191,7 +192,14 @@ function wholeDaysBetween(from: Date, to: Date): number {
 
 export function toLedgerRowView(
   order: Order & { buyerRowId?: string | null; error?: string | null },
-  options: { shop: string; now: Date; t: Translate; locale?: string; canRemind: boolean },
+  options: {
+    shop: string;
+    now: Date;
+    t: Translate;
+    locale?: string;
+    canRemind: boolean;
+    risk?: TermsRisk | null;
+  },
 ): LedgerRowView {
   const { t, now, locale } = options;
   const balance = money(amountOwed(order), order.currencyCode);
@@ -225,6 +233,23 @@ export function toLedgerRowView(
         })
       : null,
     canRemind: options.canRemind,
+    // Counted off the ledger, and it says what it counted: a chip reading
+    // "at risk" with nothing behind it is a merchant's judgement replaced by
+    // ours, which is exactly what Invariant 5 forbids.
+    risk: options.risk
+      ? {
+          level: options.risk.level,
+          label:
+            options.risk.overdueNow > 0
+              ? t("terms.risk.overdue", { count: options.risk.overdueNow })
+              : options.risk.late > 0
+                ? t("terms.risk.late", {
+                    count: options.risk.late,
+                    settled: options.risk.settled,
+                  })
+                : t("terms.risk.onTime", { count: options.risk.streak }),
+        }
+      : null,
     error: order.error ?? null,
   };
 }

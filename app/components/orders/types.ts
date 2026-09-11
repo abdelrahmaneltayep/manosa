@@ -147,6 +147,15 @@ export interface LedgerRowView {
   currencyCode: string;
   /** Already-translated "Reminded 3 days ago", or null. */
   remindedLabel: string | null;
+  /**
+   * How this buyer has paid before — counted off the ledger, never guessed.
+   *
+   * A suggestion for the merchant and nothing more: no terms and no credit
+   * limit change from it. Null when this buyer has no settled invoice and
+   * nothing overdue, because "always pays on time" about a first invoice is
+   * a confident way of saying nothing.
+   */
+  risk: { level: "good" | "watch" | "late"; label: string } | null;
   /** False while a reminder is too recent to send another. */
   canRemind: boolean;
   /** A failed payment entry, shown beside the field that caused it. */

@@ -596,7 +596,7 @@
       "daysAgo_one": "{{count}} day ago",
       "daysAgo_other": "{{count}} days ago",
       "atRiskBadge": "At risk",
-      "dueToReorderBadge": "✦ Due to reorder",
+      "dueToReorderBadge": "Due to reorder",
       "taxExemptBadge": "Tax-exempt",
       "deletedInShopify": "Deleted in Shopify",
       "changeGroup": "Group",
@@ -604,7 +604,9 @@
       "repriceNote": "New prices apply on this buyer's next visit to your store.",
       "showing": "{{from}}–{{to}} of {{total}}",
       "previous": "Previous",
-      "next": "Next"
+      "next": "Next",
+      "dueToReorderWhy_one": "Orders about every {{every}} days; it has been {{days}}. Read from {{count}} order.",
+      "dueToReorderWhy_other": "Orders about every {{every}} days; it has been {{days}}. Read from {{count}} orders."
     },
     "groups": {
       "heading": "Customer groups",
@@ -1439,6 +1441,14 @@
       "overdueBlocksHelp": "A buyer with anything past its due date has to pay now, until they settle it.",
       "previewLabel": "An eligible buyer sees",
       "save": "Save and publish"
+    },
+    "risk": {
+      "onTime_one": "Paid {{count}} invoice on time",
+      "onTime_other": "Paid the last {{count}} on time",
+      "late_one": "{{count}} of the last {{settled}} was late",
+      "late_other": "{{count}} of the last {{settled}} were late",
+      "overdue_one": "{{count}} invoice overdue now",
+      "overdue_other": "{{count}} invoices overdue now"
     }
   },
   "quotes": {
@@ -2222,7 +2232,14 @@
   "agent": {
     "scripted": {
       "off_limits": "That's not something I can help with here — someone from the team can. Send them a message and they'll pick it up.",
-      "decline": "That's outside what I can answer. If it's about your account or an order, someone from the team can help."
+      "decline": "That's outside what I can answer. If it's about your account or an order, someone from the team can help.",
+      "greeting": "Hello. Ask me about prices, stock or one of your orders.",
+      "greetingNamed": "Hello {{name}}.",
+      "greetingTier": "You are on {{tier}} pricing.",
+      "greetingLastOrder_zero": "Your last order was today.",
+      "greetingLastOrder_one": "Your last order was yesterday.",
+      "greetingLastOrder_other": "Your last order was {{count}} days ago.",
+      "greetingFirstOrder": "This would be your first order with us."
     },
     "lint": {
       "discountAuthority": "You've asked the agent to offer or negotiate discounts. It never can: it only reads the prices your rules already produce.",

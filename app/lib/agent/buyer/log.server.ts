@@ -107,7 +107,8 @@ export async function readConversation(id: string): Promise<Transcript | null> {
     conversation,
     messages: await db.agentMessage.findMany({
       where: { conversationId: id },
-      orderBy: { createdAt: "asc" },
+      // Insertion, not `createdAt`: both halves of a turn share one timestamp.
+      orderBy: { seq: "asc" },
     }),
   };
 }
@@ -288,7 +289,7 @@ export async function exportConversations(
 
   const rows = await db.agentMessage.findMany({
     where: Object.keys(conversation).length > 0 ? { conversation } : {},
-    orderBy: { createdAt: "asc" },
+    orderBy: { seq: "asc" },
     take: EXPORT_LIMIT + 1,
     include: { conversation: true },
   });

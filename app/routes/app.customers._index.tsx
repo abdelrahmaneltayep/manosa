@@ -15,6 +15,7 @@ import {
   listCustomers,
   shopSettings,
 } from "~/lib/customers/customers.server";
+import { cadenceFor } from "~/lib/customers/cadence.server";
 import { toCustomerRowView } from "~/lib/customers/view-model.server";
 import { withAdmin } from "~/shopify.server";
 
@@ -55,8 +56,20 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       },
     });
 
+    // One query for the page, not one per row.
+    const cadence = await cadenceFor(
+      page.rows.map((row) => row.customerId),
+      now,
+    );
+
     const view: CustomerListView = {
-      rows: page.rows.map((row) => toCustomerRowView(row, { now, t: translate(t) })),
+      rows: page.rows.map((row) =>
+        toCustomerRowView(row, {
+          now,
+          t: translate(t),
+          cadence: cadence.get(row.customerId) ?? null,
+        }),
+      ),
       total: page.total,
       page: page.page,
       pageSize: CUSTOMERS_PAGE_SIZE,

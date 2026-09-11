@@ -299,10 +299,17 @@ function CustomerRow({
           {row.atRisk ? (
             <s-badge tone="caution">{t("customers.list.atRiskBadge")}</s-badge>
           ) : null}
-          {/* ✦ A prediction, and labelled as one. Never shown until the model
-              behind it exists. */}
+          {/* Not ✦: this is arithmetic on the buyer's own order dates, and the
+              star marks what Claude wrote. It says why in the merchant's own
+              numbers, beside the chip rather than in a tooltip — a verdict
+              they cannot read on a phone is one they cannot act on. */}
           {row.dueToReorder ? (
-            <s-badge tone="info">{t("customers.list.dueToReorderBadge")}</s-badge>
+            <>
+              <s-badge tone="info">{t("customers.list.dueToReorderBadge")}</s-badge>
+              {row.reorderReason ? (
+                <s-text color="subdued">{row.reorderReason}</s-text>
+              ) : null}
+            </>
           ) : null}
         </s-stack>
       </s-table-cell>

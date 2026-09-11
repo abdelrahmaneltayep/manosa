@@ -1627,8 +1627,17 @@ model AgentMessage {
   aiRequestId     String?
 
   createdAt DateTime @default(now())
+  /// Insertion order, which `createdAt` is not.
+  ///
+  /// `answerBuyerTurn` stamps both halves of a turn with one `now` so they
+  /// share a timestamp — deliberate, and it left the transcript's order
+  /// undefined: Postgres may return equal keys in any order, and a merchant
+  /// reading back a conversation could find the agent replying above the
+  /// question. Every read of a thread orders by this.
+  seq       Int      @unique @default(autoincrement())
 
   @@index([shop, conversationId, createdAt])
+  @@index([shop, conversationId, seq])
 }
 
 enum AgentOutcome {

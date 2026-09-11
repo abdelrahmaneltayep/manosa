@@ -6,6 +6,11 @@
   and the check that throws away a reply quoting a price the pricing engine did
   not compute. This block is a window onto that and holds no logic of its own.
 
+  The greeting is printed from Liquid the instant the panel opens and then
+  replaced, once, by one this app composed — Liquid knows the buyer's name and
+  nothing else, while their tier and their last order are rows here. A panel
+  that waited on that request to say hello would be broken whenever it was.
+
   Three rules it does keep:
 
   - **Nothing before it is opened.** No fetch, no greeting, no cost, until the
@@ -218,6 +223,7 @@
 
       var fallbackUrl = {{ fallback_url | json }};
       var firstName = {{ customer.first_name | json }};
+      var customerId = {{ customer.id | json }};
 
       // Nothing is fetched until the buyer opens it. The launcher appearing is
       // the whole cost of this block on a page nobody uses it on.
@@ -260,14 +266,37 @@
         input.focus();
         if (!greeted) {
           greeted = true;
-          bubble(
+          // Liquid knows their name; their tier and last order arrive after.
+          var hello = bubble(
             'agent',
             firstName
               ? strings.greetingNamed.replace('%name%', firstName)
               : strings.greeting,
           );
           bubble('agent', strings.examples);
+          personalise(hello);
         }
+      }
+
+      // Signed-in only: a guest has no tier and no orders to ask about.
+      function personalise(node) {
+        if (!customerId) return;
+
+        fetch(routes + 'apps/mannon/agent?hello=1', {
+          headers: { Accept: 'application/json' }
+        })
+          .then(function (response) {
+            return response.json().catch(function () {
+              return { ok: false };
+            });
+          })
+          .then(function (data) {
+            if (!data || data.ok !== true || !data.greeting) return;
+            node.textContent = data.greeting;
+          })
+          .catch(function () {
+            // The greeting already on screen stays.
+          });
       }
 
       function closePanel() {

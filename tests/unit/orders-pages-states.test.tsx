@@ -438,6 +438,7 @@ const ledgerRow = (overrides: Partial<LedgerRowView> = {}): LedgerRowView => ({
   balanceRaw: "1000.00",
   paid: null,
   currencyCode: "USD",
+  risk: null,
   remindedLabel: null,
   canRemind: true,
   error: null,
@@ -568,6 +569,50 @@ describe("the terms ledger", () => {
 
     expect(html).toContain("more than the #1001 balance");
     capture("terms-payment-error", html);
+  });
+
+  it("says how each buyer has paid before, and on what", () => {
+    const html = render(
+      <LedgerPage
+        view={ledgerView({
+          rows: [
+            ledgerRow({
+              risk: { level: "good", label: "Paid the last 6 on time" },
+            }),
+            ledgerRow({
+              id: "o2",
+              name: "#1002",
+              buyer: "Slow Ltd",
+              risk: { level: "watch", label: "1 of the last 5 was late" },
+            }),
+            ledgerRow({
+              id: "o3",
+              name: "#1003",
+              buyer: "Late Ltd",
+              // Overdue *and* labelled overdue: the producer never writes one
+              // without the other, and a fixture that does is a fixture of a
+              // row this app cannot make.
+              overdue: true,
+              dueLabel: "9 days overdue",
+              risk: { level: "late", label: "2 invoices overdue now" },
+            }),
+          ],
+        })}
+      />,
+    );
+
+    // `terms_risk` carried a prompt version from 4.1 with no prompt, no caller
+    // and nothing on any screen. It is counted off this ledger now — and it
+    // says what it counted, because a buyer graded in one word is a merchant's
+    // judgement replaced by ours.
+    expect(html).toContain("Paid the last 6 on time");
+    expect(html).toContain("1 of the last 5 was late");
+    expect(html).toContain("2 invoices overdue now");
+    // Three tones, so the three states are told apart at a glance.
+    expect(html).toContain('tone="success"');
+    expect(html).toContain('tone="warning"');
+    expect(html).toContain('tone="critical"');
+    capture("terms-risk", html);
   });
 
   it("unpublished: warns that checkout has not been told", () => {

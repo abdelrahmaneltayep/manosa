@@ -2,7 +2,7 @@
 
 Updated: 2026-09-11T18:30:00Z
 Current milestone: 6 — Analytics
-Current task: 6.7 polish [in progress — orders-over-time done; 6.6 cold-read fix round done]
+Current task: 6.7 polish [done] · 7.1 Release [next]
 
 ## Done
 
@@ -39,7 +39,9 @@ Current task: 6.7 polish [in progress — orders-over-time done; 6.6 cold-read f
 
 - [x] 6.6 Translations — every buyer-facing string editable per language, ✦ wording suggested in the merchant's own voice, a review flag per string, export **and** import — commit `2ecabba` — QA: `qa/6.6/REPORT.md` (`docs/adr/0028`). The ✦ half nearly shipped inert for the fourth time: both catalogues ship complete, so "fill what is missing" would have had nothing to do on any store. It suggests wording over the strings a merchant has **not** written instead, which is also the first thing to read the 6.5 brand-voice samples. `StorefrontString` was not in the uninstall purge — the lesson from 6.4, applied before the cold read this time. **The cold read still returned FAIL on four P0s** (`qa/6.6/COLD-READ.md`), the worst a cross-tenant leak *outbound to buyers*: `addResource` writes into the object it is handed, so one shop's saved string rewrote the shipped catalogue for the whole process. Fixed in `aac76e3`: overrides are their own i18next namespace; the editable set is now ~50 genuinely buyer-facing keys rather than 534 mostly-admin ones; the checkout message is editable for real; an ✦ suggestion no longer reaches a buyer before a person accepts it; the page is one form with a save bar.
 
-- [x] 6.7 (part) Orders over time — an eighth chart, counts not money, with its own whole-number axis — commit `PENDING` — QA: `qa/6.7/REPORT.md`. Closes the `pages-features.md` §7 line deferred at 6.2. The ✦ chart menu was a hand-kept list **inside the prompt**: adding a chart to `CHART_KEYS` satisfied the validator while the model was never told it existed, so nothing could route to it. Generated from an exhaustive record now, with a test.
+- [x] 6.7 (part) Orders over time — an eighth chart, counts not money, with its own whole-number axis — commit `7dcd13e` — QA: `qa/6.7/REPORT.md`. Closes the `pages-features.md` §7 line deferred at 6.2. The ✦ chart menu was a hand-kept list **inside the prompt**: adding a chart to `CHART_KEYS` satisfied the validator while the model was never told it existed, so nothing could route to it. Generated from an exhaustive record now, with a test.
+
+- [x] 6.7 (part two) The three things that were registered and never built — the reorder chip (hardcoded `false` since 2.1), the net-terms risk signal (`terms_risk`: a prompt version, no prompt, no caller, no screen) and the widget greeting's tier and last order (open since 5.2) — commit `PENDING` — QA: `qa/6.7/REPORT.md`. **Neither chip needed a model**: both are arithmetic on rows this app already stores, so `reorder_prediction` and `terms_risk` are deleted from the AI registry rather than left as names for features that do not exist. Found on the way: the Buyer Agent block was at **99.2% of its byte budget** because the guard counted `{% comment %}` and `{% schema %}`, neither of which Shopify ever serves — so the budget was pushing against documenting storefront code.
 
 ## Next up
 
@@ -54,8 +56,6 @@ Current task: 6.7 polish [in progress — orders-over-time done; 6.6 cold-read f
   third time. A read API is its own task: auth, scopes, rate limits,
   versioning, pagination. Then the keys page.
 - 6.7 polish — the rest; see `DECISIONS.md` for the splits
-- 5.2 has one unfinished piece: the widget's greeting is personalised by name
-  only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
 - 7.1–7.3 Release
 
 ## Blocked
@@ -488,3 +488,25 @@ Neither is blocking; both would change product decisions if answered.
   saved string (the import file is capped at 2 MB); `buildView` calls
   `unwrittenIn` on every page load just for its `.length`; and a save is
   last-write-wins between two staff on one key.
+- **A prompt version is not a feature.** `reorder_prediction` and `terms_risk`
+  sat in `AI_FEATURES` and `PROMPT_VERSIONS` from 4.1 to 6.7 with no prompt, no
+  caller and nothing on any screen, next to a `dueToReorder: false` hardcoded in
+  a view model. Both turned out to be arithmetic. When adding a name to a
+  registry, add the thing it names in the same commit or don't add the name.
+- **A fixture is a row, and a row's fields agree with each other.** Three
+  captures in 6.7 said two contradictory things at once — "overdue" beside "due
+  in 12 days", "10 days ago" beside "it has been 24" — each a row the loader
+  cannot build. The earlier lesson was about values the writer never writes;
+  this is the same lesson inside one row.
+- **The theme block budget counts what a buyer downloads.** It used to count
+  the file on disk, including `{% comment %}` and `{% schema %}`, which Shopify
+  strips — so it was 99.2% spent and pushing against documenting storefront
+  code. JS comments are still counted: those really are shipped, so keep them
+  terse in a block and put the reasoning in the Liquid header comment, which is
+  free.
+- **Two rows written in one turn need a tiebreaker.** `appendTurn` stamps the
+  buyer's message and the agent's with one `now` on purpose, and every read
+  ordered by `createdAt` — so the transcript's order was whatever Postgres felt
+  like, and a merchant could read the reply above the question.
+  `AgentMessage.seq` is the total order now. Anywhere two rows can share a
+  timestamp, ordering by that timestamp is not an ordering.

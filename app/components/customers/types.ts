@@ -35,6 +35,13 @@ export interface CustomerRowView {
   deletedInShopify: boolean;
   /** ✦ Reorder prediction. Needs the AI layer, so false until phase 4. */
   dueToReorder: boolean;
+  /**
+   * Why the chip is there, in the merchant's own numbers.
+   *
+   * Invariant 5: a verdict a merchant cannot audit is one they cannot act on.
+   * Null whenever `dueToReorder` is false.
+   */
+  reorderReason: string | null;
 }
 
 export interface CustomerListView {

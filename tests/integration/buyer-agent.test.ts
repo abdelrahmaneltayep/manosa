@@ -606,9 +606,20 @@ describe("answering a buyer", () => {
       expect(turn.reply).toContain("$6.50");
       expect(turn.tool).toBe("price_for");
 
-      // Both halves of the turn are on the record.
+      // Both halves of the turn are on the record, in the order they happened.
+      // They share a `createdAt` by design, so ordering a thread by it left
+      // Postgres free to return the agent's reply above the question — which
+      // is what a merchant reads back in the log. Ordered by insertion now.
       const history = await historyFor(turn.conversationId);
       expect(history.map((row) => row.role)).toEqual(["buyer", "agent"]);
+
+      const rows = await db.agentMessage.findMany({
+        where: { conversationId: turn.conversationId },
+        select: { role: true, createdAt: true, seq: true },
+        orderBy: { seq: "asc" },
+      });
+      expect(rows[0]!.createdAt.getTime()).toBe(rows[1]!.createdAt.getTime());
+      expect(rows[0]!.seq).toBeLessThan(rows[1]!.seq);
     });
   });
 

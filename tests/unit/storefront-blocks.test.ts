@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -25,6 +25,23 @@ const source = (name: string) => readFileSync(join(BLOCKS, name), "utf8");
  * would fail it.
  */
 const MAX_BYTES = 16 * 1024;
+
+/**
+ * What a buyer actually downloads.
+ *
+ * Liquid comments and the `{% schema %}` block are stripped by Shopify before
+ * anything is rendered, so a buyer never pays for either. Measuring the file on
+ * disk counted them, which made the budget push against the one thing it has no
+ * business discouraging: writing down why storefront code is the way it is.
+ * JavaScript comments are **not** stripped and are still counted, because those
+ * really are shipped.
+ */
+const served = (liquid: string) =>
+  Buffer.byteLength(
+    liquid
+      .replace(/\{%-?\s*comment\s*-?%\}[\s\S]*?\{%-?\s*endcomment\s*-?%\}/g, "")
+      .replace(/\{%-?\s*schema\s*-?%\}[\s\S]*?\{%-?\s*endschema\s*-?%\}/g, ""),
+  );
 
 describe("the blocks exist", () => {
   it("ships the four the app has", () => {
@@ -65,7 +82,14 @@ describe.each(files)("%s", (name) => {
   });
 
   it("stays inside the byte budget", () => {
-    expect(statSync(join(BLOCKS, name)).size).toBeLessThan(MAX_BYTES);
+    expect(served(liquid)).toBeLessThan(MAX_BYTES);
+  });
+
+  it("is measured on what a buyer downloads, not on what is in the file", () => {
+    // Guards the guard: if the strip above ever stops matching, the budget
+    // quietly goes back to counting documentation as payload.
+    const withComment = `{% comment %}${"x".repeat(4096)}{% endcomment %}${liquid}`;
+    expect(served(withComment)).toBe(served(liquid));
   });
 
   it("declares its schema, and a preset when a preset is what adds it", () => {

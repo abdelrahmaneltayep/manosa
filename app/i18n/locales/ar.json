@@ -712,7 +712,7 @@
       "daysAgo_many": "قبل {{count}} يوماً",
       "daysAgo_other": "قبل {{count}} يوم",
       "atRiskBadge": "معرّض للفقد",
-      "dueToReorderBadge": "✦ حان وقت إعادة الطلب",
+      "dueToReorderBadge": "حان وقت إعادة الطلب",
       "taxExemptBadge": "معفى من الضريبة",
       "deletedInShopify": "محذوف في Shopify",
       "changeGroup": "المجموعة",
@@ -720,7 +720,13 @@
       "repriceNote": "تسري الأسعار الجديدة عند زيارة هذا المشتري التالية لمتجرك.",
       "showing": "{{from}}–{{to}} من {{total}}",
       "previous": "السابق",
-      "next": "التالي"
+      "next": "التالي",
+      "dueToReorderWhy_zero": "لا طلبات لقراءة نمط منها.",
+      "dueToReorderWhy_one": "يطلب كل {{every}} يوماً تقريباً، ومضى {{days}}. مقروء من طلب واحد.",
+      "dueToReorderWhy_two": "يطلب كل {{every}} يوماً تقريباً، ومضى {{days}}. مقروء من طلبين.",
+      "dueToReorderWhy_few": "يطلب كل {{every}} يوماً تقريباً، ومضى {{days}}. مقروء من {{count}} طلبات.",
+      "dueToReorderWhy_many": "يطلب كل {{every}} يوماً تقريباً، ومضى {{days}}. مقروء من {{count}} طلباً.",
+      "dueToReorderWhy_other": "يطلب كل {{every}} يوماً تقريباً، ومضى {{days}}. مقروء من {{count}} طلب."
     },
     "groups": {
       "heading": "مجموعات العملاء",
@@ -1748,6 +1754,26 @@
       "overdueBlocksHelp": "من لديه أي مبلغ تجاوز استحقاقه يدفع الآن حتى يسدده.",
       "previewLabel": "يرى المشتري المؤهل",
       "save": "حفظ ونشر"
+    },
+    "risk": {
+      "onTime_zero": "لا فواتير مسدّدة بعد",
+      "onTime_one": "سدّد فاتورة واحدة في موعدها",
+      "onTime_two": "سدّد آخر فاتورتين في موعدهما",
+      "onTime_few": "سدّد آخر {{count}} فواتير في مواعيدها",
+      "onTime_many": "سدّد آخر {{count}} فاتورة في مواعيدها",
+      "onTime_other": "سدّد آخر {{count}} فاتورة في مواعيدها",
+      "late_zero": "لا تأخير في آخر {{settled}}",
+      "late_one": "تأخّرت فاتورة واحدة من آخر {{settled}}",
+      "late_two": "تأخّرت فاتورتان من آخر {{settled}}",
+      "late_few": "تأخّرت {{count}} فواتير من آخر {{settled}}",
+      "late_many": "تأخّرت {{count}} فاتورة من آخر {{settled}}",
+      "late_other": "تأخّرت {{count}} فاتورة من آخر {{settled}}",
+      "overdue_zero": "لا فواتير متأخرة الآن",
+      "overdue_one": "فاتورة واحدة متأخرة الآن",
+      "overdue_two": "فاتورتان متأخرتان الآن",
+      "overdue_few": "{{count}} فواتير متأخرة الآن",
+      "overdue_many": "{{count}} فاتورة متأخرة الآن",
+      "overdue_other": "{{count}} فاتورة متأخرة الآن"
     }
   },
   "quotes": {
@@ -2728,7 +2754,17 @@
   "agent": {
     "scripted": {
       "off_limits": "هذا ليس مما أستطيع مساعدتك فيه هنا — لكن أحد أعضاء الفريق يستطيع. راسلهم وسيتابعون معك.",
-      "decline": "هذا خارج ما أستطيع الإجابة عنه. إن كان يخص حسابك أو طلبًا لديك فأحد أعضاء الفريق يستطيع مساعدتك."
+      "decline": "هذا خارج ما أستطيع الإجابة عنه. إن كان يخص حسابك أو طلبًا لديك فأحد أعضاء الفريق يستطيع مساعدتك.",
+      "greeting": "أهلاً. اسألني عن الأسعار أو التوفّر أو أحد طلباتك.",
+      "greetingNamed": "أهلاً {{name}}.",
+      "greetingTier": "أسعارك على فئة {{tier}}.",
+      "greetingLastOrder_zero": "آخر طلب لك كان اليوم.",
+      "greetingLastOrder_one": "آخر طلب لك كان أمس.",
+      "greetingLastOrder_two": "آخر طلب لك كان قبل يومين.",
+      "greetingLastOrder_few": "آخر طلب لك كان قبل {{count}} أيام.",
+      "greetingLastOrder_many": "آخر طلب لك كان قبل {{count}} يوماً.",
+      "greetingLastOrder_other": "آخر طلب لك كان قبل {{count}} يوم.",
+      "greetingFirstOrder": "سيكون هذا أول طلب لك معنا."
     },
     "lint": {
       "discountAuthority": "طلبت من الوكيل تقديم خصومات أو التفاوض عليها. لا يستطيع ذلك أبدًا: هو يقرأ الأسعار التي تنتجها قواعدك فقط.",

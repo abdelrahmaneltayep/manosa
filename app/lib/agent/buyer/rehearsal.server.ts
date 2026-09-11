@@ -126,7 +126,7 @@ export async function rehearsalView(options: {
   const messages = conversation
     ? await db.agentMessage.findMany({
         where: { conversationId: conversation.id },
-        orderBy: { createdAt: "asc" },
+        orderBy: { seq: "asc" },
       })
     : [];
 
