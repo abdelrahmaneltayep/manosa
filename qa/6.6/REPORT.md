@@ -1,6 +1,8 @@
 # QA — 6.6 Translations
 
-Date: 2026-09-11 · Gate: **pass** (own seven steps) · Cold read: see `COLD-READ.md`
+Date: 2026-09-11 · Gate: **pass after a fix round** · Cold read: **FAIL** on
+four P0s — see `COLD-READ.md`. This file describes the code as it stands after
+those were fixed; §9 lists what the first pass got wrong.
 
 ## 1. Test plan
 
@@ -55,7 +57,7 @@ Abuse cases invented for this task
 - `tests/e2e/translations-forms.spec.ts` — 3, in Chromium, over the capture.
 - `tests/integration/jobs.test.ts` — one added: the uninstall purge reaches
   `StorefrontString`.
-- Whole suite: **2145 passing across 115 files, 0 failing, 0 skipped.** `lint`, `typecheck`,
+- Whole suite after the fix round: **2174 passing across 117 files, 0 failing.** `lint`, `typecheck`,
   `format:check`, `build` all clean.
 
 Each new test was watched failing first, by breaking the thing it covers. The
@@ -151,3 +153,29 @@ real leak next to an exempt element and expects a failure.
 - ✦ has never been answered by Anthropic (no key). The prompt, the placeholder
   check on the reply and the three failure states are driven through an
   injected client.
+
+
+## 9. What the first pass of this gate missed
+
+The cold read returned FAIL on four P0s, and the worst of them was a
+cross-tenant leak *outbound to buyers*: `addResource` writes into the object it
+is handed, and this process handed it the imported catalogue, so one shop's
+saved string became every other shop's. `COLD-READ.md` has all of it. Three
+things about how this gate missed them are worth writing down:
+
+1. **My tenancy test never built an instance inside the first shop's scope.**
+   It saved in Alpha and read in Beta, which is the shape of a tenancy test —
+   and the leak needed a *render* in between, which is what production does on
+   every save. The question to ask a tenancy test is not "does B see A's row"
+   but "what has A's request left behind".
+2. **"There is exactly one place an instance is built" was an assertion in an
+   ADR, not a test.** There were three. A claim that a thing happens in exactly
+   one place is a claim a `grep` can check, and now does.
+3. **Every capture in this set was of keys that do not exist.** The guard that
+   reads captures for leaked keys could not see it, because those elements are
+   the ones carrying the exemption. A fixture's keys are now checked against
+   `editableKeys()` by reading the fixture file.
+
+Corrected from §2 of the original: this pass reported "0 skipped". The
+client-bundle guard is `it.runIf(built)` and no `build/client` existed at the
+time, so it did not run. It has since been run against a real build: clean.

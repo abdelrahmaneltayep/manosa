@@ -47,6 +47,16 @@ describe("the raw-key guard", () => {
     ).toBe(true);
   });
 
+  it("exempts the key the element declares, and not other text inside it", () => {
+    // Otherwise an opt-out is a place to hide a real fallback: the page that
+    // shows keys on purpose is exactly where one looks like it belongs.
+    expect(
+      fails(
+        '<s-text data-string-key="forms.public.submit">quotes.public.heading</s-text>',
+      ),
+    ).toBe(true);
+  });
+
   it("does not let an opted-out element exempt its siblings", () => {
     expect(
       fails(

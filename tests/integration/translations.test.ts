@@ -38,6 +38,20 @@ const inBeta = <T>(fn: () => Promise<T>) => shopScope.run(BETA, fn);
 
 const ACTOR = { type: "STAFF" as const, id: "staff-1" };
 
+/**
+ * A buyer-facing key whose shipped English carries no `{{tag}}`.
+ *
+ * Found rather than named: a test that hard-codes a key stops testing the day
+ * that key is reworded, and one that picks the first buyer-facing key picks
+ * `forms.public.fileHelp`, whose `{{megabytes}}` every save is checked against.
+ */
+const plainKey = () =>
+  editableKeys().find(
+    (one) =>
+      one.startsWith("forms.public.") &&
+      placeholdersIn(shippedString(one, "en") ?? "").length === 0,
+  )!;
+
 function reply(text: string) {
   return {
     id: "msg_01tr",
@@ -53,7 +67,9 @@ const once = (text: string) => stub(async () => reply(text));
 
 async function installShop(shop: string) {
   await shopScope.run(shop, async () => {
-    await db.shop.create({ data: { ...tenant(), planKey: "agentic" } });
+    await db.shop.create({
+      data: { ...tenant(), planKey: "agentic", billingStatus: "ACTIVE" },
+    });
   });
 }
 
@@ -69,18 +85,32 @@ describe("the editable set", () => {
   it("is derived from the catalogue, not a list somebody keeps up to date", () => {
     const keys = editableKeys();
 
-    // Buyer-facing roots only, and all of them. A hand-kept list is the
+    // The paths a buyer reads, and all of them. A hand-kept list is the
     // registration step this repo has forgotten three times, and forgetting a
     // key here means telling a merchant a string is not theirs to change.
-    // A real key from the catalogue, found rather than guessed.
-    expect(keys.some((key) => key.startsWith("limit."))).toBe(true);
-    expect(keys.some((key) => key.startsWith("forms."))).toBe(true);
-    expect(keys.some((key) => key.startsWith("approval."))).toBe(true);
-    expect(keys.some((key) => key.startsWith("quotes."))).toBe(true);
-    // Admin-only roots are not a merchant's to rewrite: nothing renders them
-    // to a buyer, and offering them would be a table of five hundred more.
-    expect(keys.some((key) => key.startsWith("settings."))).toBe(false);
-    expect(keys.some((key) => key.startsWith("analytics."))).toBe(false);
+    expect(keys.some((key) => key.startsWith("forms.public."))).toBe(true);
+    expect(keys.some((key) => key.startsWith("quotes.public."))).toBe(true);
+    expect(keys.some((key) => key.startsWith("agent.scripted."))).toBe(true);
+    // The checkout message: no React page renders it, so nothing that walks
+    // the components would find it, and the Limits page links a merchant here.
+    expect(keys).toContain("checkout.below_minimum_subtotal");
+
+    // Admin copy is not a merchant's to rewrite: nothing renders it to a
+    // buyer, and 6.6 first shipped offering 534 strings of which about forty
+    // ever reached one. `limit.*` is the Plans page's allowance copy;
+    // `approval.*` is the merchant's own criteria builder.
+    for (const admin of [
+      "settings.",
+      "analytics.",
+      "limit.",
+      "approval.",
+      "forms.list.",
+    ]) {
+      expect(
+        keys.filter((key) => key.startsWith(admin)),
+        admin,
+      ).toEqual([]);
+    }
   });
 });
 
@@ -89,7 +119,7 @@ describe("the editable set", () => {
 describe("a merchant's own wording", () => {
   it("reaches the buyer, which is the whole point", async () => {
     await installShop(ALPHA);
-    const key = editableKeys().find((one) => one.startsWith("forms."))!;
+    const key = plainKey();
 
     await inAlpha(async () => {
       const before = await getFixedT("en");
@@ -114,7 +144,7 @@ describe("a merchant's own wording", () => {
   it("is one shop's wording and never another's", async () => {
     await installShop(ALPHA);
     await installShop(BETA);
-    const key = editableKeys().find((one) => one.startsWith("forms."))!;
+    const key = plainKey();
 
     await inAlpha(() =>
       saveString({ key, locale: "en", value: "Alpha's words." }, { actor: ACTOR }),
@@ -134,7 +164,7 @@ describe("a merchant's own wording", () => {
 
   it("comes back to Mannon's words when cleared, not to nothing", async () => {
     await installShop(ALPHA);
-    const key = editableKeys().find((one) => one.startsWith("forms."))!;
+    const key = plainKey();
 
     await inAlpha(async () => {
       const shipped = (await getFixedT("en"))(key);
@@ -182,7 +212,7 @@ describe("a merchant's own wording", () => {
 
   it("records the key and the language, never the words", async () => {
     await installShop(ALPHA);
-    const key = editableKeys().find((one) => one.startsWith("forms."))!;
+    const key = plainKey();
 
     await inAlpha(async () => {
       await saveString(
@@ -310,6 +340,24 @@ describe("✦ suggesting wording", () => {
     });
   });
 
+  it("is refused on a plan that does not include it", async () => {
+    await shopScope.run(ALPHA, async () => {
+      await db.shop.create({
+        data: { ...tenant(), planKey: "free", billingStatus: "NONE" },
+      });
+    });
+
+    await inAlpha(async () => {
+      // A free shop could otherwise spend a model call here: `aiGate("draft")`
+      // without a feature can never answer "plan", so the whole locked state
+      // was unreachable and nothing stopped the POST.
+      await expect(fillMissing({ locale: "ar", actor: ACTOR })).rejects.toBeInstanceOf(
+        Response,
+      );
+      expect(await db.storefrontString.count()).toBe(0);
+    });
+  });
+
   it("is refused when the merchant has switched drafting off", async () => {
     await installShop(ALPHA);
 
@@ -332,7 +380,7 @@ describe("import", () => {
 
   it("puts the merchant's own file in front of the buyer", async () => {
     await installShop(ALPHA);
-    const key = editableKeys().find((one) => one.startsWith("forms."))!;
+    const key = plainKey();
 
     await inAlpha(async () => {
       const outcome = await importStrings({
@@ -550,7 +598,7 @@ describe("import", () => {
 
   it("round-trips its own export", async () => {
     await installShop(ALPHA);
-    const key = editableKeys().find((one) => one.startsWith("forms."))!;
+    const key = plainKey();
 
     await inAlpha(async () => {
       await saveString({ key, locale: "en", value: "Ours." }, { actor: ACTOR });
@@ -575,7 +623,7 @@ describe("import", () => {
 describe("export", () => {
   it("carries the merchant's own strings and nothing else", async () => {
     await installShop(ALPHA);
-    const key = editableKeys().find((one) => one.startsWith("forms."))!;
+    const key = plainKey();
 
     await inAlpha(async () => {
       await saveString({ key, locale: "en", value: "Ours." }, { actor: ACTOR });

@@ -12,6 +12,8 @@ import { money } from "@mannon/pricing-engine";
 import type { OrderLimit as LimitRow } from "@prisma/client";
 
 import { db } from "~/db.server";
+import { DEFAULT_LOCALE, isSupportedLocale, type Locale } from "~/i18n/config";
+import { overridesFor, shippedString } from "~/lib/i18n/strings.server";
 import { recordAudit, type AuditActor } from "~/lib/audit/record.server";
 import { assertFeature } from "~/lib/billing/gate.server";
 import { runMutation, type AdminGraphql } from "~/lib/pricing/admin-graphql.server";
@@ -187,10 +189,35 @@ export async function deleteLimit(
 /* Getting them to checkout                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * What a buyer reads at checkout when an order misses a limit.
+ *
+ * The merchant's own wording where they have written one — Settings →
+ * Translations, keys `checkout.*` — and Mannon's otherwise. Read straight off
+ * the row rather than through `t()`: `{{gap}}` and `{{required}}` are filled
+ * in by the Function at checkout, and i18next handed a string with no values
+ * for them would mangle exactly the two numbers that make the message worth
+ * reading.
+ *
+ * In the shop's own language, not the admin viewer's: the buyer is the reader.
+ */
 export async function messageTemplates(): Promise<MessageTemplates> {
-  // Editing the wording is Settings → Limit display (phase 6.2). Until then
-  // the defaults ship, and they already carry the numbers.
-  return { ...DEFAULT_MESSAGES };
+  const shop = shopScope.require("messageTemplates");
+  const record = await db.shop.findUnique({ where: { shop } });
+  const locale: Locale = isSupportedLocale(record?.primaryLocale)
+    ? record.primaryLocale
+    : DEFAULT_LOCALE;
+
+  const overrides = await overridesFor(locale);
+  const shipped = (key: string) =>
+    shippedString(`checkout.${key}`, locale) ??
+    shippedString(`checkout.${key}`, DEFAULT_LOCALE);
+
+  const resolved = { ...DEFAULT_MESSAGES };
+  for (const key of Object.keys(resolved) as (keyof MessageTemplates)[]) {
+    resolved[key] = overrides[`checkout.${key}`] ?? shipped(key) ?? resolved[key];
+  }
+  return resolved;
 }
 
 /**

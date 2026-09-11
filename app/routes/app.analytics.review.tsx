@@ -5,7 +5,8 @@ import { useLoaderData } from "@remix-run/react";
 import { ReviewPage } from "~/components/analytics/ReviewPage";
 import type { ReviewsView } from "~/components/analytics/types";
 import { db } from "~/db.server";
-import { detectLocale } from "~/i18n.server";
+import { detectLocale, getFixedT } from "~/i18n.server";
+import { translate } from "~/i18n/translate";
 import { aiGate } from "~/lib/ai/permissions.server";
 import { listReviews, readReviewFor } from "~/lib/analytics/review-run.server";
 import { reviewsView, reviewView } from "~/lib/analytics/review-view.server";
@@ -38,6 +39,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 
     const entitled = hasFeature(entitlements, "merchant_agent");
     const key = (await aiGate("draft")).allowed;
+    const t = translate(await getFixedT(locale));
 
     // Queued here as well as from the charts page, so a merchant who lands
     // straight on this URL still starts getting reviews.
@@ -59,7 +61,9 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
           : null,
         available: entitled && key,
         locked: !entitled ? "plan" : key ? null : "no_key",
-        requiredPlan: entitled ? null : lowestPlanWithFeature("merchant_agent"),
+        requiredPlan: entitled
+          ? null
+          : t(`planName.${lowestPlanWithFeature("merchant_agent")}`),
         scheduled: entitled && key,
         // A month that was attempted and failed is not a month still coming.
         failedMonth: shop?.reviewFailedMonth ?? null,

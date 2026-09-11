@@ -25,13 +25,31 @@ import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
  * when it is the only one a buyer reads.
  */
 
-/** Roots a buyer reads. Everything under them is editable. */
-export const BUYER_FACING_ROOTS = [
-  "agent",
-  "approval",
-  "forms",
-  "limit",
-  "quotes",
+/**
+ * The paths a buyer reads. Everything under them is editable.
+ *
+ * Paths, not roots. The first version of this took whole roots — `forms`,
+ * `quotes`, `limit`, `approval`, `agent` — and offered a merchant 534 strings
+ * of which about forty ever reach a buyer. `limit.*` is the Plans page's
+ * allowance copy; all of `approval.*` is the merchant's own criteria builder;
+ * most of `forms.*` and `quotes.*` is the admin. Editing any of them changed
+ * nothing anywhere, which is a page of controls that cannot act.
+ *
+ * `tests/unit/buyer-strings.test.ts` reads the buyer-facing source files and
+ * fails if any key they translate is missing from this set — so this is
+ * checked against the surfaces rather than believed.
+ */
+export const BUYER_FACING_PATHS = [
+  // The registration form a buyer fills in.
+  "forms.public",
+  // The quote page a buyer accepts on.
+  "quotes.public",
+  // The two things the Buyer Agent says in its own voice rather than the
+  // model's — a refusal and an off-limits topic.
+  "agent.scripted",
+  // The message at checkout when an order misses a minimum. Not rendered by
+  // React at all: it is published to a metafield and read by the Function.
+  "checkout",
 ] as const;
 
 export interface CatalogueString {
@@ -42,6 +60,39 @@ export interface CatalogueString {
   value: string | null;
   aiFilled: boolean;
   needsReview: boolean;
+}
+
+/**
+ * Plural categories Arabic has and English does not, under the same paths.
+ *
+ * `quotes.public` has no plurals today; `quotes.expiresIn_few` is admin copy.
+ * This exists so that the day one appears, it is editable with the rest of
+ * its own string rather than silently not.
+ */
+function arabicOnlyKeys(): string[] {
+  const found: string[] = [];
+
+  const walk = (node: unknown, path: string) => {
+    if (typeof node === "string") {
+      found.push(path);
+      return;
+    }
+    if (typeof node !== "object" || node === null) return;
+    for (const [part, child] of Object.entries(node)) {
+      walk(child, path === "" ? part : `${path}.${part}`);
+    }
+  };
+
+  for (const path of BUYER_FACING_PATHS) {
+    let node: unknown = ar;
+    for (const part of path.split(".")) {
+      if (typeof node !== "object" || node === null) break;
+      node = (node as Record<string, unknown>)[part];
+    }
+    if (node !== undefined) walk(node, path);
+  }
+
+  return found;
 }
 
 /** Every editable key, flattened out of the shipped catalogue. */
@@ -59,9 +110,23 @@ export function editableKeys(): string[] {
     }
   };
 
-  for (const root of BUYER_FACING_ROOTS) {
-    walk((en as Record<string, unknown>)[root], root);
+  for (const path of BUYER_FACING_PATHS) {
+    let node: unknown = en;
+    for (const part of path.split(".")) {
+      node = (node as Record<string, unknown>)[part];
+    }
+    walk(node, path);
   }
+
+  // Arabic pluralises into six categories where English has two, and the walk
+  // above only sees English's. A merchant who rewrote `expiresIn_one` and
+  // `_other` believed the string was theirs while an Arabic buyer whose quote
+  // expires in three days read Mannon's `_few`.
+  const known = new Set(keys);
+  for (const key of arabicOnlyKeys()) {
+    if (!known.has(key)) keys.push(key);
+  }
+
   return keys.sort();
 }
 
@@ -93,8 +158,15 @@ export async function overridesFor(locale: Locale): Promise<Record<string, strin
   // login page and the error boundary both translate without a tenant.
   if (!shopScope.get()) return {};
 
+  // **Not** the ones ✦ suggested and nobody has read.
+  //
+  // `translations.fillPromise` says, above the button: "nothing reaches a
+  // buyer as your words until you accept it", and the checklist says "never
+  // auto-publish a language the merchant hasn't seen". Without this clause a
+  // suggestion was live on the very next render, under a badge reading
+  // "Claude suggested this" — a draft that publishes itself is not a draft.
   const rows = await db.storefrontString.findMany({
-    where: { locale },
+    where: { locale, needsReview: false },
     select: { key: true, value: true },
   });
   return Object.fromEntries(rows.map((row) => [row.key, row.value]));
@@ -113,8 +185,16 @@ export const STRINGS_PAGE_SIZE = 25;
 export async function listStrings(options: {
   locale: Locale;
   search?: string;
-  /** Only the ones this locale has no translation for at all. */
-  missingOnly?: boolean;
+  /**
+   * Only the ones the merchant has not written themselves.
+   *
+   * This used to be "only the ones this locale has no translation for at all",
+   * which could never match a row: both catalogues ship complete and
+   * `tests/unit/i18n-catalogs.test.ts` keeps them that way, so `shipped` was
+   * always truthy and the filter always produced the empty state. It now means
+   * what the ✦ panel beside it counts.
+   */
+  unwrittenOnly?: boolean;
   /** Only the ones ✦ wrote and nobody has confirmed. */
   reviewOnly?: boolean;
   page?: number;
@@ -141,7 +221,7 @@ export async function listStrings(options: {
       needsReview: override?.needsReview ?? false,
     };
 
-    if (options.missingOnly && (shipped || row.value)) return [];
+    if (options.unwrittenOnly && row.value !== null) return [];
     if (options.reviewOnly && !row.needsReview) return [];
     if (
       search &&
@@ -273,5 +353,11 @@ export async function acceptString(
     summary: `Accepted the suggested wording for “${input.key}” in ${input.locale}.`,
     subject: { type: "Shop", id: shop },
     metadata: { key: input.key, locale: input.locale },
+    // This is the moment Claude's words become something a buyer reads, so
+    // this is the entry that carries the approver. `recordAudit` refuses an
+    // `aiAssisted` entry with no approval, which is the point of both.
+    ...(row.aiFilled && actor.id
+      ? { aiAssisted: true, approval: { byId: actor.id } }
+      : {}),
   });
 }

@@ -50,7 +50,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     const real = await hasAnyData(data);
     return json({
       view: real ? view : exampleView(view, locale),
-      ask: await askView({ question: "", reply: null }),
+      ask: await askView({ question: "", reply: null }, t),
     });
   });
 
@@ -64,6 +64,7 @@ export const chartLabels = (t: ReturnType<typeof translate>) => ({
 /** What the ask bar can do here, and why not when it cannot. */
 async function askView(
   answered: Partial<AskView> & { question: string; reply: string | null },
+  t: ReturnType<typeof translate>,
 ): Promise<AskView> {
   const entitlements = await loadEntitlements();
   const entitled = hasFeature(entitlements, "merchant_agent");
@@ -72,7 +73,9 @@ async function askView(
   return {
     available: entitled && key,
     locked: !entitled ? "plan" : key ? null : "no_key",
-    requiredPlan: entitled ? null : lowestPlanWithFeature("merchant_agent"),
+    requiredPlan: entitled
+      ? null
+      : t(`planName.${lowestPlanWithFeature("merchant_agent")}`),
     chart: null,
     href: null,
     insteadTry: [],
@@ -104,7 +107,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     // Gated server-side, like every other AI surface here. A disabled field is
     // a courtesy; this route is one POST away from anybody with a session.
-    const base = await askView({ question, reply: null });
+    const base = await askView({ question, reply: null }, t);
     if (!base.available || question === "") {
       return json({ view: real ? view : exampleView(view, locale), ask: base });
     }

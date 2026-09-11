@@ -2,8 +2,8 @@ import type { TFunction } from "i18next";
 
 import {
   DEFAULT_LOCALE,
-  DEFAULT_NAMESPACE,
   normalizeLocale,
+  OVERRIDE_NAMESPACE,
   type Locale,
 } from "~/i18n/config";
 import { createI18n } from "~/i18n/i18next";
@@ -49,7 +49,9 @@ export async function getFixedT(locale: Locale): Promise<TFunction> {
   // both translate without one — so this is the same call everywhere rather
   // than two paths, one of which would eventually forget.
   const instance = await createI18n(locale, await overridesFor(locale));
-  return instance.getFixedT(locale, DEFAULT_NAMESPACE);
+  // Bound to the shop's own layer, which falls through to `common` per key.
+  // Binding to `common` directly is how a `t` skips every override.
+  return instance.getFixedT(locale, OVERRIDE_NAMESPACE);
 }
 
 /**

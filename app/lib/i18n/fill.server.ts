@@ -75,7 +75,7 @@ export async function fillMissing(
 ): Promise<FillResult> {
   const shop = shopScope.require("fillMissing");
   // Enforcement, not a disabled button — and `draft` is exactly what this is.
-  await requireAi("draft");
+  await requireAi("draft", { feature: "merchant_agent" });
 
   const pending = await unwrittenIn(input.locale);
   if (pending.length === 0) return { pending: 0, filled: 0, failure: null };
@@ -128,6 +128,15 @@ export async function fillMissing(
     summary: `Suggested wording for ${entries.length} string${entries.length === 1 ? "" : "s"} in ${input.locale}. Each one is marked for review.`,
     subject: { type: "Shop", id: shop },
     metadata: { locale: input.locale, count: entries.length },
+    // Which model wrote them, so 6.5's audit filter can find the one ✦ path
+    // that changes what buyers read. Deliberately **not** `aiAssisted`: these
+    // are drafts and reach nobody until a person accepts one, and that is the
+    // entry that carries the approver (`acceptString`).
+    ai: {
+      model: written.model,
+      promptVersion: written.promptVersion,
+      requestId: written.requestId,
+    },
   });
 
   return { pending: pending.length, filled: entries.length, failure: null };

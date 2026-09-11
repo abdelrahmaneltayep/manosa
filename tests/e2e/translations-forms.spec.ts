@@ -19,7 +19,7 @@ const CAPTURE = resolve(process.cwd(), "qa/6.6/01-translations.html");
 test.describe("the Translations forms, as a browser builds them", () => {
   test.skip(!existsSync(CAPTURE), "run `npm run qa:capture` first");
 
-  test("every row saves itself, and nothing else", async ({ page }) => {
+  test("one Save carries every row on the page, not just one", async ({ page }) => {
     await page.goto(pathToFileURL(CAPTURE).href);
 
     const bodies = await page.evaluate(() =>
@@ -33,31 +33,28 @@ test.describe("the Translations forms, as a browser builds them", () => {
       ),
     );
 
-    const saves = bodies.filter((body) => body.intent === "save");
-    // Three rows in the capture, three save forms: one folded into another
-    // would show up here as two.
-    expect(saves).toHaveLength(3);
-    expect(saves.map((body) => body.key)).toEqual([
-      "forms.submit",
-      "quotes.expiresIn",
-      "approval.welcome",
-    ]);
-    for (const body of saves) {
-      expect(body.locale).toBe("ar");
-      // Exactly the hidden fields this row owns. A row that also carried a
-      // second row's key would overwrite the wrong string.
-      //
-      // `value` is absent here and that is the environment, not the page: the
-      // wording is an `s-text-area`, and an `s-*` element only joins a form
-      // once Polaris upgrades it — which needs the CDN this sandbox cannot
-      // reach. So it is checked as markup, below, and what a merchant's typing
-      // actually posts is one of the things a capture cannot prove.
-      expect(Object.keys(body).sort()).toEqual(["intent", "key", "locale"]);
-    }
+    const save = bodies.find((body) => body.intent === "save");
+    expect(save).toBeDefined();
+    expect(save!.locale).toBe("ar");
 
-    // One wording field per row, named the same thing the action reads.
-    const areas = await page.locator("form s-text-area[name=value]").count();
-    expect(areas).toBe(saves.length);
+    // Every row in the capture is in the one body. Per-row forms meant a
+    // merchant who edited five rows and pressed Save on one lost the other
+    // four with nothing said about it.
+    const was = Object.keys(save!).filter((field) => field.startsWith("was:"));
+    expect(was.sort()).toEqual([
+      "was:checkout.below_minimum_subtotal",
+      "was:forms.public.submit",
+      "was:quotes.public.expiresOn",
+    ]);
+
+    // The wording fields are `s-text-area`s, and an `s-*` element only joins a
+    // form once Polaris upgrades it — which needs the CDN this sandbox cannot
+    // reach. So they are checked as markup, and what a merchant's typing
+    // actually posts stays one of the things a capture cannot prove.
+    const areas = await page.locator("form s-text-area[name^='value:']").count();
+    expect(areas).toBe(was.length);
+    // And the accept control rides in the same form rather than a nested one.
+    expect(await page.locator("form s-checkbox[name^='accept:']").count()).toBe(1);
   });
 
   test("the fill and the import are their own forms, each with its own intent", async ({
@@ -76,6 +73,9 @@ test.describe("the Translations forms, as a browser builds them", () => {
     expect(intents.filter((intent) => intent === "fill")).toHaveLength(1);
     expect(intents.filter((intent) => intent === "import")).toHaveLength(1);
     expect(intents.filter((intent) => intent === "(none)")).toHaveLength(1);
+    // Four in total: filters, fill, import, and the one Save for the table. A
+    // fifth would mean a form nested inside another and folded by the parser.
+    expect(intents).toHaveLength(4);
   });
 
   test("the import form can carry a file at all", async ({ page }) => {

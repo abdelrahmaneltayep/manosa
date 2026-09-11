@@ -51,10 +51,10 @@ export function TranslationsPage({ view }: { view: TranslationsView }) {
               value={view.search}
             />
             <s-checkbox
-              name="missing"
+              name="unwritten"
               value="on"
-              label={t("translations.missingOnly")}
-              {...whenChecked(view.missingOnly)}
+              label={t("translations.unwrittenOnly")}
+              {...whenChecked(view.unwrittenOnly)}
             />
             <s-checkbox
               name="review"
@@ -75,13 +75,26 @@ export function TranslationsPage({ view }: { view: TranslationsView }) {
             {t(view.filtered ? "translations.emptyFiltered" : "translations.emptyAll")}
           </s-paragraph>
         ) : (
-          <s-stack direction="block" gap="base">
-            {view.rows.map((row) => (
-              <s-box key={row.key} padding="base" borderWidth="base" borderRadius="base">
-                <form method="post">
-                  <input type="hidden" name="intent" value="save" />
-                  <input type="hidden" name="key" value={row.key} />
-                  <input type="hidden" name="locale" value={view.locale} />
+          /* One form for the whole page, with the contextual save bar.
+             Per-row forms meant a merchant who edited five rows and pressed
+             Save on one lost the other four, silently — and a page built for
+             bulk editing is exactly where that happens. */
+          <form method="post" data-save-bar>
+            <input type="hidden" name="intent" value="save" />
+            <input type="hidden" name="locale" value={view.locale} />
+
+            <s-stack direction="block" gap="base">
+              {view.rows.map((row) => (
+                <s-box
+                  key={row.key}
+                  padding="base"
+                  borderWidth="base"
+                  borderRadius="base"
+                >
+                  {/* What this row said when the page was drawn, so the action
+                      can tell an edit from a row nobody touched — and leave the
+                      untouched ones as Mannon's rather than adopting all 51. */}
+                  <input type="hidden" name={`was:${row.key}`} value={row.value ?? ""} />
 
                   <s-stack direction="block" gap="small-100">
                     <s-stack direction="inline" gap="small" alignItems="center">
@@ -111,7 +124,7 @@ export function TranslationsPage({ view }: { view: TranslationsView }) {
                     </s-text>
 
                     <s-text-area
-                      name="value"
+                      name={`value:${row.key}`}
                       label={t("translations.yourWordingLabel")}
                       details={
                         row.placeholders.length > 0
@@ -128,36 +141,39 @@ export function TranslationsPage({ view }: { view: TranslationsView }) {
                       {...(row.error ? { error: row.error } : {})}
                     />
 
-                    <s-stack direction="inline" gap="small" alignItems="center">
-                      <s-button type="submit" variant="primary">
-                        {t("translations.save")}
-                      </s-button>
-                      {row.needsReview ? (
-                        <s-button
-                          href={`${view.acceptHrefBase}&accept=${encodeURIComponent(row.key)}`}
-                          variant="tertiary"
-                        >
-                          {t("translations.accept")}
-                        </s-button>
-                      ) : null}
-                    </s-stack>
+                    {/* Accepting is part of the same Save rather than a second
+                        form: a `<form>` inside a `<form>` is folded by the
+                        parser and its fields join the outer one, which is how
+                        6.4 shipped a section that could not be saved at all. */}
+                    {row.needsReview ? (
+                      <s-checkbox
+                        name={`accept:${row.key}`}
+                        value="on"
+                        label={t("translations.accept")}
+                        details={t("translations.acceptHelp")}
+                      />
+                    ) : null}
                   </s-stack>
-                </form>
-              </s-box>
-            ))}
+                </s-box>
+              ))}
 
-            <s-stack direction="inline" gap="small" alignItems="center">
-              {view.previousHref ? (
-                <s-link href={view.previousHref}>{t("translations.newer")}</s-link>
-              ) : null}
-              <s-text color="subdued">
-                {t("translations.page", { page: view.page, pages: view.pages })}
-              </s-text>
-              {view.nextHref ? (
-                <s-link href={view.nextHref}>{t("translations.older")}</s-link>
-              ) : null}
+              <s-button type="submit" variant="primary">
+                {t("translations.save")}
+              </s-button>
+
+              <s-stack direction="inline" gap="small" alignItems="center">
+                {view.previousHref ? (
+                  <s-link href={view.previousHref}>{t("translations.newer")}</s-link>
+                ) : null}
+                <s-text color="subdued">
+                  {t("translations.page", { page: view.page, pages: view.pages })}
+                </s-text>
+                {view.nextHref ? (
+                  <s-link href={view.nextHref}>{t("translations.older")}</s-link>
+                ) : null}
+              </s-stack>
             </s-stack>
-          </s-stack>
+          </form>
         )}
       </s-section>
 
@@ -292,7 +308,10 @@ function Fill({ view }: { view: TranslationsView }) {
 
         {fill.failure ? (
           <s-banner tone="warning">
-            <s-paragraph>{t(`agent.failure.${fill.failure}`)}</s-paragraph>
+            {/* This page's own copy, not the Buyer Agent's: "so the agent
+                can't answer" and "Nothing was sent" are about a conversation
+                with a buyer, and neither is what happened here. */}
+            <s-paragraph>{t(`translations.fillFailure.${fill.failure}`)}</s-paragraph>
           </s-banner>
         ) : null}
         {fill.filled > 0 ? (

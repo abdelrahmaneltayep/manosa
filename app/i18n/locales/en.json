@@ -2784,12 +2784,12 @@
   "translations": {
     "heading": "Translations",
     "backToSettings": "Back to settings",
-    "body": "Every word Mannon puts in front of a buyer: the registration form, the quote they accept, the approval and rejection emails, the message at checkout when an order misses a minimum, and the storefront agent.",
-    "notHere": "Your theme blocks' own headings are not here — edit those in the theme editor, where you set them.",
+    "body": "Every word Mannon puts in front of a buyer in its own voice: the registration form, the quote they accept, the message at checkout when an order misses a minimum, and what the storefront agent says when it declines.",
+    "notHere": "Two things are edited elsewhere, on purpose. Your approval and rejection emails are per form, under Forms → Emails. Your theme blocks' own headings are in the theme editor, where you set them.",
     "filtersHeading": "Find a string",
     "languageLabel": "Language",
     "searchLabel": "Search the key or the words",
-    "missingOnly": "Only ones with no wording at all",
+    "unwrittenOnly": "Only ones you haven't written yourself",
     "reviewOnly": "Only ones Claude suggested",
     "apply": "Apply",
     "tableHeading_one": "{{count}} string",
@@ -2854,6 +2854,22 @@
       "tooMany": "That file lists more strings than Mannon has, so something else produced it. Export this language again and edit that.",
       "noFile": "Choose a file first — the one this page exports for this language.",
       "tooBig": "That file is larger than {{megabytes}} MB. A language's wording is a few dozen kilobytes, so something else produced this one."
-    }
+    },
+    "fillFailure": {
+      "no_key": "Claude isn't connected to this store, so nothing was suggested. You can still write every string yourself.",
+      "timeout": "Claude took too long and nothing was written. Try again.",
+      "rate_limited": "Claude is rate-limited right now. Wait a moment and try again.",
+      "refused": "Claude declined to translate these. Write them yourself, or try a smaller batch.",
+      "invalid_output": "What came back was not usable wording, so none of it was saved.",
+      "error": "Something went wrong reaching Claude. Nothing was saved."
+    },
+    "acceptHelp": "Keeps Claude's wording as it is and stops marking it as a suggestion."
+  },
+  "checkout": {
+    "below_minimum_subtotal": "Add {{gap}} to reach your {{required}} minimum order.",
+    "above_maximum_subtotal": "This order is {{gap}} over your {{required}} maximum.",
+    "below_minimum_quantity": "Add {{gap}} more items to reach the {{required}} minimum.",
+    "above_maximum_quantity": "Remove {{gap}} items to stay within the {{required}} maximum.",
+    "not_a_multiple": "These are sold in cases of {{required}}. Add {{gap}} to complete a case."
   }
 }

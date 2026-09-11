@@ -144,10 +144,15 @@ const CATALOG_ROOTS = Object.keys(en as Record<string, unknown>);
  * checked, which is what switching the guard off per page would have thrown
  * away.
  */
-const LITERAL_KEY_TEXT = /(<[a-z-]+[^>]*\sdata-string-key="[^"]*"[^>]*>)[^<]*/g;
+const LITERAL_KEY_TEXT = /<[a-z-]+[^>]*\sdata-string-key="([^"]*)"[^>]*>([^<]*)/g;
 
 export function expectNoRawCatalogKeys(rendered: string, name: string) {
-  const html = rendered.replace(LITERAL_KEY_TEXT, "$1");
+  // Only the exact key the element declares is exempt. Stripping whatever text
+  // happened to be inside would hide a real fallback behind an opt-out — on
+  // the one page where a leaked key looks like it belongs.
+  const html = rendered.replace(LITERAL_KEY_TEXT, (match, key: string, text: string) =>
+    text.trim() === key ? match.slice(0, match.length - text.length) : match,
+  );
   for (const root of CATALOG_ROOTS) {
     expect(html, `${name}: a raw "${root}." catalog key reached the markup`).not.toMatch(
       new RegExp(`>[^<]*\\b${root}\\.[a-zA-Z_]`),

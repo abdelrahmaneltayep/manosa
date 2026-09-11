@@ -34,13 +34,13 @@ const view = (overrides: Partial<TranslationsView> = {}): TranslationsView => ({
     { code: "ar", name: "Arabic" },
   ],
   search: "",
-  missingOnly: false,
+  unwrittenOnly: false,
   reviewOnly: false,
   filtered: false,
 
   rows: [
     {
-      key: "forms.submit",
+      key: "forms.public.submit",
       shipped: "قدّم الطلب",
       value: null,
       needsReview: false,
@@ -48,34 +48,33 @@ const view = (overrides: Partial<TranslationsView> = {}): TranslationsView => ({
       error: null,
     },
     {
-      key: "quotes.expiresIn",
-      shipped: "تنتهي خلال {{days}} أيام.",
-      value: "صالح لمدة {{days}} أيام.",
+      key: "quotes.public.expiresOn",
+      shipped: "هذا العرض ساري حتى {{date}}.",
+      value: "صالح حتى {{date}}.",
       needsReview: false,
-      placeholders: ["days"],
+      placeholders: ["date"],
       error: null,
     },
     {
-      key: "approval.welcome",
-      shipped: "أهلاً بك.",
+      key: "checkout.below_minimum_subtotal",
+      shipped: "أضف {{gap}} لتبلغ الحد الأدنى {{required}} للطلب.",
       value: "يسعدنا انضمامك إلينا.",
       needsReview: true,
       placeholders: [],
       error: null,
     },
   ],
-  total: 534,
+  total: 51,
   page: 1,
-  pages: 22,
+  pages: 3,
   nextHref: "/app/settings/translations?locale=ar&page=2",
   previousHref: null,
-  acceptHrefBase: "/app/settings/translations?locale=ar",
 
   imported: null,
   importIssue: null,
 
   fill: {
-    pending: 531,
+    pending: 48,
     filled: 0,
     locked: null,
     requiredPlan: null,
@@ -96,7 +95,7 @@ describe("the translations table", () => {
     expect(html).toContain("As Mannon ships it");
     expect(html).toContain("Your wording");
     expect(html).toContain("Claude suggested this");
-    expect(html).toContain("Mannon ships: تنتهي خلال");
+    expect(html).toContain("Mannon ships: هذا العرض ساري حتى");
     capture("01-translations", html);
   });
 
@@ -105,12 +104,18 @@ describe("the translations table", () => {
 
     // `{{days}}` dropped means a buyer reads "expires in days", i18next has
     // nothing to complain about, and nobody finds out.
-    expect(html).toContain("Keep {{days}} exactly as written");
+    expect(html).toContain("Keep {{date}} exactly as written");
   });
 
-  it("says the theme's own headings are edited elsewhere", () => {
+  it("names what is edited elsewhere, rather than promising it here", () => {
     const html = render(<TranslationsPage view={view()} />);
-    expect(html).toContain("edit those in the theme editor");
+
+    // The approval and rejection emails are per-form templates, not catalogue
+    // strings — the body used to list them among what this page changes, which
+    // is a merchant looking for something that was never here.
+    expect(html).toContain("under Forms → Emails");
+    expect(html).toContain("in the theme editor");
+    expect(html).not.toMatch(/puts in front of a buyer[^<]*approval and rejection/u);
   });
 
   it("puts the error beside the string that caused it", () => {
@@ -150,7 +155,7 @@ describe("the translations table", () => {
     // A merchant deciding whether to press this needs to know the result
     // arrives marked, not live.
     expect(html).toContain("arrives marked as a suggestion");
-    expect(html).toContain("531 strings are still in Mannon&#x27;s words");
+    expect(html).toContain("48 strings are still in Mannon&#x27;s words");
   });
 
   it("says which of the three reasons ✦ is unavailable", () => {
@@ -194,7 +199,9 @@ describe("the translations table", () => {
       <TranslationsPage view={view({ fill: { ...view().fill, failure: "timeout" } })} />,
     );
 
-    expect(html).toContain("took too long");
+    expect(html).toContain("took too long and nothing was written");
+    // This page's own copy, not the Buyer Agent's "so the agent can't answer".
+    expect(html).not.toContain("nothing was sent");
     capture("06-translations-failed", html);
   });
 
@@ -206,9 +213,9 @@ describe("the translations table", () => {
             applied: 12,
             unchanged: 3,
             rejected: [
-              { key: "quotes.expiresIn", reason: "placeholders" },
+              { key: "quotes.public.expiresOn", reason: "placeholders" },
               { key: "settings.heading", reason: "unknownKey" },
-              { key: "forms.submit", reason: "empty" },
+              { key: "forms.public.submit", reason: "empty" },
             ],
           },
         })}

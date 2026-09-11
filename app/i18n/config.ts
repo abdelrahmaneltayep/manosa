@@ -20,6 +20,18 @@ export const LANGUAGE_NAMES: Record<Locale, string> = {
 };
 export const DEFAULT_NAMESPACE = "common";
 
+/**
+ * Where a shop's own wording lives.
+ *
+ * A second namespace rather than an edit to the first. i18next's
+ * `addResource` writes **into the resource object it was handed** — and this
+ * process hands it the imported `en.json`, so one shop saving a string
+ * rewrote the shipped catalogue for every later request and every other
+ * tenant, outbound, to their buyers. Overrides are their own layer now: built
+ * fresh per instance, looked up first, falling back to `common`.
+ */
+export const OVERRIDE_NAMESPACE = "shop";
+
 /** Locales written right-to-left. */
 const RTL_LOCALES = new Set<Locale>(["ar"]);
 

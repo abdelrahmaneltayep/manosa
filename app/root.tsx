@@ -24,7 +24,7 @@ export const links: LinksFunction = () => [];
  * not be handed App Bridge: it cannot work outside the admin iframe, and it is
  * a third-party script on a page a member of the public is looking at.
  */
-const PUBLIC_PREFIXES = ["/f/"];
+const PUBLIC_PREFIXES = ["/f/", "/q/"];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const locale = detectLocale(request);

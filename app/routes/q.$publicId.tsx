@@ -6,7 +6,9 @@ import { useTranslation } from "react-i18next";
 
 import { PublicQuote, type PublicQuoteView } from "~/components/orders/PublicQuote";
 import { db } from "~/db.server";
+import { ShopWording } from "~/components/i18n/ShopWording";
 import { detectLocale, getFixedT } from "~/i18n.server";
+import { overridesFor } from "~/lib/i18n/strings.server";
 import { dirFor, type Locale } from "~/i18n/config";
 import { translate, type Translate } from "~/i18n/translate";
 import { formatCurrency } from "~/lib/money";
@@ -37,6 +39,9 @@ interface LoaderData {
   view: PublicQuoteView;
   /** Set after accepting or declining, so the page can say what happened. */
   outcome: "accepted" | "declined" | null;
+  /** This shop's own wording for the strings on this page. */
+  locale: Locale;
+  overrides: Record<string, string>;
 }
 
 /** Why a buyer cannot act, in their own words. */
@@ -107,11 +112,14 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   if (!found) throw new Response("Quote not found", { status: 404 });
 
   const locale = detectLocale(request);
-  const t = translate(await getFixedT(locale));
   const now = new Date();
   const url = new URL(request.url);
 
   return shopScope.run(found.shop, async () => {
+    // **Inside** the scope. Built above it, `getFixedT` finds no shop, so
+    // `overridesFor` returns nothing and every string on the page a buyer
+    // reads comes back as Mannon's rather than the merchant's.
+    const t = translate(await getFixedT(locale));
     // Expired between the job's last run and this request: marked now, so what
     // the buyer reads and what the merchant sees agree.
     if (
@@ -127,6 +135,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     const outcome = url.searchParams.get("s");
 
     const data: LoaderData = {
+      locale,
+      overrides: await overridesFor(locale),
       view: toView(found.quote, record?.name ?? found.shop, { now, t, locale }),
       outcome: outcome === "accepted" || outcome === "declined" ? outcome : null,
     };
@@ -165,12 +175,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function PublicQuoteRoute() {
-  const { view, outcome } = useLoaderData<typeof loader>();
+  const { view, outcome, locale, overrides } = useLoaderData<typeof loader>();
   return (
-    <>
+    <ShopWording locale={locale as Locale} overrides={overrides}>
       {outcome ? <Outcome outcome={outcome} /> : null}
       <PublicQuote view={view as PublicQuoteView} />
-    </>
+    </ShopWording>
   );
 }
 

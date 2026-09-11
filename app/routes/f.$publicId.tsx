@@ -8,8 +8,10 @@ import { useActionData, useLoaderData } from "@remix-run/react";
 import { useTranslation } from "react-i18next";
 
 import { PublicForm, type PublicFormView } from "~/components/forms/PublicForm";
+import { ShopWording } from "~/components/i18n/ShopWording";
 import { detectLocale } from "~/i18n.server";
-import { dirFor } from "~/i18n/config";
+import { dirFor, type Locale } from "~/i18n/config";
+import { overridesFor } from "~/lib/i18n/strings.server";
 import { readAppearance, readPublish } from "~/lib/forms/appearance";
 import { readDefinition, type Answers } from "~/lib/forms/schema";
 import {
@@ -38,6 +40,9 @@ interface LoaderData {
   view: PublicFormView | null;
   formName: string;
   alreadyStatus?: string;
+  /** This shop's own wording for the strings on this page. */
+  locale: Locale;
+  overrides: Record<string, string>;
 }
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
@@ -57,6 +62,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     }
 
     const data: LoaderData = {
+      locale,
+      overrides: await overridesFor(locale),
       screen: found.form.status === "LIVE" ? screen : "closed",
       formName: found.form.name,
       alreadyStatus: url.searchParams.get("status") ?? undefined,
@@ -161,6 +168,10 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     // Re-render with the answers still in place. Losing what a buyer typed
     // because one field was wrong is how an application becomes abandoned.
     const data: LoaderData = {
+      locale,
+      // The buyer is about to read their own error messages: the shop's
+      // wording has to survive a rejected submit too.
+      overrides: await overridesFor(locale),
       screen: "form",
       formName: found.form.name,
       view: {
@@ -195,10 +206,12 @@ export default function PublicFormPage() {
 
   if (data.screen === "form" && data.view) {
     return (
-      <main style={{ padding: "2rem 1rem" }}>
-        <PublicForm view={data.view} />
-        <FrameHeightReporter />
-      </main>
+      <ShopWording locale={data.locale} overrides={data.overrides}>
+        <main style={{ padding: "2rem 1rem" }}>
+          <PublicForm view={data.view} />
+          <FrameHeightReporter />
+        </main>
+      </ShopWording>
     );
   }
 

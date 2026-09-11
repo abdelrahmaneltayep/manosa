@@ -2,7 +2,7 @@
 
 Updated: 2026-09-11T18:30:00Z
 Current milestone: 6 — Analytics
-Current task: 6.7 polish [in progress — orders-over-time done]
+Current task: 6.7 polish [in progress — orders-over-time done; 6.6 cold-read fix round done]
 
 ## Done
 
@@ -37,7 +37,7 @@ Current task: 6.7 polish [in progress — orders-over-time done]
 
 - [x] 6.5 ✦ Agent controls — permission toggles wired through every ✦ surface, brand-voice samples, the muted-briefing list, the audit log filterable by actor/action/date, and the twelve-month retention job — commit `5babb43` + fix round — QA: `qa/6.5/REPORT.md` (cold read returned FAIL on 25 findings, 1 P0 — **the gate did not gate the POST**: every call site put `aiGate(...).allowed` in a _view_ and never read it as a condition, so four ✦ surfaces still called Claude after a merchant switched it off. All fixed — `qa/6.5/COLD-READ.md`. `docs/adr/0027`. **There was no AI permission control anywhere before this** — every ✦ surface gated on `isAiAvailable()` alone — and **nothing enforced the audit retention** the schema has promised since 0.2.)
 
-- [x] 6.6 Translations — every buyer-facing string editable per language, ✦ wording suggested in the merchant's own voice, a review flag per string, export **and** import — commit `2ecabba` — QA: `qa/6.6/REPORT.md` (`docs/adr/0028`). The ✦ half nearly shipped inert for the fourth time: both catalogues ship complete, so "fill what is missing" would have had nothing to do on any store. It suggests wording over the strings a merchant has **not** written instead, which is also the first thing to read the 6.5 brand-voice samples. `StorefrontString` was not in the uninstall purge — the lesson from 6.4, applied before the cold read this time.
+- [x] 6.6 Translations — every buyer-facing string editable per language, ✦ wording suggested in the merchant's own voice, a review flag per string, export **and** import — commit `2ecabba` — QA: `qa/6.6/REPORT.md` (`docs/adr/0028`). The ✦ half nearly shipped inert for the fourth time: both catalogues ship complete, so "fill what is missing" would have had nothing to do on any store. It suggests wording over the strings a merchant has **not** written instead, which is also the first thing to read the 6.5 brand-voice samples. `StorefrontString` was not in the uninstall purge — the lesson from 6.4, applied before the cold read this time. **The cold read still returned FAIL on four P0s** (`qa/6.6/COLD-READ.md`), the worst a cross-tenant leak *outbound to buyers*: `addResource` writes into the object it is handed, so one shop's saved string rewrote the shipped catalogue for the whole process. Fixed in `PENDING2`: overrides are their own i18next namespace; the editable set is now ~50 genuinely buyer-facing keys rather than 534 mostly-admin ones; the checkout message is editable for real; an ✦ suggestion no longer reaches a buyer before a person accepts it; the page is one form with a save bar.
 
 - [x] 6.7 (part) Orders over time — an eighth chart, counts not money, with its own whole-number axis — commit `PENDING` — QA: `qa/6.7/REPORT.md`. Closes the `pages-features.md` §7 line deferred at 6.2. The ✦ chart menu was a hand-kept list **inside the prompt**: adding a chart to `CHART_KEYS` satisfied the validator while the model was never told it existed, so nothing could route to it. Generated from an exhaustive record now, with a test.
 
@@ -472,3 +472,19 @@ Neither is blocking; both would change product decisions if answered.
   currency formatting, a 1/2/5 axis (`niceMax` makes three orders a scale of
   five, labelled 3.75), a trend line between whole numbers, and a "Currency"
   column in the CSV. `wholeMax` exists for the axis half of that.
+- **`addResource` writes into the object you handed i18next.** `resources` holds
+  a direct reference to the imported `en.json`, so one shop's override rewrote
+  the shipped catalogue for the whole Node process and served that shop's
+  wording to every other shop's buyers. A shop's wording is its own namespace
+  now (`OVERRIDE_NAMESPACE`), built fresh per instance with `fallbackNS` to
+  `common`. **A tenancy test has to render between the write and the read** —
+  mine saved in Alpha and read in Beta with nothing in between, which is the
+  shape of the test and not the shape of production.
+- **"There is exactly one place X happens" is a `grep`, not an ADR sentence.**
+  ADR 0028 claimed one i18next creation site; there were three, and two of them
+  served buyers.
+- **Three P2s from the 6.6 cold read are deliberately unfixed**, all recorded
+  here rather than in a round that was already large: no length cap on a single
+  saved string (the import file is capped at 2 MB); `buildView` calls
+  `unwrittenIn` on every page load just for its `.length`; and a save is
+  last-write-wins between two staff on one key.

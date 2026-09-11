@@ -172,7 +172,7 @@ export interface TranslationsView {
   locale: string;
   locales: { code: string; name: string }[];
   search: string;
-  missingOnly: boolean;
+  unwrittenOnly: boolean;
   reviewOnly: boolean;
   /** True when any filter is set, so "no rows" can say which. */
   filtered: boolean;
@@ -183,8 +183,6 @@ export interface TranslationsView {
   pages: number;
   nextHref: string | null;
   previousHref: string | null;
-  /** The current filter state, for an "accept" link to come back to. */
-  acceptHrefBase: string;
 
   /** The last import, if this render is answering one. */
   imported: {
