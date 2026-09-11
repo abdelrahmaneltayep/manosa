@@ -39,7 +39,22 @@ Current task: 6.4 Settings, part one [done, cold read pending] · 6.5 Settings, 
 
 - **Run the cold read on 6.4** — it has not had one
 - 6.5 Settings, part two — API keys, translations with the ✦ fill, agent
-  controls (permission toggles, brand voice, briefing mutes, filtered audit log)
+  controls. Scoped, with what is actually missing found by reading the code:
+  - **There is no AI permission toggle anywhere.** Every ✦ surface is gated on
+    `isAiAvailable()` alone — `aiScreening: isAiAvailable()`
+    (`app.customers.applications.tsx:172`) is the entirety of "may Claude
+    screen my applicants". Needs `aiMayScreen` / `aiMayDraft` /
+    `aiMayAutoApprove`, the last defaulting **off** (Invariant 3).
+  - **Nothing enforces the audit log's 12-month retention.** The schema
+    comment promises it and `purge-conversations` exists for `AgentMessage`,
+    but no job trims `AuditLog`. A promise nothing enforces.
+  - The audit log filters by **category only** (`all/orders/registrations/
+pricing`); §8 asks for actor, action and date. The indexes are already
+    there: `@@index([shop, actorType, createdAt])`, `([shop, action, …])`.
+  - `Shop.briefingMuted` is written by the home page and readable nowhere —
+    a merchant who muted a briefing kind cannot find it again.
+  - Full plan in the scratchpad; brand voice, API keys and translations all
+    need new models.
 - 6.6 polish (including orders-over-time, below) — see `DECISIONS.md` for why §8
   is two tasks
 - **Orders-over-time** — `pages-features.md` §7 asks for it and the checklist
