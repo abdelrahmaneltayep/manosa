@@ -1,6 +1,7 @@
 import { backfillCustomers } from "~/lib/jobs/handlers/backfill-customers.server";
 import { dailyBriefing } from "~/lib/jobs/handlers/daily-briefing.server";
 import { backfillOrders } from "~/lib/jobs/handlers/backfill-orders.server";
+import { monthlyReviewJob } from "~/lib/jobs/handlers/monthly-review.server";
 import { expireQuotes } from "~/lib/jobs/handlers/expire-quotes.server";
 import { decideApplications } from "~/lib/jobs/handlers/decide-applications.server";
 import { screenApplications } from "~/lib/jobs/handlers/screen-applications.server";
@@ -18,6 +19,7 @@ export const JOB_HANDLERS = {
   "shop.purge_pii": purgeShopPii,
   "customers.backfill": backfillCustomers,
   "orders.backfill": backfillOrders,
+  "analytics.monthly_review": monthlyReviewJob,
   "quotes.expire": expireQuotes,
   "forms.decide_applications": decideApplications,
   "forms.screen_applications": screenApplications,

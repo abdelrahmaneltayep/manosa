@@ -7,8 +7,10 @@ import {
   RevenueChart,
 } from "~/components/analytics/Charts";
 import { CHART_STYLES } from "~/components/analytics/palette";
+import { AskBar } from "~/components/analytics/AskBar";
 import type {
   AnalyticsView,
+  AskView,
   RankedRowView,
   RuleRowView,
 } from "~/components/analytics/types";
@@ -21,7 +23,14 @@ import type {
  * were left out. A chart whose reader has to assume any of those is a chart
  * that can be confidently misread.
  */
-export function AnalyticsPage({ view }: { view: AnalyticsView }) {
+export function AnalyticsPage({
+  view,
+  ask,
+}: {
+  view: AnalyticsView;
+  /** ✦ Ask your data. Absent in the state captures that do not exercise it. */
+  ask?: AskView;
+}) {
   const { t } = useTranslation();
 
   return (
@@ -33,9 +42,11 @@ export function AnalyticsPage({ view }: { view: AnalyticsView }) {
         <s-stack direction="block" gap="base">
           <s-paragraph>{t("analytics.description")}</s-paragraph>
           <RangePicker view={view} />
+          <s-link href="/app/analytics/review">{t("analytics.monthlyReview")}</s-link>
         </s-stack>
       </s-section>
 
+      {ask ? <AskBar view={ask} /> : null}
       {view.loading ? <Skeleton /> : null}
       {view.isExample ? <ExampleBanner /> : null}
       {view.partial ? <PartialBanner view={view} /> : null}

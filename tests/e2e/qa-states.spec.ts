@@ -173,6 +173,10 @@ test.describe("Analytics chart states", () => {
   captureSuite("6.2");
 });
 
+test.describe("Ask-your-data and monthly review states", () => {
+  captureSuite("6.3");
+});
+
 test.describe("Plans page states", () => {
   const dir = resolve(process.cwd(), "qa/0.3");
   const states = existsSync(dir)

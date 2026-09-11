@@ -107,3 +107,64 @@ export interface AnalyticsView {
   funnel: FunnelStepView[];
   aging: AgingRowView[];
 }
+
+/* -------------------------------------------------------------------------- */
+
+export interface AskView {
+  /** Off without the plan, or without a key. The page says which. */
+  available: boolean;
+  locked: "plan" | "no_key" | null;
+  requiredPlan: string | null;
+  /** What the merchant typed, echoed back. */
+  question: string;
+  /** The answer, already substituted. Null when there is not one. */
+  reply: string | null;
+  /** The chart it came from — the checklist's "from: Revenue by group". */
+  chart: string | null;
+  /** The filter state that reproduces it. */
+  href: string | null;
+  /** Charts that could answer something, when the chosen one could not. */
+  insteadTry: string[];
+  failure: string | null;
+}
+
+export interface ReviewSectionView {
+  kind: string;
+  headline: string;
+  body: string;
+  /** A page the merchant acts on. Never something this app did. */
+  action: string | null;
+  actionHref: string | null;
+  /** The figures this section was written from — the "why" expander. */
+  because: string[];
+}
+
+export interface ReviewDiffView {
+  key: string;
+  /** Already formatted and signed: "+$2,400.00", "−3". */
+  label: string;
+  better: boolean;
+}
+
+export interface ReviewView {
+  month: string;
+  /** "September 2026", in the merchant's language. */
+  monthLabel: string;
+  generatedAt: string;
+  quiet: boolean;
+  sections: ReviewSectionView[];
+  /** Null for a shop's first review, which has nothing to be a diff of. */
+  diff: ReviewDiffView[] | null;
+  /** Every month kept, newest first, for the list beside it. */
+  months: { month: string; label: string; current: boolean }[];
+}
+
+export interface ReviewsView {
+  available: boolean;
+  locked: "plan" | "no_key" | null;
+  requiredPlan: string | null;
+  /** Null when nothing has been written yet. */
+  latest: ReviewView | null;
+  /** True on the 1st-of-month path: nothing yet, but something is coming. */
+  scheduled: boolean;
+}

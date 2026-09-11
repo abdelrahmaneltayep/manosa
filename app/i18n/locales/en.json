@@ -151,7 +151,8 @@
     "advisorSoon": {
       "heading": "Plan advice is coming",
       "body": "Once Mannon has a month of your usage, Claude will tell you whether your plan still fits — including when the honest answer is to stay where you are."
-    }
+    },
+    "seePlans": "See plans"
   },
   "planName": {
     "free": "Free",
@@ -1985,7 +1986,17 @@
       },
       "window_one": "{{count}} day",
       "window_other": "{{count}} days"
-    }
+    },
+    "heading": "✦ Ask your data",
+    "body": "Ask a question about the charts below. Every answer says which chart it came from, and links to it, so you can check the number yourself.",
+    "label": "Your question",
+    "help": "Try: “which group grew fastest this quarter?” or “what did Café Aroma spend last month?”",
+    "action": "Ask",
+    "from": "From: {{chart}}.",
+    "show": "Show me",
+    "noData": "That chart has nothing in it for this window. These do:",
+    "lockedPlan": "Asking your data comes with the Merchant Agent, on {{plan}}. The charts below work on every plan.",
+    "lockedNoKey": "There's no Anthropic API key set, so questions can't be answered. The charts below work either way."
   },
   "po": {
     "heading": "✦ Purchase order to draft order",
@@ -2516,6 +2527,43 @@
     "lineLevel": "Line totals, before shipping and tax — so this will not add up to the revenue chart above.",
     "capped": "This window has more orders than one view reads, so the charts below cover the most recent of them. Narrow the window for a complete picture.",
     "aov_one": "Average wholesale order: {{value}}, across {{count}} order.",
-    "aov_other": "Average wholesale order: {{value}}, across {{count}} orders."
+    "aov_other": "Average wholesale order: {{value}}, across {{count}} orders.",
+    "monthlyReview": "✦ Monthly review"
+  },
+  "review": {
+    "heading": "✦ Monthly review",
+    "body": "Written on the first of each month, about the month just gone, and kept. Nothing here changes once it is written — so you can read this month against last.",
+    "backToCharts": "Back to the charts",
+    "offHeading": "The monthly review is off",
+    "lockedPlan": "The monthly review comes with the Merchant Agent, on {{plan}}.",
+    "lockedNoKey": "There's no Anthropic API key set, so no review can be written. Every figure it would have used is on the charts page.",
+    "emptyHeading": "No review yet",
+    "emptyBody": "Reviews are written on the first of the month. There isn't one yet.",
+    "emptyScheduled": "The first one will be written on the first of next month, about this one.",
+    "firstMonth": "This is your first review, so there's no month before it to compare against.",
+    "quiet": "Nothing happened last month that needs you. That's a real answer, not a missing one.",
+    "why": "Why this?",
+    "generated": "Written {{when}}.",
+    "kind": {
+      "worked": "What worked",
+      "dead_weight": "Dead weight",
+      "experiment": "Worth trying",
+      "risk": "Keep an eye on"
+    },
+    "diff": {
+      "revenue": "Revenue {{change}}",
+      "orders": "Orders {{change}}",
+      "buyers": "Buyers {{change}}"
+    },
+    "action": {
+      "open_pricing": "Open your pricing rules",
+      "open_rule_builder": "Draft a new rule",
+      "open_segments": "Open segments",
+      "open_applications": "Open applications",
+      "open_terms": "Open the terms ledger",
+      "open_quotes": "Open quotes",
+      "open_agent": "Open the Buyer Agent",
+      "open_forms": "Open your registration forms"
+    }
   }
 }
