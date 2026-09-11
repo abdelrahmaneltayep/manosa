@@ -27,8 +27,11 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     const locale = detectLocale(request);
     const now = new Date();
 
+    const before = (url.searchParams.get("before") ?? "").trim() || null;
+    const after = (url.searchParams.get("after") ?? "").trim() || null;
+
     const [months, entitlements, shop] = await Promise.all([
-      listReviews(),
+      listReviews({ before, after }),
       loadEntitlements(now),
       db.shop.findUnique({ where: { shop: session.shop } }),
     ]);
@@ -43,7 +46,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     const asked = (url.searchParams.get("month") ?? "").trim();
     // Resolved against this shop's own reviews rather than trusted: a month in
     // a query string is not proof that a review for it exists.
-    const chosen = asked ? await readReviewFor(asked) : (months[0] ?? null);
+    const chosen = asked ? await readReviewFor(asked) : (months.rows[0] ?? null);
 
     return json({
       view: reviewsView({
@@ -58,6 +61,8 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         locked: !entitled ? "plan" : key ? null : "no_key",
         requiredPlan: entitled ? null : lowestPlanWithFeature("merchant_agent"),
         scheduled: entitled && key,
+        // A month that was attempted and failed is not a month still coming.
+        failedMonth: shop?.reviewFailedMonth ?? null,
       }),
     });
   });

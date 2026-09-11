@@ -1,7 +1,7 @@
 import { money, type Money } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
-import { amountOwed, orderRevenue } from "~/lib/orders/totals";
+import { amountOwed, orderRevenue, orderRevenueOfSum } from "~/lib/orders/totals";
 import { localDay } from "~/lib/analytics/series.server";
 import { formatCurrency } from "~/lib/money";
 import { shopScope } from "~/lib/tenant/shop-context.server";
@@ -30,7 +30,6 @@ export interface MonthFacts {
   approvals: number;
   owedNow: Money;
   overdueNow: Money;
-  topGroup: { label: string; amount: Money } | null;
   topBuyer: { label: string; amount: Money } | null;
   topProduct: { label: string; amount: Money } | null;
   /** Rules that priced nothing all month, by the name the buyer saw. */
@@ -45,20 +44,44 @@ export interface MonthDiff {
   buyers: number;
 }
 
-/** The first instant of a `YYYY-MM` in a given zone, as a UTC `Date`. */
+/** Every real UTC offset is a whole number of these. */
+const QUARTER_HOUR = 15 * 60 * 1000;
+/** Wider than the widest offset either way (UTC−12 … UTC+14). */
+const BRACKET = 2 * 24 * 60 * 60 * 1000;
+
+/**
+ * The first instant of a `YYYY-MM` in a given zone, as a UTC `Date`.
+ *
+ * Binary search between two instants that are certainly on either side of it,
+ * on a fifteen-minute grid because Kathmandu and Chatham are not on the hour.
+ *
+ * The previous version started at midday UTC on the 1st and walked *backwards*
+ * an hour at a time while the local day was still the 1st. It could never walk
+ * forwards, so for every zone at UTC+12 or further east — Auckland, Chatham,
+ * Apia, Tongatapu, Kiritimati — midday UTC on the 1st is already the **2nd**
+ * locally, the loop never ran, and the month began at 01:00 on the 2nd. Every
+ * order placed on the 1st landed in the month before, and the review the
+ * checklist requires on the 1st was written on the 2nd. The hour step also
+ * could not land on a :45 boundary, so Kathmandu and Eucla lost 45 minutes of
+ * every month.
+ */
 export function monthStart(month: string, timeZone: string | null): Date {
   const [year, index] = month.split("-").map(Number);
-  // Midday UTC on the first, then walked back to the first instant whose local
-  // day is still the first — the only way to get a zone's midnight without a
-  // date library, and correct across a DST transition at midnight.
-  const noon = Date.UTC(year!, index! - 1, 1, 12);
-  let cursor = noon;
+  const base = Date.UTC(year!, index! - 1, 1);
+  const first = `${month}-01`;
 
-  while (localDay(new Date(cursor - 60 * 60 * 1000), timeZone).endsWith("-01")) {
-    cursor -= 60 * 60 * 1000;
-    if (noon - cursor > 36 * 60 * 60 * 1000) break;
+  // Monotonic: local time only moves forward, and `YYYY-MM-DD` sorts as dates.
+  const reached = (at: number) => localDay(new Date(at), timeZone) >= first;
+
+  let before = Math.floor((base - BRACKET) / QUARTER_HOUR);
+  let after = Math.ceil((base + BRACKET) / QUARTER_HOUR);
+
+  while (after - before > 1) {
+    const mid = Math.floor((before + after) / 2);
+    if (reached(mid * QUARTER_HOUR)) after = mid;
+    else before = mid;
   }
-  return new Date(cursor);
+  return new Date(after * QUARTER_HOUR);
 }
 
 /** The `YYYY-MM` an instant falls in, in the shop's own zone. */
@@ -127,15 +150,24 @@ export async function monthFacts(month: string, now = new Date()): Promise<Month
       }),
       db.pricingRule.findMany({
         where: { status: "ACTIVE", archivedAt: null },
-        select: { name: true },
+        select: {
+          name: true,
+          createdAt: true,
+          updatedAt: true,
+          startsAt: true,
+          endsAt: true,
+        },
       }),
     ]);
 
-  const net = (order: { totalPrice: number }) => orderRevenue(order);
+  const net = orderRevenue;
 
   const retail = await db.order.aggregate({
     where: { ...inCurrency, isWholesale: false, processedAt: window },
-    _sum: { totalPrice: true, refundedAmount: true },
+    // `refundedAmount` is deliberately not summed: `totalPrice` is already net
+    // of refunds, and subtracting it here is what made this permanent figure
+    // disagree with the charts the review links to.
+    _sum: { totalPrice: true },
   });
 
   const orderIds = orders.map((order) => order.id);
@@ -146,9 +178,7 @@ export async function monthFacts(month: string, now = new Date()): Promise<Month
           where: { orderId: { in: orderIds } },
           select: { title: true, productId: true, currentTotal: true, discounts: true },
         }),
-    Promise.resolve(
-      Math.max(0, (retail._sum.totalPrice ?? 0) - (retail._sum.refundedAmount ?? 0)),
-    ),
+    Promise.resolve(orderRevenueOfSum(retail._sum)),
   ]);
 
   const buyerIds = new Set(
@@ -196,7 +226,6 @@ export async function monthFacts(month: string, now = new Date()): Promise<Month
     approvals,
     owedNow: money(owed, currencyCode),
     overdueNow: money(overdue, currencyCode),
-    topGroup: null,
     topBuyer: topOf(
       orders.map((order) => ({
         label: order.company ?? order.customerId ?? "",
@@ -211,7 +240,25 @@ export async function monthFacts(month: string, now = new Date()): Promise<Month
     // An **active** rule that priced nothing all month is the checklist's
     // "dead rules to archive". A draft one priced nothing because it is a
     // draft, which is not news.
+    //
+    // Three ways a live rule looked dead and was not, all of which produced a
+    // permanent, stored recommendation to archive something that is earning:
+    // a rule created *after* the month ended had obviously priced nothing in
+    // it; a rule scheduled to start later likewise; and a **renamed** rule
+    // keeps its history under the old name, because rule performance is read
+    // from the discount title the buyer saw, so its current name appears
+    // nowhere in the month. `updatedAt` cannot tell a rename from any other
+    // edit, so any rule touched during or after the month is left alone. This
+    // can only under-report, which is the right direction for advice that is
+    // kept forever.
     deadRules: rules
+      .filter(
+        (rule) =>
+          rule.createdAt <= start &&
+          rule.updatedAt < start &&
+          (rule.startsAt === null || rule.startsAt <= start) &&
+          (rule.endsAt === null || rule.endsAt >= end),
+      )
       .map((rule) => rule.name)
       .filter((name) => !pricedRuleNames.has(name))
       .slice(0, 5),
@@ -254,48 +301,64 @@ function topOf(
 export function factLines(
   facts: MonthFacts,
   locale: string,
+  /**
+   * Namespace for the slot names.
+   *
+   * Last month's facts must not reuse this month's slot names. They did: both
+   * months were rendered as the same template strings and only this month's
+   * values were supplied, so the model was asked to compare two months and
+   * handed one twice — and a sentence saying "last month you took {{f1}}"
+   * passed the check and was filled with *this* month's revenue, permanently.
+   */
+  prefix = "",
 ): { facts: string[]; slots: Record<string, string> } {
   const cash = (value: Money) => formatCurrency(value, locale);
+  const at = (name: string) => `${prefix}${name}`;
+  const slot = (name: string) => `{{${at(name)}}}`;
+
   const slots: Record<string, string> = {
-    f1: cash(facts.wholesaleRevenue),
-    f2: cash(facts.retailRevenue),
-    f3: cash(facts.owedNow),
-    f4: cash(facts.overdueNow),
-    q1: String(facts.wholesaleOrders),
-    q2: String(facts.buyers),
-    q3: String(facts.newBuyers),
-    q4: String(facts.applications),
-    q5: String(facts.approvals),
-    q6: String(facts.quietBuyers),
+    [at("f1")]: cash(facts.wholesaleRevenue),
+    [at("f2")]: cash(facts.retailRevenue),
+    [at("f3")]: cash(facts.owedNow),
+    [at("f4")]: cash(facts.overdueNow),
+    [at("q1")]: String(facts.wholesaleOrders),
+    [at("q2")]: String(facts.buyers),
+    [at("q3")]: String(facts.newBuyers),
+    [at("q4")]: String(facts.applications),
+    [at("q5")]: String(facts.approvals),
+    [at("q6")]: String(facts.quietBuyers),
   };
 
   const lines = [
-    "wholesale revenue: {{f1}}",
-    "retail revenue: {{f2}}",
-    "wholesale orders: {{q1}}",
-    "buyers who ordered: {{q2}}, of them new: {{q3}}",
-    "registration applications: {{q4}}, approved: {{q5}}",
-    "owed on terms now: {{f3}}, of that overdue: {{f4}}",
-    "buyers who ordered last month but not this one: {{q6}}",
+    `wholesale revenue: ${slot("f1")}`,
+    `retail revenue: ${slot("f2")}`,
+    `wholesale orders: ${slot("q1")}`,
+    `buyers who ordered: ${slot("q2")}, of them new: ${slot("q3")}`,
+    `registration applications: ${slot("q4")}, approved: ${slot("q5")}`,
+    `owed on terms now: ${slot("f3")}, of that overdue: ${slot("f4")}`,
+    `buyers who ordered last month but not this one: ${slot("q6")}`,
   ];
 
   if (facts.topBuyer) {
-    slots.n1 = facts.topBuyer.label;
-    slots.f5 = cash(facts.topBuyer.amount);
-    lines.push("biggest buyer: {{n1}} at {{f5}}");
+    slots[at("n1")] = facts.topBuyer.label;
+    slots[at("f5")] = cash(facts.topBuyer.amount);
+    lines.push(`biggest buyer: ${slot("n1")} at ${slot("f5")}`);
   }
   if (facts.topProduct) {
-    slots.n2 = facts.topProduct.label;
-    slots.f6 = cash(facts.topProduct.amount);
-    lines.push("biggest product: {{n2}} at {{f6}}");
+    slots[at("n2")] = facts.topProduct.label;
+    slots[at("f6")] = cash(facts.topProduct.amount);
+    lines.push(`biggest product: ${slot("n2")} at ${slot("f6")}`);
   }
   for (const [index, name] of facts.deadRules.entries()) {
-    slots[`r${index + 1}`] = name;
-    lines.push(`active rule that priced nothing this month: {{r${index + 1}}}`);
+    slots[at(`r${index + 1}`)] = name;
+    lines.push(`active rule that priced nothing this month: ${slot(`r${index + 1}`)}`);
   }
 
   return { facts: lines, slots };
 }
+
+/** The namespace last month's figures live in. */
+export const PREVIOUS_PREFIX = "p_";
 
 /** What moved, month on month. Null when there is no month before. */
 export function diffOf(

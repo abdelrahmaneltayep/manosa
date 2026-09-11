@@ -1,3 +1,4 @@
+import type { ChartKey } from "~/components/analytics/types";
 import type { DataAnswer } from "~/lib/analytics/answer.server";
 import { answerFrom, chartsWithData } from "~/lib/analytics/answer.server";
 import { askForJson } from "~/lib/ai/json.server";
@@ -7,7 +8,9 @@ import type { AiDeps, AiFailure } from "~/lib/ai/run.server";
 import {
   DEFAULT_RANGE,
   loadAnalytics,
+  type AnalyticsData,
   type ChartLabels,
+  type Range,
 } from "~/lib/analytics/charts.server";
 import type { Translate } from "~/i18n/translate";
 
@@ -28,7 +31,9 @@ export interface AskResult {
   /** The filter state that reproduces it. */
   href: string | null;
   /** Charts that do have something, when the chosen one was empty. */
-  insteadTry: string[];
+  insteadTry: ChartKey[];
+  /** The chosen chart was empty, and so was every other one. */
+  nothingToAnswer: boolean;
   failure: AiFailure | null;
 }
 
@@ -67,6 +72,14 @@ export async function askYourData(
     labels: ChartLabels;
     actorId: string | null;
     now?: Date;
+    /**
+     * The charts the page has already loaded, and the window they cover.
+     *
+     * Reused when the question routes to that same window, which is the common
+     * case — otherwise this ran all seven queries a second time for every
+     * question. A question that asks for a different window still gets one.
+     */
+    loaded?: { range: Range; data: AnalyticsData };
   },
   deps: AiDeps = {},
 ): Promise<AskResult> {
@@ -75,6 +88,7 @@ export async function askYourData(
     chart: null,
     href: null,
     insteadTry: [],
+    nothingToAnswer: false,
     failure: null,
   };
 
@@ -87,22 +101,26 @@ export async function askYourData(
   // The window the *question* asked for, not the one the page happens to be
   // showing — "how did last quarter go" means ninety days whatever the range
   // picker says, and the link this answer carries takes the merchant there.
-  const data = await loadAnalytics({
-    range: routed.value.range ?? DEFAULT_RANGE,
-    now: input.now,
-    labels: input.labels,
-  });
+  const range = routed.value.range ?? DEFAULT_RANGE;
+  const data =
+    input.loaded && input.loaded.range === range
+      ? input.loaded.data
+      : await loadAnalytics({ range, now: input.now, labels: input.labels });
 
   const answer = answerFrom(data, routed.value, { locale: input.locale, t: input.t });
 
   if (answer.empty) {
+    // "No-data answer offers what *can* be answered" — the checklist's own
+    // words. An empty chart with nothing beside it is a dead end, and on a
+    // shop with no history at all there is nothing to offer, which the page
+    // has to say rather than come back unchanged.
+    const withData = chartsWithData(data);
     return {
       reply: null,
       chart: answer.chart,
       href: answer.href,
-      // "No-data answer offers what *can* be answered" — the checklist's own
-      // words. An empty chart with nothing beside it is a dead end.
-      insteadTry: chartsWithData(data),
+      insteadTry: withData,
+      nothingToAnswer: withData.length === 0,
       failure: null,
     };
   }
@@ -140,6 +158,7 @@ export async function askYourData(
     chart: answer.chart,
     href: answer.href,
     insteadTry: [],
+    nothingToAnswer: false,
     failure: null,
   };
 }

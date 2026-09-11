@@ -13,7 +13,18 @@ Date: 2026-09-11 · Branch: `claude/mannon-b2b-wholesale-oc5b18`
 > and a guard in the capture harness now makes the class impossible to ship
 > silently. §7 has the details.
 >
-> The independent cold read has **not** run yet — it is the next thing.
+> **The independent cold read then returned FAIL on 22 findings, two of them
+> P0.** All 22 are fixed and the gate re-run clean; `qa/6.3/COLD-READ.md` has
+> the evidence and §9 below summarises what changed. This is the third run.
+>
+> The two P0s are worth naming here because both are repeats of defects this
+> repo has already paid for once. The answer's **citation rendered a raw i18n
+> key** for three of the seven charts — including the one the product's own
+> example question routes to — and the guard that exists to catch exactly that
+> (`expectNoRawCatalogKeys`) never saw it, because the fixture was written from
+> the catalogue rather than from the producer. And the review's **retail
+> revenue subtracted the refund a second time**, the bug `app/lib/orders/
+> totals.ts` was created to end, in the one figure that is kept forever.
 
 ## 1. Scope
 
@@ -77,8 +88,8 @@ New:
 - `tests/integration/analytics-ai.test.ts` — 12 (end to end against a queued
   model, both tenants)
 
-**Whole suite: 2,026 unit + integration across 108 files, green.**
-**Playwright: 383 passed.** `npm run lint`, `npx tsc --noEmit`, `npm run build`,
+**Whole suite: 2,038 unit + integration across 108 files, green.**
+**Playwright: 386 passed.** `npm run lint`, `npx tsc --noEmit`, `npm run build`,
 `npm run format:check` clean.
 
 ### Abuse cases, results
@@ -99,9 +110,9 @@ New:
 
 ## 4. States walked
 
-14 captures in `qa/6.3/`, rendered from the props the production view-models
-build and screenshotted by Playwright: `01`–`06` the ask bar, `10`–`17` the
-review. All 14 PNGs are distinct renders (checked, not assumed — see §7).
+17 captures in `qa/6.3/`, rendered from the props the production view-models
+build and screenshotted by Playwright: `01`–`08` the ask bar, `10`–`18` the
+review. All 17 PNGs are distinct renders (checked, not assumed — see §7).
 
 **What this proves:** which content and which states render, and that no raw
 i18n key reached the page. **What it does not prove:** what a merchant sees.
@@ -237,3 +248,85 @@ and re-scanned; no two PNGs in any task directory are now identical.
 - A real dev store, and Built for Shopify budgets at p75. Blocked — see
   `PROGRESS.md`.
 - The independent cold read, which has not run yet.
+
+## 9. The cold read, and the round that followed
+
+**Verdict: FAIL** — 2 P0, 3 P1, 11 P2, 6 P3. Evidence in `qa/6.3/COLD-READ.md`,
+every finding reproduced from the file and line given. All 22 are fixed.
+
+### The two P0s
+
+| # | What a merchant saw | Fix |
+| --- | --- | --- |
+| P0-1 | `From: analytics.groups.heading.` under every answer about groups, buyers or products — three of seven charts, including the one the help text's own example question routes to | `CHART_HEADING`, exhaustive by type, in `components/analytics/types.ts`; `AskView.chart` retyped from `string` to `ChartKey`, which made the compiler reject the two fixtures on sight |
+| P0-2 | August's review said retail revenue was $20.00 about a month the charts, one click away, said was $60.00 — permanently | `orderRevenueOfSum` in `orders/totals.ts`, so the aggregate and the per-row path are one definition; `charts.server.ts` was restating the rule by hand too and now calls it |
+
+### The three P1s
+
+- **P1-3 — the audit trail showed `{{f1}}`, and was checked by nothing.**
+  `because` was neither substituted nor run through `checkReply`, so the one
+  field Invariant 5 rests on rendered a placeholder *and* would have passed a
+  model-authored `$9,999,999`. Both fixed; truncation now happens before the
+  check and never through a slot, because slicing into one turns a valid slot
+  into an orphaned figure and throws the whole review away.
+- **P1-4 — the model was asked to compare two months and handed one twice.**
+  `factLines` returns templates; both months rendered to the same strings. Last
+  month now has its own `p_` slot namespace, both sets are handed over, and the
+  prompt says which is which.
+- **P1-5 — `monthStart` was wrong for every zone at UTC+12 or further east.**
+  Auckland's month began at 01:00 on the **2nd**, every month; Kathmandu and
+  Eucla lost 45 minutes of every month. Replaced with a binary search on a
+  fifteen-minute grid between two instants certainly either side. Verified
+  across 15 zones × 12 months, both halves.
+
+### The P2s and P3s
+
+Opening Analytics on the 1st could cancel that month's review (`replacePending`
+killed a due job); "written once" was a check-then-act race that threw P2002 at
+the loser; `listReviews` was `take: 24` with no cursor under a comment claiming
+it paginated; "this is your first review" was shown whenever the previous month
+was quiet, contradicting the switcher above it; dead-rule advice ignored
+`createdAt`, `startsAt` and renames, so it could tell a merchant to archive a
+rule that is earning; the ask bar had no loading state through an ~80-second
+worst case with the button live; a shop with no data at all got *nothing* back
+from a question; a failed review was indistinguishable from one not yet
+written; the `#groups` anchor did not exist; `checkReply` passed numbers in
+words in both shipped languages; `topGroup` was declared and permanently null;
+the quiet-month screen contradicted its own diff chips; a non-IANA timezone
+500'd both pages; historic diffs were re-labelled in the shop's current
+currency; and the charts were loaded twice per question.
+
+The `previewNotYet` split shipped in `8995999` had also regressed: `preview:
+null` means "not computed" on a save conflict and a validation error too, so a
+merchant who had just failed to save a complete rule was told to fill it in. It
+now turns on whether the rule is saved, not on the preview being null.
+
+### The three tests the cold read named as unable to fail
+
+All three rewritten so they fail against the bug they guard, and watched do it:
+
+- `monthStart` "whatever the zone" asserted only that the start was *somewhere*
+  in the month — true with a start 25 hours late. It now asserts the instant one
+  millisecond earlier is in the previous month, across 15 zones.
+- The `because` round-trip asserted that a line containing `42` survived
+  unchanged, which **encoded** the hole. The fixture is now a real `factLines`
+  shape and five invented-figure variants are asserted refused.
+- Every ask fixture used `chart: "byGroup"`, a value `ChartKey` cannot hold.
+  Now every one of the seven is rendered and checked for a raw key.
+
+The integration fixture that let P0-2 through now sets `total_refunded` through
+`factsFromWebhook`, and the new test was watched fail (`expected 2000 to be
+6000`) against the old expression before the fix went in.
+
+### Captures
+
+Three of the fourteen showed states the product cannot produce, and all three
+are rebuilt from what the writer emits rather than from what reads well: the
+review fixtures are now generated by calling `factLines` and `fillSlots`
+directly, and the ask captures cite charts that have rows on the same page.
+Three new states are captured (`07-ask-nothing-yet`, `08-ask-pending`,
+`18-review-previous-quiet`). Seventeen captures, seventeen distinct renders.
+
+**On `expectDistinct`:** the cold read is right that it proves "not
+byte-identical", not "shows a different state" — `02` and `03` passed it while
+lying. It is worth keeping and worth not trusting.

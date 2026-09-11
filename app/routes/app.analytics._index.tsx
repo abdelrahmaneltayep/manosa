@@ -76,6 +76,8 @@ async function askView(
     chart: null,
     href: null,
     insteadTry: [],
+    nothingToAnswer: false,
+    pending: false,
     failure: null,
     ...answered,
   };
@@ -113,6 +115,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
       t,
       labels: chartLabels(t),
       actorId: session.id,
+      loaded: { range, data },
     });
 
     return json({
@@ -123,6 +126,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
         chart: answer.chart,
         href: answer.href,
         insteadTry: answer.insteadTry,
+        nothingToAnswer: answer.nothingToAnswer,
         failure: answer.failure,
       },
     });
@@ -139,8 +143,16 @@ export default function Analytics() {
   // is how Remix says "that moment is now".
   const navigation = useNavigation();
   const loading = navigation.state === "loading";
+  // A question is a POST, so the state is "submitting", not "loading" — and a
+  // question is two model calls, up to about eighty seconds with nothing on
+  // screen to say so unless this is threaded through.
+  const asking =
+    navigation.state === "submitting" && navigation.formData?.get("intent") === "ask";
 
   return (
-    <AnalyticsPage view={{ ...(view as AnalyticsView), loading }} ask={ask as AskView} />
+    <AnalyticsPage
+      view={{ ...(view as AnalyticsView), loading }}
+      ask={{ ...(ask as AskView), pending: asking }}
+    />
   );
 }

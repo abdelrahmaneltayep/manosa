@@ -279,7 +279,7 @@ export async function loadAnalytics(options: {
    * `refundedAmount` is kept for the gross figure, which is
    * `totalPrice + refundedAmount`, not the other way round.
    */
-  const net = (order: { totalPrice: number }) => Math.max(0, order.totalPrice);
+  const net = orderRevenue;
 
   const series = (rows: typeof orders) =>
     bucketByDay(

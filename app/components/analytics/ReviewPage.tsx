@@ -61,6 +61,14 @@ function Nothing({ view }: { view: ReviewsView }) {
         <s-paragraph color="subdued">
           {t(view.scheduled ? "review.emptyScheduled" : "review.emptyBody")}
         </s-paragraph>
+        {/* A month that was attempted and failed is not a month still coming.
+            Promising one that had already been given up on is the screen
+            claiming something that did not happen. */}
+        {view.failedMonth ? (
+          <s-banner tone="warning">
+            <s-paragraph>{t("review.failed", { month: view.failedMonth })}</s-paragraph>
+          </s-banner>
+        ) : null}
       </s-stack>
     </s-section>
   );
@@ -83,6 +91,14 @@ function Review({ review }: { review: ReviewView }) {
                 {month.label}
               </s-link>
             ))}
+            {/* Kept forever means reachable forever. This list was capped at
+                24 with no way back, so month 25 had no route in the product. */}
+            {review.newerHref ? (
+              <s-link href={review.newerHref}>{t("review.newerMonths")}</s-link>
+            ) : null}
+            {review.olderHref ? (
+              <s-link href={review.olderHref}>{t("review.olderMonths")}</s-link>
+            ) : null}
           </s-stack>
         </s-section>
       ) : null}
@@ -98,13 +114,23 @@ function Review({ review }: { review: ReviewView }) {
               ))}
             </s-stack>
           ) : (
-            // A first month has nothing to be a diff of, and saying "no change"
-            // would be a claim about a month that does not exist.
-            <s-text color="subdued">{t("review.firstMonth")}</s-text>
+            // Two different things: no earlier month at all, and an earlier
+            // month that was quiet. Saying "your first review" about the second
+            // contradicted the month switcher directly above it.
+            <s-text color="subdued">
+              {t(
+                review.noDiffBecause === "previousQuiet"
+                  ? "review.previousQuiet"
+                  : "review.firstMonth",
+              )}
+            </s-text>
           )}
 
           {review.quiet ? (
-            <s-paragraph color="subdued">{t("review.quiet")}</s-paragraph>
+            // The chips above are computed independently of the model's "quiet"
+            // judgement, so "Revenue +$2,400" sat directly over "nothing
+            // happened". The figures are the honest half; the copy softens.
+            <s-paragraph color="subdued">{t("review.quietNothingNeeded")}</s-paragraph>
           ) : (
             review.sections.map((section, index) => (
               <s-box key={index} padding="base" borderWidth="base" borderRadius="base">

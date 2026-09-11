@@ -37,3 +37,20 @@ export const amountOwed = (
 export const grossOrderValue = (
   order: Pick<OrderTotals, "totalPrice" | "refundedAmount">,
 ): number => order.totalPrice + order.refundedAmount;
+
+/**
+ * `orderRevenue` over a Prisma `_sum` aggregate.
+ *
+ * A month of retail orders is too many rows to pull just to add them up, so
+ * the review aggregates in the database — but an aggregate cannot call
+ * `orderRevenue` per row, and the last time this rule was restated by hand
+ * rather than reused, the refund came off twice and a permanent review
+ * disagreed with the charts one click away.
+ *
+ * It is the same rule: `totalPrice` is never negative (Shopify's
+ * `current_total_price` cannot be), so the sum of the clamps equals the clamp
+ * of the sum. `tests/unit/order-totals.test.ts` asserts the two agree over
+ * arbitrary rows rather than leaving that as a comment.
+ */
+export const orderRevenueOfSum = (sum: { totalPrice: number | null }): number =>
+  Math.max(0, sum.totalPrice ?? 0);

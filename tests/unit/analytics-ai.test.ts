@@ -78,7 +78,11 @@ describe("reading a monthly review", () => {
     headline: "{{n1}} did the heavy lifting",
     body: "It priced {{q1}} lines and brought in {{f1}}.",
     action: "open_pricing",
-    because: ["rule Café trade price: 42 lines"],
+    // A fact line as `factLines` emits one: slot names, never figures. The
+    // previous fixture wrote "rule Café trade price: 42 lines" — a shape the
+    // writer cannot produce, whose bare "42" the check then had to accept, so
+    // the test proved the hole rather than closing it.
+    because: ["wholesale revenue: {{f1}}"],
     ...overrides,
   });
 
@@ -87,9 +91,48 @@ describe("reading a monthly review", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.sections[0]?.action).toBe("open_pricing");
-      expect(result.value.sections[0]?.because).toEqual([
-        "rule Café trade price: 42 lines",
-      ]);
+      expect(result.value.sections[0]?.because).toEqual(["wholesale revenue: {{f1}}"]);
+    }
+  });
+
+  it("checks the audit trail too — it is the field Invariant 5 rests on", () => {
+    for (const because of [
+      ["we estimate revenue at $9,999,999 next month"],
+      ["ربحت ١٢٣٤ ريال"],
+      ["rule Café trade price: 42 lines"],
+      ["wholesale revenue: {{f1}}", "and orders doubled"],
+      ["it used {{f9}}"],
+    ]) {
+      expect(
+        read({ quiet: false, sections: [section({ because })] }).ok,
+        because.join(" / "),
+      ).toBe(false);
+    }
+  });
+
+  it("refuses a number written as a word, not only a digit", () => {
+    for (const body of [
+      "Your top group brought in nine hundred more than the second.",
+      "Revenue doubled on last month.",
+      "Café Aroma came second.",
+      "المبيعات ارتفعت ثلاثة أضعاف",
+    ]) {
+      expect(read({ quiet: false, sections: [section({ body })] }).ok, body).toBe(false);
+    }
+  });
+
+  it("never truncates through a slot", () => {
+    const long = `${"x".repeat(315)} {{f1}}`;
+    const result = read({ quiet: false, sections: [section({ body: long })] });
+
+    // Slicing after the check and before the fill stored a dangling "{{" that
+    // rendered at the merchant. Slicing before the check is worse: the
+    // orphaned "f1" reads as an invented figure and loses the whole review.
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const body = result.value.sections[0]!.body;
+      expect(body).not.toContain("{{");
+      expect(body.length).toBeLessThanOrEqual(320);
     }
   });
 

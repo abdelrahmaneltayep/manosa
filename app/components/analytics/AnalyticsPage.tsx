@@ -9,6 +9,7 @@ import {
 import { CHART_STYLES } from "~/components/analytics/palette";
 import { AskBar } from "~/components/analytics/AskBar";
 import type {
+  ChartKey,
   AnalyticsView,
   AskView,
   RankedRowView,
@@ -278,7 +279,7 @@ function Card({
   children,
 }: {
   heading: string;
-  csv: string;
+  csv: ChartKey;
   view: AnalyticsView;
   empty: boolean;
   note?: string | null;
@@ -287,7 +288,10 @@ function Card({
   const { t } = useTranslation();
 
   return (
-    <s-section heading={heading}>
+    // The id an answer's "Show me" link points at. `answer.server.ts` has built
+    // `#groups` since this shipped and there was no `id` anywhere on the page,
+    // so the link reloaded with the right window and landed at the top.
+    <s-section id={csv} heading={heading}>
       <s-stack direction="block" gap="base">
         {empty ? (
           <s-paragraph color="subdued">{t("analytics.noData")}</s-paragraph>
@@ -312,7 +316,7 @@ function RankedCard({
   note,
 }: {
   heading: string;
-  csv: string;
+  csv: ChartKey;
   rows: RankedRowView[];
   view: AnalyticsView;
   note?: string | null;

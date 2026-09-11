@@ -338,6 +338,27 @@ const CURRENCY_WORDS =
   /\b(?:dollars?|usd|pounds?|gbp|euros?|eur|yen|jpy|riyals?|sar|dirhams?|aed|dinars?|kwd|bhd|cents?|percent|per\s?cent)\b|[$£€¥₹﷼%]|٪|ريال|ريالات|درهم|دراهم|دينار|دولار|دولارات|جنيه|يورو|بالمئة|بالمائة|في\s?المئة/iu;
 
 /**
+ * Numbers written as words, and comparisons that are numbers in disguise.
+ *
+ * `DIGIT` catches every script's digits and nothing else, so "you took nine
+ * hundred and fifty this month", "revenue doubled", "up by a third" and
+ * "Café Aroma came second" all passed a check the ADR presents as the thing
+ * that stops a model stating a figure this app did not compute. The monthly
+ * review is where it matters most: it is the one prompt that asks a model to
+ * *compare two months in prose*, which is the shape that invites exactly these
+ * words — and what it writes is kept forever.
+ *
+ * Bare "one" is deliberately absent: "one of your rules priced nothing" is
+ * ordinary prose, and refusing it would fail reviews for no gain. "One
+ * hundred" is still caught, by "hundred".
+ *
+ * English and Arabic, the two languages this ships in. A third language means
+ * a third row here, and `tests/unit/agent-guardrails.test.ts` says so.
+ */
+const NUMBER_WORDS =
+  /\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundreds?|thousands?|millions?|billions?|dozens?|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|half|halves|halved|quarters?|double[ds]?|doubling|triple[ds]?|tripled|quadruple[ds]?|twice|thrice|fold)\b|واحدة|اثنان|اثنين|ثلاثة|ثلاث|أربعة|اربعة|خمسة|ستة|سبعة|ثمانية|تسعة|عشرة|عشرين|ثلاثين|مئة|مائة|ألف|الف|مليون|ضعف|ضعفين|أضعاف|اضعاف|نصف|ثلث|ربع|الأول|الثاني|الثالث/iu;
+
+/**
  * Runs of digits in `text` that do not appear in `source`.
  *
  * Used on the acknowledgement, which has no slots because nothing has been
@@ -405,6 +426,14 @@ export function checkReply(
     return {
       ok: false,
       error: `Your reply says "${currency[0]}". Do not name a currency or a percentage — the slot you were given already carries its own symbol.`,
+    };
+  }
+
+  const inWords = bare.match(NUMBER_WORDS);
+  if (inWords) {
+    return {
+      ok: false,
+      error: `Your reply says "${inWords[0]}", which is a number written as a word. Every number, rank and comparison has to be a slot from the list — write {{q1}} rather than "three", and say which figures moved rather than "doubled".`,
     };
   }
 

@@ -462,13 +462,17 @@ function PreviewPanel({ view }: { view: RuleBuilderView }) {
       <s-stack direction="block" gap="small">
         <s-paragraph color="subdued">{t("pricing.builder.previewBody")}</s-paragraph>
 
-        {/* A form with nothing in it yet has nothing to preview. Saying the
-            preview is *unavailable* there reports a failure that never
-            happened — and made an empty new form indistinguishable from a
-            broken one, in the product and in its capture alike. */}
-        {!view.preview ? (
+        {/* Three states, not two. A form with nothing in it yet has nothing to
+            preview, and saying the preview is *unavailable* there reports a
+            failure that never happened. But a **saved** rule always has
+            something to price, so `preview: null` on one of those — which is
+            what a save conflict and a validation error both set — means the
+            preview was not computed, not that the merchant has typed nothing.
+            The first version of this fix told a merchant who had just failed
+            to save a complete rule to go and fill it in. */}
+        {!view.preview && !view.form.id ? (
           <s-text color="subdued">{t("pricing.builder.previewNotYet")}</s-text>
-        ) : view.preview.unavailable ? (
+        ) : !view.preview || view.preview.unavailable ? (
           <s-text color="subdued">{t("pricing.builder.previewUnavailable")}</s-text>
         ) : view.preview.changed ? (
           <s-stack direction="inline" gap="base" alignItems="center">

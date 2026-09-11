@@ -1,6 +1,6 @@
 # Progress
 
-Updated: 2026-09-11T09:35:00Z
+Updated: 2026-09-11T10:30:00Z
 Current milestone: 6 — Analytics
 Current task: 6.3 ✦ ask-your-data + monthly review [done] · 6.4 Settings [next]
 
@@ -31,11 +31,10 @@ Current task: 6.3 ✦ ask-your-data + monthly review [done] · 6.4 Settings [nex
 - [x] 6.1 Order lines mirrored, with discount allocations — commits `1c2cafb` + fix round — QA: `qa/6.1/REPORT.md` (cold read returned FAIL on 7 findings: revenue over-reported after any refund, a truncation flag that could never be true, and a query ~100× over Shopify's cost ceiling. All fixed — `qa/6.1/COLD-READ.md`.)
 - [x] shop facts — the store's own currency and timezone are finally read from Shopify — commit `0dbc09a` (they never had been; every money figure fell back to USD)
 - [x] 6.2 the Analytics page — seven charts, their states, CSV per chart, the currency/timezone footer — commits `ad7a048` + fix round — QA: `qa/6.2/REPORT.md` (cold read returned FAIL on 20 findings, 3 of them P0 — `qa/6.2/COLD-READ.md`. All fixed; 16 captures from 13 distinct renders.)
-- [x] 6.3 ✦ ask-your-data + ✦ monthly review — commits `7a05849` + this one — QA: `qa/6.3/REPORT.md` (14 captures; `docs/adr/0025`. The gate's step 3 found `11-review-why.png` byte-identical to `10-review.png`; chasing it found the same defect in 1.3, 2.3, 3.2, 4.4 and 6.2 — one of them a real product bug — and a guard now fails any two captures in a set that render the same.)
+- [x] 6.3 ✦ ask-your-data + ✦ monthly review — commits `7a05849` + this one — QA: `qa/6.3/REPORT.md` (cold read returned FAIL on 22 findings, 2 P0 — the answer's citation rendered a raw i18n key for three of seven charts, and the review re-introduced the refund double-subtraction in a figure kept forever. All fixed, gate re-run clean — `qa/6.3/COLD-READ.md`. 17 captures; `docs/adr/0025`. The gate's own step 3 had separately found `11-review-why.png` byte-identical to `10-review.png`, and chasing that found the same defect in 1.3, 2.3, 3.2, 4.4 and 6.2 — one a real product bug — so a guard now fails any two captures in a set that render the same.)
 
 ## Next up
 
-- **Run the cold read on 6.3** — it has not had one
 - 6.4 Settings, part one — the section shell and save bar, display, discount
   combinations (with "affects 3 active rules"), tax, notifications and email
   domain verification, danger zone; and the settings scattered across other
@@ -359,3 +358,22 @@ Neither is blocking; both would change product decisions if answered.
 - `qa:capture` globs `tests/unit/*-states.test.tsx` now rather than listing the
   files. A hand-kept list is a registration step to forget — this is the third
   one found (after `CATALOG_ROOTS`).
+
+- **A fixture written from the catalogue is not a fixture from the producer.**
+  6.3's ask captures used `chart: "byGroup"` — the i18n key, not the `ChartKey`
+  the route emits — so the raw-key guard was fed a value guaranteed to resolve
+  and never saw that three of seven charts printed `analytics.groups.heading`
+  at the merchant. The view type said `string`. Typing it as the union made the
+  compiler reject both fixtures immediately. **When a view field can only hold
+  a few values, type it as those values**; `string` is where this class hides.
+- **The refund double-subtraction has now been found three times** (6.1, 6.2,
+  6.3) and twice by a cold read. `app/lib/orders/totals.ts` is the only
+  definition — but an aggregate cannot call a per-row function, so restating
+  the rule for a `_sum` is the shape it comes back in. That is what
+  `orderRevenueOfSum` is for. **Any new money query: if you are writing
+  `totalPrice` and `refundedAmount` in the same expression, stop.**
+- **`monthStart` was a one-directional walk.** Anything that walks from a guess
+  towards an answer has to be able to walk both ways, or it is only correct on
+  the side it was tested. The four zones in its test topped out at UTC+11; the
+  bug started at UTC+12. It is a binary search now, on a fifteen-minute grid
+  because Kathmandu and Chatham are not on the hour.

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import { whenDisabled } from "~/components/boolean-attribute";
-import type { AskView } from "~/components/analytics/types";
+import { CHART_HEADING, type AskView } from "~/components/analytics/types";
 
 /**
  * ✦ Ask your data.
@@ -43,9 +43,20 @@ export function AskBar({ view }: { view: AskView }) {
               value={view.question}
               {...whenDisabled(!view.available)}
             />
-            <s-button variant="primary" type="submit" {...whenDisabled(!view.available)}>
-              {t("ask.action")}
+            <s-button
+              variant="primary"
+              type="submit"
+              {...whenDisabled(!view.available || view.pending)}
+            >
+              {t(view.pending ? "ask.asking" : "ask.action")}
             </s-button>
+            {/* Two sequential model calls, each with a timeout and a retry — up
+                to about eighty seconds. With no loading state the page was
+                byte-identical to before the click and the button still live,
+                so the obvious thing to do was click again. */}
+            {view.pending ? (
+              <s-text color="subdued">{t("ask.pendingHelp")}</s-text>
+            ) : null}
           </s-stack>
         </form>
 
@@ -58,7 +69,7 @@ export function AskBar({ view }: { view: AskView }) {
                   a figure the merchant has to take on trust. */}
               {view.chart && view.href ? (
                 <s-text color="subdued">
-                  {t("ask.from", { chart: t(`analytics.${view.chart}.heading`) })}{" "}
+                  {t("ask.from", { chart: t(CHART_HEADING[view.chart]) })}{" "}
                   <s-link href={view.href}>{t("ask.show")}</s-link>
                 </s-text>
               ) : null}
@@ -72,9 +83,16 @@ export function AskBar({ view }: { view: AskView }) {
             <s-paragraph>{t("ask.noData")}</s-paragraph>
             <s-unordered-list>
               {view.insteadTry.map((chart) => (
-                <s-list-item key={chart}>{t(`analytics.${chart}.heading`)}</s-list-item>
+                <s-list-item key={chart}>{t(CHART_HEADING[chart])}</s-list-item>
               ))}
             </s-unordered-list>
+          </s-banner>
+        ) : null}
+
+        {view.nothingToAnswer ? (
+          <s-banner tone="info">
+            {/* "Offer what can be answered" has no branch when nothing can. */}
+            <s-paragraph>{t("ask.nothingYet")}</s-paragraph>
           </s-banner>
         ) : null}
 

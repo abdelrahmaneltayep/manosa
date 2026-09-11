@@ -57,11 +57,28 @@ export async function enqueueNextMonth(
  * Called from the analytics page rather than on install, so a shop that
  * installed before this shipped starts getting reviews the first time somebody
  * looks at their numbers.
+ *
+ * It must never *replace* a pending job, only add a missing one. It used to
+ * call `enqueueNextMonth`, whose `replacePending` cancels every PENDING job of
+ * the kind — including one that was already due and merely waiting for the
+ * runner to claim it. A merchant opening Analytics at 00:20 on the 1st
+ * cancelled that morning's review and queued one for the *following* month, so
+ * the month just gone was never written and the page said the first review was
+ * still coming. One page view, one review silently thrown away.
  */
 export async function ensureMonthlyReviewScheduled(now = new Date()): Promise<void> {
   const shop = shopScope.require("ensureMonthlyReviewScheduled");
   const record = await db.shop.findUnique({ where: { shop } });
   if (!record || record.uninstalledAt) return;
 
-  await enqueueNextMonth(record.ianaTimezone, now);
+  const queued = await db.scheduledJob.count({
+    where: { kind: "analytics.monthly_review", status: "PENDING" },
+  });
+  if (queued > 0) return;
+
+  await enqueueJob({
+    kind: "analytics.monthly_review",
+    runAt: monthStart(nextMonth(monthOf(now, record.ianaTimezone)), record.ianaTimezone),
+    replacePending: true,
+  });
 }

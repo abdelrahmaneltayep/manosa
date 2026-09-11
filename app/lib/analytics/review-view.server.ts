@@ -119,23 +119,56 @@ export function readDiff(
   return entries.length > 0 ? entries : null;
 }
 
+/** What the writer stored alongside the sections. */
+function storedFacts(value: unknown): {
+  currencyCode: string | null;
+  noDiffBecause: "first" | "previousQuiet" | null;
+} {
+  if (typeof value !== "object" || value === null) {
+    return { currencyCode: null, noDiffBecause: null };
+  }
+  const row = value as Record<string, unknown>;
+  const reason = row.noDiffBecause;
+  return {
+    currencyCode: typeof row.currencyCode === "string" ? row.currencyCode : null,
+    noDiffBecause: reason === "first" || reason === "previousQuiet" ? reason : null,
+  };
+}
+
 export function reviewView(
   review: MonthlyReview,
-  months: MonthlyReview[],
+  page: {
+    rows: MonthlyReview[];
+    nextBefore: string | null;
+    previousAfter: string | null;
+  },
   options: { locale: string; currencyCode: string; now: Date },
 ): ReviewView {
+  const stored = storedFacts(review.facts);
+  // The currency the figures were actually in. Falling back to the shop's
+  // current one re-labelled every past review when a shop changed currency.
+  const currencyCode = stored.currencyCode ?? options.currencyCode;
+  const diff = readDiff(review.diff, { ...options, currencyCode });
+
   return {
     month: review.month,
     monthLabel: monthLabel(review.month, options.locale),
     generatedAt: whenLabel(review.generatedAt, options.now, options.locale),
     quiet: review.quiet,
     sections: readSections(review.sections),
-    diff: readDiff(review.diff, options),
-    months: months.map((row) => ({
+    diff,
+    // A row written before this was stored has no reason recorded; "first" is
+    // the older behaviour and stays the fallback rather than inventing one.
+    noDiffBecause: diff === null ? (stored.noDiffBecause ?? "first") : null,
+    months: page.rows.map((row) => ({
       month: row.month,
       label: monthLabel(row.month, options.locale),
       current: row.month === review.month,
     })),
+    olderHref: page.nextBefore ? `/app/analytics/review?before=${page.nextBefore}` : null,
+    newerHref: page.previousAfter
+      ? `/app/analytics/review?after=${page.previousAfter}`
+      : null,
   };
 }
 
@@ -145,6 +178,7 @@ export function reviewsView(options: {
   locked: "plan" | "no_key" | null;
   requiredPlan: string | null;
   scheduled: boolean;
+  failedMonth: string | null;
 }): ReviewsView {
   return { ...options };
 }

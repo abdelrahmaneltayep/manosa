@@ -110,6 +110,46 @@ export interface AnalyticsView {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The seven charts, by key.
+ *
+ * Lives here rather than beside the CSV writer because the *page* needs it:
+ * `AskView.chart` is one of these, and typing it `string` is what let the ask
+ * bar cite `analytics.groups.heading` to a merchant for three of the seven.
+ */
+export const CHART_KEYS = [
+  "revenue",
+  "groups",
+  "buyers",
+  "products",
+  "rules",
+  "funnel",
+  "aging",
+] as const;
+export type ChartKey = (typeof CHART_KEYS)[number];
+
+export const isChartKey = (value: string): value is ChartKey =>
+  (CHART_KEYS as readonly string[]).includes(value);
+
+/**
+ * A chart key, as the catalogue spells it.
+ *
+ * Three of the seven differ (`groups` → `byGroup`), and interpolating the key
+ * straight into `analytics.${chart}.heading` printed the raw key at the
+ * merchant. Exhaustive by type, so a new chart cannot be added without one.
+ */
+export const CHART_HEADING: Record<ChartKey, string> = {
+  revenue: "analytics.revenue.heading",
+  groups: "analytics.byGroup.heading",
+  buyers: "analytics.topBuyers.heading",
+  products: "analytics.topProducts.heading",
+  rules: "analytics.rules.heading",
+  funnel: "analytics.funnel.heading",
+  aging: "analytics.aging.heading",
+};
+
+/* -------------------------------------------------------------------------- */
+
 export interface AskView {
   /** Off without the plan, or without a key. The page says which. */
   available: boolean;
@@ -120,11 +160,21 @@ export interface AskView {
   /** The answer, already substituted. Null when there is not one. */
   reply: string | null;
   /** The chart it came from — the checklist's "from: Revenue by group". */
-  chart: string | null;
+  chart: ChartKey | null;
   /** The filter state that reproduces it. */
   href: string | null;
   /** Charts that could answer something, when the chosen one could not. */
-  insteadTry: string[];
+  insteadTry: ChartKey[];
+  /**
+   * The chosen chart was empty and so was every other one.
+   *
+   * Distinct from `insteadTry: []` meaning "nothing was asked": without it the
+   * page came back byte-identical to before the click, so a merchant on a shop
+   * with no history pressed Ask and was shown nothing at all.
+   */
+  nothingToAnswer: boolean;
+  /** A question is in flight. Two model calls, up to ~80s. */
+  pending: boolean;
   failure: string | null;
 }
 
@@ -153,10 +203,21 @@ export interface ReviewView {
   generatedAt: string;
   quiet: boolean;
   sections: ReviewSectionView[];
-  /** Null for a shop's first review, which has nothing to be a diff of. */
+  /** Null when there is nothing to compare against — see `noDiffBecause`. */
   diff: ReviewDiffView[] | null;
+  /**
+   * Why there is no diff. "first" means there is no earlier month at all;
+   * "previousQuiet" means there is one and it had no wholesale activity. The
+   * page said "this is your first review" for both, while the month switcher
+   * directly above it listed the two months before.
+   */
+  noDiffBecause: "first" | "previousQuiet" | null;
   /** Every month kept, newest first, for the list beside it. */
   months: { month: string; label: string; current: boolean }[];
+  /** Older months exist beyond this page — `?before=`. Null at the end. */
+  olderHref: string | null;
+  /** Newer months exist — `?after=`. Null on the newest page. */
+  newerHref: string | null;
 }
 
 export interface ReviewsView {
@@ -167,4 +228,12 @@ export interface ReviewsView {
   latest: ReviewView | null;
   /** True on the 1st-of-month path: nothing yet, but something is coming. */
   scheduled: boolean;
+  /**
+   * The month whose review was attempted and failed, if one was.
+   *
+   * Without it a review that could not be written is indistinguishable from
+   * one that has not been written yet, and the page tells a merchant their
+   * first review is coming about a month it already gave up on.
+   */
+  failedMonth: string | null;
 }

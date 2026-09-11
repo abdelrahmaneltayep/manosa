@@ -87,7 +87,9 @@ Answer with a single JSON object and nothing else:
 
 "because" lists the fact lines you used, copied exactly as they were given to you.
 
-**Numbers.** Every figure is a slot: write {{f1}}, {{q2}}, {{n1}} — the names you were given — and the app puts the value in. Never write a digit, a percentage, a currency symbol or a number in words. A sentence with a number you typed yourself is thrown away.
+**Numbers.** Every figure is a slot: write {{f1}}, {{q2}}, {{n1}} — the names you were given — and the app puts the value in. Never write a digit, a percentage, a currency symbol or a number in words ("nine hundred", "twice", "a third", "double"). A sentence with a number you typed yourself, in digits or in words, is thrown away.
+
+**Last month's figures are separate slots, prefixed p_.** {{p_f1}} is last month's wholesale revenue, {{f1}} is this month's. Never use a this-month slot in a sentence about last month.
 
 Rules:
 - At most ${MAX_SECTIONS} sections. Fewer is better than padding.
@@ -110,7 +112,9 @@ export function reviewUser(input: {
     "This month:",
     ...input.facts.map((fact) => `- ${fact}`),
     "",
-    input.previous.length > 0 ? "The month before:" : "There is no previous month.",
+    input.previous.length > 0
+      ? "The month before (its slots are the p_ ones):"
+      : "There is no previous month.",
     ...input.previous.map((fact) => `- ${fact}`),
     "",
     "Slots you may write, and nothing else:",
@@ -119,6 +123,19 @@ export function reviewUser(input: {
 }
 
 /* -------------------------------------------------------------------------- */
+
+/**
+ * `text` cut to `limit`, never mid-slot.
+ *
+ * If the cut leaves an unterminated `{{`, the whole partial slot goes with it.
+ */
+export function trimToSlotBoundary(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit);
+  const open = cut.lastIndexOf("{{");
+  if (open !== -1 && !cut.slice(open).includes("}}")) return cut.slice(0, open).trimEnd();
+  return cut;
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -163,7 +180,24 @@ export function readReview(
         return { ok: false, error: "Every section needs a headline and a body." };
       }
 
-      for (const text of [headline, body]) {
+      const because = Array.isArray(entry.because)
+        ? entry.because
+            .filter((line): line is string => typeof line === "string")
+            .slice(0, 6)
+        : [];
+
+      // Truncated here, before the check and the substitution, and never
+      // through a slot. Slicing a body after `checkReply` and before
+      // `fillSlots` cut slots in half and stored a dangling "{{" that rendered
+      // at the merchant and was kept forever; slicing through one before the
+      // check is worse, because the orphaned "f1" then reads as an invented
+      // figure and throws the whole review away.
+      const trimmed = trimToSlotBoundary(body, MAX_BODY);
+
+      // `because` is the audit trail — the one field Invariant 5 rests on. It
+      // was checked by nothing, so a model-authored "$9,999,999" reached the
+      // merchant on the same screen that promises it cannot.
+      for (const text of [headline, trimmed, ...because]) {
         const checked = checkReply(text, slots);
         if (!checked.ok)
           return { ok: false, error: checked.error ?? "A figure was invented." };
@@ -180,13 +214,9 @@ export function readReview(
       sections.push({
         kind: kind as ReviewKind,
         headline,
-        body: body.slice(0, MAX_BODY),
+        body: trimmed,
         action: typeof action === "string" ? (action as ReviewAction) : null,
-        because: Array.isArray(entry.because)
-          ? entry.because
-              .filter((line): line is string => typeof line === "string")
-              .slice(0, 6)
-          : [],
+        because,
       });
     }
 
@@ -235,6 +265,9 @@ export async function writeMonthlyReview(
         ...section,
         headline: fillSlots(section.headline, input.slots),
         body: fillSlots(section.body, input.slots),
+        // The "why" expander showed "wholesale revenue: {{f1}}" to a merchant,
+        // which is the audit trail rendering a placeholder.
+        because: section.because.map((line) => fillSlots(line, input.slots)),
       })),
     },
   };

@@ -5,7 +5,12 @@ import { resetAnthropicClient, type MessagesApi } from "~/lib/ai/client.server";
 import { answerFrom, chartsWithData } from "~/lib/analytics/answer.server";
 import { askYourData } from "~/lib/analytics/ask.server";
 import { loadAnalytics } from "~/lib/analytics/charts.server";
-import { generateMonthlyReview } from "~/lib/analytics/review-run.server";
+import {
+  REVIEWS_PER_PAGE,
+  generateMonthlyReview,
+  listReviews,
+} from "~/lib/analytics/review-run.server";
+import { ensureMonthlyReviewScheduled } from "~/lib/jobs/handlers/monthly-review.server";
 import { monthFacts } from "~/lib/analytics/review.server";
 import { factsFromWebhook, upsertOrder } from "~/lib/orders/sync.server";
 import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
@@ -67,7 +72,13 @@ async function installShop(shop: string, planKey = "growth") {
   );
 }
 
-const order = (id: number, at: string, total: string, company = "Café Aroma") =>
+const order = (
+  id: number,
+  at: string,
+  total: string,
+  company = "Café Aroma",
+  extra: { wholesale?: boolean; refunded?: string } = {},
+) =>
   upsertOrder(
     {
       ...factsFromWebhook({
@@ -76,6 +87,11 @@ const order = (id: number, at: string, total: string, company = "Café Aroma") =
         currency: "USD",
         processed_at: at,
         current_total_price: total,
+        // Shopify sends the total **already net of the refund**, alongside the
+        // refund itself. Every fixture in this file used to omit it, which is
+        // how the review's retail revenue subtracted it a second time and
+        // nothing noticed.
+        ...(extra.refunded === undefined ? {} : { total_refunded: extra.refunded }),
         customer: { id },
         discount_applications: [{ title: "Café trade price" }],
         line_items: [
@@ -92,7 +108,7 @@ const order = (id: number, at: string, total: string, company = "Café Aroma") =
       })!,
       company,
     },
-    true,
+    extra.wholesale ?? true,
   );
 
 beforeEach(async () => {
@@ -390,6 +406,138 @@ describe("the monthly review", () => {
 
       expect(august.wholesaleRevenue.amount).toBe(10_000);
       expect(september.wholesaleRevenue.amount).toBe(5_000);
+    });
+  });
+
+  it("counts a refund once, and agrees with the charts about it", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // What Shopify sends for a $100 retail order with $40 refunded.
+      await order(1, "2026-08-10T10:00:00Z", "60.00", "Walk-in", {
+        wholesale: false,
+        refunded: "40.00",
+      });
+      await order(2, "2026-08-11T10:00:00Z", "300.00", "Café Aroma", {
+        refunded: "100.00",
+      });
+
+      const row = await db.order.findFirst({ where: { isWholesale: false } });
+      // The writer stores the net total and the refund side by side. A fixture
+      // that sets `refundedAmount` by hand proves nothing about either.
+      expect(row?.totalPrice).toBe(6_000);
+      expect(row?.refundedAmount).toBe(4_000);
+
+      const facts = await monthFacts("2026-08", NOW);
+      const charts = await loadAnalytics({ range: 90, now: NOW, labels });
+
+      // One order, one figure — on the review and on the chart it links to.
+      expect(facts.retailRevenue.amount).toBe(6_000);
+      expect(facts.wholesaleRevenue.amount).toBe(30_000);
+      const total = (series: { points: { value: number }[] }) =>
+        series.points.reduce((at, point) => at + point.value, 0);
+      expect(total(charts.revenue.retail)).toBe(facts.retailRevenue.amount);
+      expect(total(charts.revenue.wholesale)).toBe(facts.wholesaleRevenue.amount);
+    });
+  });
+
+  it("writes one review when two runs race, and does not throw at the loser", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order(1, "2026-08-10T10:00:00Z", "900.00");
+
+      // `findFirst` then `create` is check-then-act with a model round-trip in
+      // between; the unique index is what actually decides, and the loser used
+      // to throw P2002 out of the job handler for work that had succeeded.
+      const both = await Promise.allSettled([
+        generateMonthlyReview(
+          { month: "2026-08", now: NOW },
+          { messages: queue([sections]) },
+        ),
+        generateMonthlyReview(
+          { month: "2026-08", now: NOW },
+          { messages: queue([sections]) },
+        ),
+      ]);
+
+      expect(both.every((one) => one.status === "fulfilled")).toBe(true);
+      expect(await db.monthlyReview.count()).toBe(1);
+    });
+  });
+
+  it("records a month it could not write, rather than promising it is coming", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await order(1, "2026-08-10T10:00:00Z", "900.00");
+
+      const run = await generateMonthlyReview(
+        { month: "2026-08", now: NOW },
+        { messages: queue(["not json at all"]) },
+      );
+
+      expect(run.review).toBeNull();
+      expect(run.failure).not.toBeNull();
+
+      const shop = await db.shop.findUnique({ where: { shop: ALPHA } });
+      expect(shop?.reviewFailedMonth).toBe("2026-08");
+      expect(shop?.reviewFailedReason).toBe(run.failure);
+    });
+  });
+
+  it("reaches a month older than one page, because they are kept forever", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      for (let index = 0; index < 30; index += 1) {
+        const month = `20${24 + Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+        await db.monthlyReview.create({
+          data: {
+            ...tenant(),
+            month,
+            quiet: true,
+            sections: [],
+            facts: {},
+            generatedAt: NOW,
+          },
+        });
+      }
+
+      const first = await listReviews();
+      expect(first.rows).toHaveLength(REVIEWS_PER_PAGE);
+      expect(first.nextBefore).not.toBeNull();
+
+      const older = await listReviews({ before: first.nextBefore });
+      expect(older.rows.length).toBeGreaterThan(0);
+      // The oldest month had no route in the product at all before this.
+      expect(older.rows.at(-1)?.month).toBe("2024-01");
+      expect(older.nextBefore).toBeNull();
+      expect(older.previousAfter).not.toBeNull();
+    });
+  });
+
+  it("does not cancel a review that is due when the page is opened", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // The job for the 1st, queued and waiting for the runner to claim it.
+      await db.scheduledJob.create({
+        data: {
+          ...tenant(),
+          kind: "analytics.monthly_review",
+          runAt: new Date("2026-09-01T00:00:00Z"),
+        },
+      });
+
+      // A merchant opening Analytics twenty minutes later.
+      await ensureMonthlyReviewScheduled(new Date("2026-09-01T00:20:00Z"));
+
+      const pending = await db.scheduledJob.findMany({
+        where: { kind: "analytics.monthly_review", status: "PENDING" },
+      });
+      expect(pending).toHaveLength(1);
+      expect(pending[0]?.runAt.toISOString()).toBe("2026-09-01T00:00:00.000Z");
     });
   });
 

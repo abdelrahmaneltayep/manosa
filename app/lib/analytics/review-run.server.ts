@@ -1,10 +1,11 @@
-import type { MonthlyReview } from "@prisma/client";
+import { Prisma, type MonthlyReview } from "@prisma/client";
 
 import { db } from "~/db.server";
 import { isAiAvailable } from "~/lib/ai/client.server";
 import { writeMonthlyReview } from "~/lib/ai/prompts/monthly-review.server";
 import type { AiDeps } from "~/lib/ai/run.server";
 import {
+  PREVIOUS_PREFIX,
   diffOf,
   factLines,
   monthFacts,
@@ -69,6 +70,12 @@ export async function generateMonthlyReview(
   const previousFacts = await monthFacts(previousMonth(month), now);
   const hasPrevious = previousFacts.wholesaleOrders > 0 || previousFacts.applications > 0;
 
+  // "There is no month before this one" and "the month before was quiet" are
+  // different things, and the page said the first about both — while the month
+  // switcher directly above it listed the earlier months.
+  const firstMonth =
+    month <= monthOf(record?.installedAt ?? now, record?.ianaTimezone ?? null);
+
   // A month in which nothing happened at all is not a month to write about,
   // and saying so costs no model call.
   if (facts.wholesaleOrders === 0 && facts.applications === 0 && !hasPrevious) {
@@ -76,39 +83,166 @@ export async function generateMonthlyReview(
   }
 
   const { facts: lines, slots } = factLines(facts, locale);
-  const previousLines = hasPrevious ? factLines(previousFacts, locale).facts : [];
+  // Last month's figures get their own slot namespace, and its slots are
+  // handed over with this month's. Without that the model was shown the same
+  // template strings twice and could only invent the comparison.
+  const previous = hasPrevious
+    ? factLines(previousFacts, locale, PREVIOUS_PREFIX)
+    : { facts: [], slots: {} };
+  const previousLines = previous.facts;
+  const allSlots = { ...slots, ...previous.slots };
 
   const written = await writeMonthlyReview(
-    { month, locale, facts: lines, previous: previousLines, slots, actorId: null },
+    {
+      month,
+      locale,
+      facts: lines,
+      previous: previousLines,
+      slots: allSlots,
+      actorId: null,
+    },
     deps,
   );
 
-  if (!written.ok) return { review: null, skipped: null, failure: written.reason };
+  if (!written.ok) {
+    // Recorded, so the page can say the month was attempted and failed rather
+    // than promising a review that is never coming.
+    await db.shop.update({
+      where: { shop },
+      data: {
+        reviewFailedMonth: month,
+        reviewFailedAt: now,
+        reviewFailedReason: written.reason,
+      },
+    });
+    return { review: null, skipped: null, failure: written.reason };
+  }
 
-  const review = await db.monthlyReview.create({
-    data: {
-      ...tenant(),
-      month,
-      quiet: written.value.quiet,
-      sections: written.value.sections,
-      // The figures the sections were written from, stored beside them — the
-      // "why" expander reads these rather than asking the model to remember.
-      facts: { lines, slots, previous: previousLines },
-      diff: diffOf(facts, hasPrevious ? previousFacts : null) ?? undefined,
-      generatedAt: now,
-      aiModel: written.model,
-      aiPromptVersion: written.promptVersion,
-      aiRequestId: written.requestId,
+  const stored = await createOnce({
+    ...tenant(),
+    month,
+    quiet: written.value.quiet,
+    sections: written.value.sections,
+    // The figures the sections were written from, stored beside them — the
+    // "why" expander reads these rather than asking the model to remember.
+    facts: {
+      lines,
+      slots: allSlots,
+      previous: previousLines,
+      // Stored beside the figures so a shop that changes currency later does
+      // not re-label every past review with a symbol it was never in.
+      currencyCode: facts.currencyCode,
+      noDiffBecause: hasPrevious ? null : firstMonth ? "first" : "previousQuiet",
     },
+    diff: diffOf(facts, hasPrevious ? previousFacts : null) ?? undefined,
+    generatedAt: now,
+    aiModel: written.model,
+    aiPromptVersion: written.promptVersion,
+    aiRequestId: written.requestId,
   });
 
-  return { review, skipped: null, failure: null };
+  // Lost the race with a concurrent run: the other one's words stand, because
+  // a review is written once.
+  if (stored === null) {
+    const existing = await db.monthlyReview.findFirst({ where: { month } });
+    return { review: existing, skipped: "exists", failure: null };
+  }
+
+  // A month that succeeds clears the marker, the same way the briefing does.
+  if (record?.reviewFailedMonth) {
+    await db.shop.update({
+      where: { shop },
+      data: { reviewFailedMonth: null, reviewFailedAt: null, reviewFailedReason: null },
+    });
+  }
+
+  return { review: stored, skipped: null, failure: null };
 }
 
-/** Newest first. Kept forever, so this paginates. */
-export async function listReviews(limit = 24): Promise<MonthlyReview[]> {
+/**
+ * The write, with the unique index doing the deciding.
+ *
+ * `findFirst` then `create` is check-then-act with a model round-trip in
+ * between, so two runs of the same month both passed the check. The
+ * `@@unique([shop, month])` index is what actually protects the data — but the
+ * loser threw P2002 out of the job handler, which the runner recorded as a
+ * failed attempt and retried, for work that had in fact succeeded.
+ */
+async function createOnce(
+  data: Parameters<typeof db.monthlyReview.create>[0]["data"],
+): Promise<MonthlyReview | null> {
+  try {
+    return await db.monthlyReview.create({ data });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/** One page of months, newest first, and whether there are older ones. */
+export interface ReviewPageResult {
+  rows: MonthlyReview[];
+  /** The month to pass as `before` for the next page. Null at the end. */
+  nextBefore: string | null;
+  /** The month to pass as `after` for the newer page. Null at the newest. */
+  previousAfter: string | null;
+}
+
+export const REVIEWS_PER_PAGE = 24;
+
+/**
+ * Newest first, a page at a time.
+ *
+ * This was `take: 24` with a comment claiming it paginated. It did not, and
+ * the month switcher is built from exactly this list — so on a shop two years
+ * in, month 25 and everything older had no route in the product at all, while
+ * the page promised reviews are kept forever. Keyset on `month`, which is a
+ * sortable `YYYY-MM` and unique per shop.
+ */
+export async function listReviews(
+  options: { before?: string | null; after?: string | null; limit?: number } = {},
+): Promise<ReviewPageResult> {
   shopScope.require("list monthly reviews");
-  return db.monthlyReview.findMany({ orderBy: { month: "desc" }, take: limit });
+  const limit = options.limit ?? REVIEWS_PER_PAGE;
+
+  // `after` walks back towards the newest, so it reads ascending and is
+  // reversed before it is handed out.
+  const ascending = Boolean(options.after);
+  const where = options.before
+    ? { month: { lt: options.before } }
+    : options.after
+      ? { month: { gt: options.after } }
+      : {};
+
+  const rows = await db.monthlyReview.findMany({
+    where,
+    orderBy: { month: ascending ? "asc" : "desc" },
+    take: limit + 1,
+  });
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const ordered = ascending ? [...page].reverse() : page;
+
+  const oldest = ordered.at(-1)?.month ?? null;
+  const newest = ordered[0]?.month ?? null;
+
+  const [olderExists, newerExists] = await Promise.all([
+    oldest === null
+      ? Promise.resolve(0)
+      : db.monthlyReview.count({ where: { month: { lt: oldest } } }),
+    newest === null
+      ? Promise.resolve(0)
+      : db.monthlyReview.count({ where: { month: { gt: newest } } }),
+  ]);
+
+  return {
+    rows: ordered,
+    nextBefore: olderExists > 0 ? oldest : null,
+    previousAfter: newerExists > 0 ? newest : null,
+  };
 }
 
 export async function readReviewFor(month: string): Promise<MonthlyReview | null> {

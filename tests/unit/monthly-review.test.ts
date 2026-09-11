@@ -39,10 +39,46 @@ describe("the first instant of a month", () => {
     expect(iso(monthStart("2026-03", null))).toBe("2026-03-01T00:00:00.000Z");
   });
 
-  it("lands on the first of the month in that zone, whatever the zone", () => {
-    for (const zone of ["UTC", "Australia/Sydney", "America/Denver", "Asia/Riyadh"]) {
-      for (const month of ["2026-01", "2026-03", "2026-10", "2026-12"]) {
-        expect(monthOf(monthStart(month, zone), zone)).toBe(month);
+  /**
+   * Both halves, every month, every awkward zone.
+   *
+   * The old version of this test asserted only that the start instant is
+   * *somewhere* in the month — which is still true when the month begins at
+   * 01:00 on the **2nd**, and it did, for every zone at UTC+12 or further
+   * east. The instant one millisecond earlier has to be in the month before,
+   * or it is not the start of anything.
+   */
+  it("is the first local instant of the month, and nothing before it", () => {
+    const zones = [
+      "UTC",
+      "Australia/Sydney",
+      "America/Denver",
+      "Asia/Riyadh",
+      // Past UTC+12, where walking backwards from midday UTC never ran.
+      "Pacific/Auckland",
+      "Pacific/Apia",
+      "Pacific/Tongatapu",
+      "Pacific/Kiritimati",
+      // Not on the hour: an hour-stepping loop cannot land on :45.
+      "Pacific/Chatham",
+      "Asia/Kathmandu",
+      "Australia/Eucla",
+      // Behind UTC, and the half-hour ones.
+      "Pacific/Honolulu",
+      "America/St_Johns",
+      "Asia/Tehran",
+    ];
+
+    for (const zone of zones) {
+      for (let index = 1; index <= 12; index += 1) {
+        const month = `2026-${String(index).padStart(2, "0")}`;
+        const start = monthStart(month, zone);
+
+        expect(monthOf(start, zone), `${zone} ${month} start`).toBe(month);
+        expect(
+          monthOf(new Date(start.getTime() - 1), zone),
+          `${zone} ${month} the instant before`,
+        ).toBe(previousMonth(month));
       }
     }
   });
@@ -53,6 +89,9 @@ describe("the first instant of a month", () => {
     for (const zone of ["America/Santiago", "Asia/Beirut", "Europe/London"]) {
       for (const month of ["2026-03", "2026-04", "2026-10", "2026-11"]) {
         expect(monthOf(monthStart(month, zone), zone)).toBe(month);
+        expect(monthOf(new Date(monthStart(month, zone).getTime() - 1), zone)).toBe(
+          previousMonth(month),
+        );
       }
     }
   });
@@ -89,7 +128,6 @@ const facts = (overrides: Partial<MonthFacts> = {}): MonthFacts => ({
   approvals: 7,
   owedNow: { amount: 420_000, currencyCode: "USD" },
   overdueNow: { amount: 90_000, currencyCode: "USD" },
-  topGroup: null,
   topBuyer: { label: "Café Aroma", amount: { amount: 310_000, currencyCode: "USD" } },
   topProduct: {
     label: "House Blend 1kg",

@@ -1,4 +1,4 @@
-import type { AnalyticsView } from "~/components/analytics/types";
+import type { AnalyticsView, ChartKey } from "~/components/analytics/types";
 import type { Translate } from "~/i18n/translate";
 
 /**
@@ -12,19 +12,10 @@ import type { Translate } from "~/i18n/translate";
  * and a script still has something to add up.
  */
 
-export const CHART_KEYS = [
-  "revenue",
-  "groups",
-  "buyers",
-  "products",
-  "rules",
-  "funnel",
-  "aging",
-] as const;
-export type ChartKey = (typeof CHART_KEYS)[number];
-
-export const isChartKey = (value: string): value is ChartKey =>
-  (CHART_KEYS as readonly string[]).includes(value);
+// The keys live with the page's types: `AskView.chart` is one of them, and a
+// component cannot import from a `.server` module.
+export { CHART_KEYS, isChartKey } from "~/components/analytics/types";
+export type { ChartKey } from "~/components/analytics/types";
 
 export function csvCell(value: string | number): string {
   const text = String(value);

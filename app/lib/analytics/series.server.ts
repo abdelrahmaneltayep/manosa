@@ -18,11 +18,30 @@ import { money, type Money } from "@mannon/pricing-engine";
 
 export const UTC = "UTC";
 
+/**
+ * A zone `Intl` will accept, or UTC.
+ *
+ * `ianaTimezone` is a text column. A value `Intl` does not recognise — a bad
+ * write, or a Node built without full ICU — threw `RangeError` out of every
+ * caller, and since both analytics loaders reach this through the review
+ * scheduler, the whole page returned 500 rather than falling back to the zone
+ * the footer already says it is using when the column is null.
+ */
+function usableZone(timeZone: string | null): string {
+  if (!timeZone) return UTC;
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone }).format(0);
+    return timeZone;
+  } catch {
+    return UTC;
+  }
+}
+
 /** The store-local calendar day an instant falls on: `YYYY-MM-DD`. */
 export function localDay(at: Date, timeZone: string | null): string {
   // `en-CA` formats as `YYYY-MM-DD`, which sorts and compares as a string.
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: timeZone ?? UTC,
+    timeZone: usableZone(timeZone),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

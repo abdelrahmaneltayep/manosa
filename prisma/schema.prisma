@@ -83,15 +83,25 @@ model Shop {
   /// though it were today's. Cleared on the next success.
   briefingFailedAt     DateTime?
   briefingFailedReason String?
-  installedAt          DateTime  @default(now())
-  uninstalledAt        DateTime?
+
+  /// The month whose review was attempted and could not be written, and why.
+  ///
+  /// Same reason the briefing has its pair: without it the review page cannot
+  /// tell "not written yet" from "we tried and failed", and told a merchant
+  /// their first review was still coming about a month it had given up on.
+  /// Cleared on the next success.
+  reviewFailedMonth  String?
+  reviewFailedAt     DateTime?
+  reviewFailedReason String?
+  installedAt        DateTime  @default(now())
+  uninstalledAt      DateTime?
   /// Set by the Danger zone "pause app" control (Settings, phase 6.4).
   /// While paused an empty ruleset is published, so the Function stops
   /// discounting at checkout, and the App Proxy refuses. Nothing is
   /// deleted: every rule stays here and resume republishes them.
-  pausedAt             DateTime?
+  pausedAt           DateTime?
   /// Set when the post-uninstall PII purge has run (GDPR, within 48h).
-  piiPurgedAt          DateTime?
+  piiPurgedAt        DateTime?
 
   // --- Billing (phase 0.3) -----------------------------------------------
   // Shopify is the source of truth; this is a cache so the gate can answer on
