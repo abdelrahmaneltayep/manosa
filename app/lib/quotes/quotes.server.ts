@@ -17,6 +17,7 @@ import {
 } from "~/lib/quotes/pricing.server";
 import {
   DEFAULT_EXPIRY_DAYS,
+  DEFAULT_REMINDER_DAYS,
   expiryFrom,
   hasExpired,
   transition,
@@ -348,6 +349,7 @@ export async function sendQuote(
 
   const record = await db.shop.findUnique({ where: { shop } });
   const expiryDays = record?.quoteExpiryDays ?? DEFAULT_EXPIRY_DAYS;
+  const reminderDays = record?.quoteReminderDays ?? DEFAULT_REMINDER_DAYS;
 
   const saved = await db.quote.update({
     where: { id },
@@ -356,6 +358,7 @@ export async function sendQuote(
       sentAt: now,
       expiryDays,
       expiresAt: expiryFrom(now, expiryDays),
+      reminderDays,
       // A resend starts the warning over.
       remindedAt: null,
     },

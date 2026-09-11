@@ -100,6 +100,13 @@ model Shop {
   /// discounting at checkout, and the App Proxy refuses. Nothing is
   /// deleted: every rule stays here and resume republishes them.
   pausedAt           DateTime?
+  /// When the empty ruleset actually reached Shopify.
+  ///
+  /// Derived signals do not work here: `rulesetRuleCount` is 0 both for a
+  /// pause that landed and for a shop that has never published, and the page
+  /// must not say "no wholesale price is being applied anywhere" about a shop
+  /// whose checkout is still discounting because the publish threw.
+  pausePublishedAt   DateTime?
   /// Set when the post-uninstall PII purge has run (GDPR, within 48h).
   piiPurgedAt        DateTime?
 
@@ -198,19 +205,20 @@ model Shop {
   // --- Settings (phase 6.4) ------------------------------------------------
   /// Show the retail price struck through beside the wholesale one. Off for
   /// merchants whose trade buyers should never see retail at all.
-  showCompareAt          Boolean @default(true)
+  showCompareAt         Boolean @default(true)
   /// "Log in to see prices" — a signed-out visitor sees no price and no
   /// add-to-cart, rather than a retail price the buyer would never pay.
-  hidePricesFromGuests   Boolean @default(false)
+  hidePricesFromGuests  Boolean @default(false)
   /// Whether storefront prices read as tax-inclusive or tax-exclusive. Display
   /// only: Shopify still decides what is charged.
-  taxDisplay             String  @default("excl")
+  taxDisplay            String  @default("excl")
   /// Whether a wholesale price may stack with a Shopify discount code. Off by
   /// default — stacking is how a trade price accidentally becomes a giveaway.
   /// Per-rule `combinable` still applies; this is the store-wide gate.
-  allowShopifyDiscounts  Boolean @default(false)
-  /// Whether marking a buyer tax-exempt needs a second pair of eyes.
-  taxExemptNeedsApproval Boolean @default(true)
+  allowShopifyDiscounts Boolean @default(false)
+  /// The combination setting as last pushed to the live discount, so a rule
+  /// save does not re-state a choice that has not moved.
+  combinationsHash      String?
 
   /// The address the app sends from, and the domain it belongs to.
   ///
@@ -1269,10 +1277,16 @@ model Quote {
   internalNote String?
 
   /// Null means it stands until somebody acts. Set when it is sent.
-  expiresAt  DateTime?
+  expiresAt    DateTime?
   /// Days of validity, copied from settings when it was sent, so changing the
   /// setting does not move a date the buyer has already been told.
-  expiryDays Int?
+  expiryDays   Int?
+  /// The warning window, copied at send for the same reason `expiryDays` is.
+  /// Read live from `Shop`, raising the setting from 3 to 10 made every
+  /// outstanding quote inside ten days of expiry immediately due — a burst of
+  /// "your quote is expiring" mail to buyers, which is the exact thing the
+  /// Settings copy promises will not happen.
+  reminderDays Int?
 
   /// When the prices on the lines were fixed.
   lockedAt   DateTime?

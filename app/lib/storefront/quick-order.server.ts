@@ -86,6 +86,8 @@ export interface UnresolvedLine {
 }
 
 export interface QuickOrderResult {
+  /** Display only — Shopify still decides what is charged. */
+  taxDisplay: "excl" | "incl";
   lines: ResolvedLine[];
   unresolved: UnresolvedLine[];
   subtotal: string;
@@ -167,7 +169,22 @@ export async function priceQuickOrder(
   admin: AdminGraphql,
   lines: PasteLine[],
   buyer: BuyerForPricing,
-  { now, currencyCode, locale }: { now: Date; currencyCode: string; locale?: string },
+  {
+    now,
+    currencyCode,
+    locale,
+    // Settings: "Off if your trade buyers should never see the retail price."
+    // This block used to send the struck-through price regardless, so that
+    // setting promised something it never did.
+    showCompareAt = true,
+    taxDisplay = "excl",
+  }: {
+    now: Date;
+    currencyCode: string;
+    locale?: string;
+    showCompareAt?: boolean;
+    taxDisplay?: "excl" | "incl";
+  },
 ): Promise<QuickOrderResult> {
   const [variants, { rules }] = await Promise.all([
     findVariantsBySku(
@@ -224,7 +241,7 @@ export async function priceQuickOrder(
       unitPrice: formatCurrency(priced.unitPrice, locale),
       lineTotal: formatCurrency(money(total, currencyCode), locale),
       wasPrice:
-        priced.unitPrice.amount === listPrice.amount
+        !showCompareAt || priced.unitPrice.amount === listPrice.amount
           ? null
           : formatCurrency(listPrice, locale),
       ruleSummary: priced.ruleSummary,
@@ -239,6 +256,7 @@ export async function priceQuickOrder(
   return {
     lines: resolved,
     unresolved,
+    taxDisplay,
     subtotal: formatCurrency(money(subtotal, currencyCode), locale),
     subtotalAmount: subtotal,
     currencyCode,

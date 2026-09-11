@@ -25,8 +25,19 @@ export interface DisplaySettingsView {
   showCompareAt: boolean;
   hidePricesFromGuests: boolean;
   taxDisplay: "excl" | "incl";
-  /** What a buyer will read on a product page, built from these settings. */
-  preview: { price: string; compareAt: string | null; taxNote: string };
+  /**
+   * What a buyer will read on a product page — priced by the engine from this
+   * shop's own highest-priority rule, or blank when there is nothing to show
+   * (no rules, or the app paused). Never a made-up figure: the first version
+   * hardcoded a 30% discount and labelled it "A buyer will read:".
+   */
+  preview: {
+    price: string | null;
+    compareAt: string | null;
+    taxNote: string;
+    /** The rule the example came from, so the merchant can check it. */
+    ruleName?: string;
+  };
 }
 
 export interface DiscountSettingsView {
@@ -38,7 +49,6 @@ export interface DiscountSettingsView {
 
 export interface TaxSettingsView {
   requireVatForTaxExempt: boolean;
-  taxExemptNeedsApproval: boolean;
   /** Buyers already tax-exempt without a VAT id on file. */
   exemptWithoutVat: number;
 }
@@ -83,6 +93,12 @@ export interface DangerZoneView {
   ruleCount: number;
   /** Set while the confirm is open. */
   confirming: boolean;
+  /**
+   * False when the app is paused here but the empty ruleset never reached
+   * Shopify — the publish failed part-way, so checkout is still discounting
+   * and the banner must not claim otherwise.
+   */
+  reachedCheckout: boolean;
 }
 
 export interface SettingsView {

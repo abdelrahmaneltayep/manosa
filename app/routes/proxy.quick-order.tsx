@@ -71,6 +71,8 @@ export const action = ({ request }: ActionFunctionArgs) =>
         now: new Date(),
         currencyCode: record?.currencyCode ?? "USD",
         locale: context.locale ?? undefined,
+        showCompareAt: record?.showCompareAt ?? true,
+        taxDisplay: record?.taxDisplay === "incl" ? "incl" : "excl",
       },
     );
 

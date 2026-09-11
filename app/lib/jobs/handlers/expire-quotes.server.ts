@@ -55,7 +55,14 @@ export async function expireQuotes({ now = new Date() } = {}) {
 
     if (
       quote.email &&
-      isDueForReminder(state, now, record.quoteReminderDays ?? DEFAULT_REMINDER_DAYS)
+      // The quote's own window, copied at send. Reading the live setting made
+      // changing it move the date on quotes already out — the one thing the
+      // Settings copy promises it does not do.
+      isDueForReminder(
+        state,
+        now,
+        quote.reminderDays ?? record.quoteReminderDays ?? DEFAULT_REMINDER_DAYS,
+      )
     ) {
       // Stamped whatever the provider said. A failed send is recorded in
       // `EmailMessage` with its error; retrying it every hour would not help

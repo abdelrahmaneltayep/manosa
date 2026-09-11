@@ -11,16 +11,32 @@ import { withAdmin } from "~/shopify.server";
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
   withAdmin(request, async ({ admin, session }) => {
-    await ensureShopRecord(admin);
-    return json({ shop: session.shop });
+    const record = await ensureShopRecord(admin);
+    return json({
+      shop: session.shop,
+      paused: record?.pausedAt !== null && record?.pausedAt !== undefined,
+    });
   });
 
 export default function AppLayout() {
-  const { shop } = useLoaderData<typeof loader>();
+  const { shop, paused } = useLoaderData<typeof loader>();
   const { t } = useTranslation();
 
   return (
     <>
+      {/* Every page, not only Settings.
+          While paused, the Pricing list still badges every rule Active, the
+          rule builder still previews "was $40 → now $28", and the quote
+          builder prices at retail and **locks** those prices into the quote
+          with no reason on screen. A merchant who paused and moved on had no
+          signal anywhere that their trade prices were switched off. */}
+      {paused ? (
+        <s-banner tone="warning">
+          <s-heading>{t("settings.danger.pausedHeading")}</s-heading>
+          <s-paragraph>{t("settings.danger.pausedEverywhere")}</s-paragraph>
+          <s-link href="/app/settings">{t("settings.danger.pausedSettingsLink")}</s-link>
+        </s-banner>
+      ) : null}
       {/* App Bridge renders this into the admin sidebar. The rel="home" link
           is hidden from the menu and sets the app's landing route. */}
       <s-app-nav>

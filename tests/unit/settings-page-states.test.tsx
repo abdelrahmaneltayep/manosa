@@ -37,18 +37,22 @@ const view = (overrides: Partial<SettingsView> = {}): SettingsView => ({
     showCompareAt: true,
     hidePricesFromGuests: false,
     taxDisplay: "excl",
-    preview: { price: "$28.00", compareAt: "$40.00", taxNote: "Excluding tax" },
+    // Priced by the engine from this shop's own rule, and named so a merchant
+    // can check it. The first version hardcoded a 30% discount and labelled it
+    // "A buyer will read:".
+    preview: {
+      price: "$28.00",
+      compareAt: "$40.00",
+      taxNote: "Excluding tax",
+      ruleName: "Café trade price",
+    },
   },
   discounts: {
     allowShopifyDiscounts: false,
     combinableRules: 3,
     combinableHref: "/app/pricing?combinable=1",
   },
-  tax: {
-    requireVatForTaxExempt: false,
-    taxExemptNeedsApproval: true,
-    exemptWithoutVat: 2,
-  },
+  tax: { requireVatForTaxExempt: false, exemptWithoutVat: 2 },
   orders: {
     posBypassesLimits: true,
     quoteExpiryDays: 14,
@@ -65,18 +69,18 @@ const view = (overrides: Partial<SettingsView> = {}): SettingsView => ({
     fallbackFrom: "mannon@mannonapp.com",
     verifiable: true,
   },
-  danger: { paused: false, pausedAt: null, ruleCount: 7, confirming: false },
+  danger: {
+    paused: false,
+    pausedAt: null,
+    ruleCount: 7,
+    confirming: false,
+    reachedCheckout: true,
+  },
   saved: null,
   failedSection: null,
   issues: [],
   ...overrides,
 });
-
-const DNS_RECORDS = [
-  { kind: "TXT", host: "mannon._domainkey.acme.com", value: "v=DKIM1; k=rsa; p=MIG…" },
-  { kind: "TXT", host: "acme.com", value: "v=spf1 include:mannonapp.com ~all" },
-  { kind: "MX", host: "reply.acme.com", value: "10 feedback.mannonapp.com" },
-];
 
 /* -------------------------------------------------------------------------- */
 
@@ -125,7 +129,9 @@ describe("the settings page", () => {
   it("previews what a buyer reads, rather than describing the setting", () => {
     const html = render(<SettingsPage view={view()} />);
 
-    expect(html).toContain("A buyer will read:");
+    // Labelled as an example, and naming the rule it came from.
+    expect(html).toContain("Example");
+    expect(html).toContain("Café trade price");
     expect(html).toContain("$28.00");
     expect(html).toContain("$40.00");
   });
@@ -138,7 +144,12 @@ describe("the settings page", () => {
             showCompareAt: false,
             hidePricesFromGuests: true,
             taxDisplay: "incl",
-            preview: { price: "$28.00", compareAt: null, taxNote: "Including tax" },
+            preview: {
+              price: "$28.00",
+              compareAt: null,
+              taxNote: "Including tax",
+              ruleName: "Café trade price",
+            },
           },
         })}
       />,
@@ -176,7 +187,7 @@ describe("the settings page", () => {
     capture("05-settings-saved", html);
   });
 
-  it("shows a sender's records and says where mail goes meanwhile", () => {
+  it("says where mail goes, and that a domain cannot be checked yet", () => {
     const html = render(
       <SettingsPage
         view={view({
@@ -186,67 +197,26 @@ describe("the settings page", () => {
             status: "unchecked",
             checkedAt: null,
             error: null,
-            records: DNS_RECORDS,
+            records: [],
             fallbackFrom: "mannon@mannonapp.com",
-            verifiable: true,
+            verifiable: false,
           },
         })}
       />,
     );
 
-    // "Not checked yet" is a statement about this app; "unverified" would be
-    // a claim about the merchant's DNS that nobody has looked at.
-    expect(html).toContain("Not checked yet");
-    expect(html).toContain("mannon._domainkey.acme.com");
+    // The "verified" and "records not found" screens are deliberately gone:
+    // nothing in this app writes `senderVerifiedAt`, `senderCheckedAt` or
+    // `senderDnsRecords`, so a screen for either was a screen for something
+    // that could not happen — and the tests reached them by hand-setting the
+    // columns, which is a test that cannot fail. They come back with a
+    // provider.
     expect(html).toContain("mail goes out from mannon@mannonapp.com");
-    capture("06-sender-unchecked", html);
-  });
-
-  it("says what was wrong when the records were checked and missing", () => {
-    const html = render(
-      <SettingsPage
-        view={view({
-          sender: {
-            senderEmail: "orders@acme.com",
-            senderDomain: "acme.com",
-            status: "failed",
-            checkedAt: "2 hours ago",
-            error: "No TXT record found at mannon._domainkey.acme.com.",
-            records: DNS_RECORDS,
-            fallbackFrom: "mannon@mannonapp.com",
-            verifiable: true,
-          },
-        })}
-      />,
-    );
-
-    expect(html).toContain("Records not found");
-    expect(html).toContain("No TXT record found");
-    expect(html).toContain("Last checked 2 hours ago");
-    capture("07-sender-failed", html);
-  });
-
-  it("stops claiming a fallback once the domain is verified", () => {
-    const html = render(
-      <SettingsPage
-        view={view({
-          sender: {
-            senderEmail: "orders@acme.com",
-            senderDomain: "acme.com",
-            status: "verified",
-            checkedAt: "today",
-            error: null,
-            records: DNS_RECORDS,
-            fallbackFrom: "mannon@mannonapp.com",
-            verifiable: true,
-          },
-        })}
-      />,
-    );
-
-    expect(html).toContain("Verified");
-    expect(html).not.toContain("mail goes out from");
-    capture("08-sender-verified", html);
+    expect(html).toContain("cannot check a domain");
+    // A button that checks nothing could only ever report success or crash.
+    // It did the second: enabled whenever MANNON_EMAIL_FROM was set, and a 501.
+    expect(html).not.toContain("Check the records");
+    capture("06-sender-set", html);
   });
 
   it("says mail cannot be sent at all when nothing is configured", () => {
@@ -271,8 +241,6 @@ describe("the settings page", () => {
     // happened to the messages rather than leaving a merchant to guess.
     expect(html).toContain("cannot send mail at all");
     expect(html).toContain("Nothing is queued and nothing is lost");
-    // A Verify that checks nothing could only ever report success.
-    expect(html).toContain("nothing to check against yet");
     capture("09-sender-none", html);
   });
 
@@ -280,7 +248,13 @@ describe("the settings page", () => {
     const html = render(
       <SettingsPage
         view={view({
-          danger: { paused: false, pausedAt: null, ruleCount: 7, confirming: true },
+          danger: {
+            paused: false,
+            pausedAt: null,
+            ruleCount: 7,
+            confirming: true,
+            reachedCheckout: true,
+          },
         })}
       />,
     );
@@ -300,6 +274,7 @@ describe("the settings page", () => {
             pausedAt: "1 September 2026",
             ruleCount: 7,
             confirming: false,
+            reachedCheckout: true,
           },
         })}
       />,
@@ -311,6 +286,48 @@ describe("the settings page", () => {
     expect(html).toContain("No wholesale price is being applied anywhere");
     expect(html).toContain("Resume, and apply 7 rules again");
     capture("11-danger-paused", html);
+  });
+
+  it("does not claim a pause reached checkout when the publish failed", () => {
+    const html = render(
+      <SettingsPage
+        view={view({
+          danger: {
+            paused: true,
+            pausedAt: "1 September 2026",
+            ruleCount: 7,
+            confirming: false,
+            reachedCheckout: false,
+          },
+        })}
+      />,
+    );
+
+    // Half a pause: our own code has stopped, Shopify's metafield has not, so
+    // checkout is still discounting. This is the screen a merchant reads in a
+    // hurry to find out whether it stopped.
+    expect(html).toContain("did not reach Shopify");
+    expect(html).not.toContain("No wholesale price is being applied anywhere");
+    capture("13-danger-not-at-checkout", html);
+  });
+
+  it("shows no example price when there is no rule to price one from", () => {
+    const html = render(
+      <SettingsPage
+        view={view({
+          display: {
+            showCompareAt: true,
+            hidePricesFromGuests: false,
+            taxDisplay: "excl",
+            preview: { price: null, compareAt: null, taxNote: "Excluding tax" },
+          },
+        })}
+      />,
+    );
+
+    expect(html).toContain("no active pricing rule to price one from");
+    expect(html).not.toContain("$");
+    capture("14-display-no-example", html);
   });
 
   it("states the uninstall policy rather than linking to it", () => {

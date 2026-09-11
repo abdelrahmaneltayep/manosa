@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-11T11:45:00Z
+Updated: 2026-09-11T13:15:00Z
 Current milestone: 6 — Analytics
-Current task: 6.4 Settings, part one [done, cold read pending] · 6.5 Settings, part two [next]
+Current task: 6.4 Settings, part one [done] · 6.5 Settings, part two [next]
 
 ## Done
 
@@ -33,11 +33,10 @@ Current task: 6.4 Settings, part one [done, cold read pending] · 6.5 Settings, 
 - [x] 6.2 the Analytics page — seven charts, their states, CSV per chart, the currency/timezone footer — commits `ad7a048` + fix round — QA: `qa/6.2/REPORT.md` (cold read returned FAIL on 20 findings, 3 of them P0 — `qa/6.2/COLD-READ.md`. All fixed; 16 captures from 13 distinct renders.)
 - [x] 6.3 ✦ ask-your-data + ✦ monthly review — commits `7a05849` + this one — QA: `qa/6.3/REPORT.md` (cold read returned FAIL on 22 findings, 2 P0 — the answer's citation rendered a raw i18n key for three of seven charts, and the review re-introduced the refund double-subtraction in a figure kept forever. All fixed, gate re-run clean — `qa/6.3/COLD-READ.md`. 17 captures; `docs/adr/0025`. The gate's own step 3 had separately found `11-review-why.png` byte-identical to `10-review.png`, and chasing that found the same defect in 1.3, 2.3, 3.2, 4.4 and 6.2 — one a real product bug — so a guard now fails any two captures in a set that render the same.)
 
-- [x] 6.4 Settings, part one — sections with a save bar each, wholesale tags, display, discount combinations, tax, orders and quotes, notifications with sender verification, danger zone — commit `cf22fd7` — QA: `qa/6.4/REPORT.md` (found that `pausedAt` had existed since 0.1 and stopped nothing at checkout; `docs/adr/0026`. Six `Shop` columns a merchant could not change are now editable. The capture stand-in had no rule for `details` or `checked`, so field help text and checkbox state were invisible in **every** capture in the repo.)
+- [x] 6.4 Settings, part one — sections with a save bar each, wholesale tags, display, discount combinations, tax, orders and quotes, notifications with sender verification, danger zone — commits `cf22fd7` + fix round — QA: `qa/6.4/REPORT.md` (cold read returned FAIL on 23 findings, 1 P0 — the Notifications section could not be saved at all, because its Verify form was nested inside the section's form. All fixed — `qa/6.4/COLD-READ.md`. Also found `pausedAt` had existed since 0.1 and stopped nothing at checkout; `docs/adr/0026`. Six `Shop` columns a merchant could not change are now editable. The capture stand-in had no rule for `details` or `checked`, so field help text and checkbox state were invisible in **every** capture in the repo.)
 
 ## Next up
 
-- **Run the cold read on 6.4** — it has not had one
 - 6.5 Settings, part two — API keys, translations with the ✦ fill, agent
   controls. Scoped, with what is actually missing found by reading the code:
   - **There is no AI permission toggle anywhere.** Every ✦ surface is gated on
@@ -404,3 +403,22 @@ Neither is blocking; both would change product decisions if answered.
   A backtick in a CSS comment ends the literal; `\A` is a JS escape, so CSS
   needs `\\A`; and `\26A0` is a legacy octal escape that esbuild refuses —
   use the glyph. All three cost a round trip this session.
+
+- **A `<form>` inside a `<form>` is not a form.** The parser drops the inner
+  start tag and its inputs join the outer one, so the Notifications section's
+  Save posted `intent=verify` and returned 501 — unsaveable in a browser while
+  fifteen assertions on the HTML _string_ passed. A string can hold markup no
+  browser will build. `tests/e2e/settings-forms.spec.ts` now parses the real
+  captures in Chromium and asserts what each section posts; add a case to it
+  whenever a page grows a form.
+- **A setting with no reader is a lie with a checkbox.** Five of 6.4's nine
+  columns were write-only while the copy beside each promised specific
+  behaviour. Before shipping a control, grep for a consumer of the column
+  outside the page that writes it. One of the five had no behaviour to gate at
+  all and was deleted — a toggle for a feature the product does not have is
+  worse than no toggle.
+- **Two-step remote operations need the dangerous direction picked
+  deliberately.** Pause writes the flag then publishes; resume publishes then
+  clears, and restores the flag if the publish fails. `pausePublishedAt` exists
+  because a derived signal could not tell "the pause landed" from "this shop
+  has never published".

@@ -35,6 +35,8 @@ export interface PauseResult {
   pausedAt: Date | null;
   /** How many rules checkout is pricing with after this. */
   ruleCount: number;
+  /** False when the flag is set here but the publish has not landed. */
+  reachedCheckout: boolean;
 }
 
 export async function pauseApp({
@@ -47,23 +49,47 @@ export async function pauseApp({
   now?: Date;
 }): Promise<PauseResult> {
   const shop = shopScope.require("pauseApp");
+  const record = await db.shop.findUnique({ where: { shop } });
 
-  await db.shop.update({ where: { shop }, data: { pausedAt: now } });
+  // Already paused: re-pausing must not move "Paused since" to today and must
+  // not write a second entry about a change that did not happen. The publish
+  // still runs, because that is how an incomplete pause is retried.
+  const pausedAt = record?.pausedAt ?? now;
+  if (!record?.pausedAt) {
+    await db.shop.update({
+      where: { shop },
+      data: { pausedAt, pausePublishedAt: null },
+    });
 
-  // After the flag, so `activeEngineRules` already reports nothing and the two
-  // cannot disagree if this throws part-way.
+    // Written before the publish, not after. The publish is the part that can
+    // fail, and an app that is paused with no record of who paused it is
+    // Invariant 5 broken on the most consequential control on the page.
+    await recordAudit({
+      actor,
+      action: "settings.app_paused",
+      summary: "Paused Mannon. Wholesale prices stopped applying; nothing was deleted.",
+      subject: { type: "Shop", id: shop },
+      metadata: { pausedAt: pausedAt.toISOString() },
+    });
+  }
+
+  // Flag first, so everything in our own code has already stopped — a pause
+  // that reached checkout but not the admin would mean quoting wholesale and
+  // charging retail, which is the direction that costs a merchant money.
   const { rules } = await activeEngineRules();
+
+  // A shop with no discount has nothing live at checkout to stop, and
+  // publishing would *create* a discount — switching the app off is not a
+  // reason to create a live object in somebody's Shopify admin.
+  if (!record?.discountId) {
+    // Nothing is live at checkout to stop, so the pause is complete.
+    await db.shop.update({ where: { shop }, data: { pausePublishedAt: now } });
+    return { pausedAt, ruleCount: 0, reachedCheckout: true };
+  }
+
   await publishRuleset(admin, rules);
-
-  await recordAudit({
-    actor,
-    action: "settings.app_paused",
-    summary: "Paused Mannon. Wholesale prices stopped applying; nothing was deleted.",
-    subject: { type: "Shop", id: shop },
-    metadata: { pausedAt: now.toISOString() },
-  });
-
-  return { pausedAt: now, ruleCount: rules.length };
+  await db.shop.update({ where: { shop }, data: { pausePublishedAt: new Date() } });
+  return { pausedAt, ruleCount: rules.length, reachedCheckout: true };
 }
 
 export async function resumeApp({
@@ -74,19 +100,37 @@ export async function resumeApp({
   actor: AuditActor;
 }): Promise<PauseResult> {
   const shop = shopScope.require("resumeApp");
+  const record = await db.shop.findUnique({ where: { shop } });
+  if (!record?.pausedAt) return { pausedAt: null, ruleCount: 0, reachedCheckout: true };
 
-  await db.shop.update({ where: { shop }, data: { pausedAt: null } });
-
-  const { rules } = await activeEngineRules();
-  await publishRuleset(admin, rules);
-
-  await recordAudit({
-    actor,
-    action: "settings.app_resumed",
-    summary: `Resumed Mannon. ${rules.length} rule${rules.length === 1 ? "" : "s"} price at checkout again.`,
-    subject: { type: "Shop", id: shop },
-    metadata: { ruleCount: rules.length },
+  await db.shop.update({
+    where: { shop },
+    data: { pausedAt: null, pausePublishedAt: null },
   });
 
-  return { pausedAt: null, ruleCount: rules.length };
+  try {
+    const { rules } = await activeEngineRules();
+    if (record.discountId) await publishRuleset(admin, rules);
+
+    await recordAudit({
+      actor,
+      action: "settings.app_resumed",
+      summary: `Resumed Mannon. ${rules.length} rule${rules.length === 1 ? "" : "s"} price at checkout again.`,
+      subject: { type: "Shop", id: shop },
+      metadata: { ruleCount: rules.length },
+    });
+
+    return { pausedAt: null, ruleCount: rules.length, reachedCheckout: true };
+  } catch (error) {
+    // Resume is the dangerous direction and it gets a compensating action.
+    // Half a resume means our own code prices wholesale — quotes, the agent,
+    // PO-to-order — while Shopify's metafield is still the empty one, so a
+    // buyer is quoted one price and charged another. Better to stay paused,
+    // which is a state the merchant can see and press again.
+    await db.shop.update({
+      where: { shop },
+      data: { pausedAt: record.pausedAt, pausePublishedAt: record.pausePublishedAt },
+    });
+    throw error;
+  }
 }

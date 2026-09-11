@@ -64,7 +64,11 @@ function readDays(
   bounds: { min: number; max: number },
   issues: SettingsIssue[],
 ): number {
-  const days = Number(value.trim());
+  const text = value.trim();
+  // `Number("0x10")` is 16, so a reminder typed as "0x10" stored 16 days.
+  // Plain digits only: this is a day count a merchant typed into a number
+  // field, not an expression.
+  const days = /^\d+$/.test(text) ? Number(text) : Number.NaN;
   if (!Number.isInteger(days) || days < bounds.min || days > bounds.max) {
     issues.push({ field, code: "range" });
     return bounds.min;
@@ -79,7 +83,8 @@ function readDays(
  * verify about a sender address is whether mail through it is accepted, and it
  * says so rather than implying a green tick means delivery works.
  */
-const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
+const LOOKS_LIKE_EMAIL =
+  /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
 /* -------------------------------------------------------------------------- */
 
@@ -96,7 +101,14 @@ export async function saveSettings(
   const shop = shopScope.require("saveSettings");
   const issues: SettingsIssue[] = [];
   const text = (key: string) => (form.get(key) ?? "").toString();
-  const on = (key: string) => form.get(key) === "on";
+  // Presence, not the string "on". An unchecked box posts nothing at all; a
+  // checked one posts whatever its `value` is, and Polaris documents no
+  // default for `s-checkbox`. Comparing to "on" meant that if the upgraded
+  // component submits anything else, every checkbox in Settings would save as
+  // *off* and render unticked afterwards — which reads as data loss, not as a
+  // bug. `app/routes/app.orders.limits.tsx` already tests presence; this now
+  // matches it, and every checkbox carries an explicit value="on" besides.
+  const on = (key: string) => form.get(key) !== null;
 
   const data = (() => {
     switch (section) {
@@ -126,10 +138,7 @@ export async function saveSettings(
         return { allowShopifyDiscounts: on("allowShopifyDiscounts") };
 
       case "tax":
-        return {
-          requireVatForTaxExempt: on("requireVatForTaxExempt"),
-          taxExemptNeedsApproval: on("taxExemptNeedsApproval"),
-        };
+        return { requireVatForTaxExempt: on("requireVatForTaxExempt") };
 
       case "orders": {
         const expiry = readDays(
@@ -175,6 +184,9 @@ export async function saveSettings(
   const changed = Object.entries(data).filter(
     ([key, value]) => (before as Record<string, unknown> | null)?.[key] !== value,
   );
+  // `senderDomain` is derived from `senderEmail`, so counting it made a
+  // one-field edit read as "Changed 2 notifications settings".
+  const reported = changed.filter(([key]) => key !== "senderDomain");
 
   // Nothing to write is not an error, but it is also not an audit entry — a log
   // full of "changed nothing" entries is a log nobody reads.
@@ -194,7 +206,7 @@ export async function saveSettings(
   await recordAudit({
     actor,
     action: `settings.${section}_updated`,
-    summary: summaryFor(section, changed.length),
+    summary: summaryFor(section, Math.max(1, reported.length)),
     subject: { type: "Shop", id: shop },
     metadata: { section, changed: changed.map(([key]) => key), at: now.toISOString() },
   });

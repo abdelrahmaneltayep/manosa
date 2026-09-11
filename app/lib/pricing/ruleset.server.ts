@@ -117,13 +117,43 @@ export async function resolveFunctionId(admin: AdminGraphql): Promise<string> {
  * One discount per shop, created once and remembered. It carries the ruleset as
  * a metafield, so the configuration travels with the discount it drives.
  */
+/**
+ * What a wholesale price may stack with at checkout.
+ *
+ * `productDiscounts` is the merchant's Settings choice: a product discount is
+ * the one that lands on the same line as the wholesale price, so stacking is
+ * how a trade price becomes a giveaway.
+ *
+ * This used to be three hardcoded booleans inside `ensureDiscount`, which
+ * returns early once a discount exists — so the store-wide gate the Settings
+ * page calls "the store-wide gate", complete with a warning banner and a
+ * count of affected rules, changed nothing at checkout, ever.
+ */
+export const combinesWith = (allowShopifyDiscounts: boolean) => ({
+  orderDiscounts: true,
+  productDiscounts: allowShopifyDiscounts,
+  shippingDiscounts: true,
+});
+
+const UPDATE_DISCOUNT = `#graphql
+  mutation MannonUpdateDiscount($id: ID!, $discount: DiscountAutomaticAppInput!) {
+    discountAutomaticAppUpdate(id: $id, automaticAppDiscount: $discount) {
+      automaticAppDiscount { discountId }
+      userErrors { field message }
+    }
+  }`;
+
 export async function ensureDiscount(
   admin: AdminGraphql,
   rules: PricingRule[],
 ): Promise<string> {
   const shop = shopScope.require("ensureDiscount");
   const existing = await db.shop.findUnique({ where: { shop } });
-  if (existing?.discountId) return existing.discountId;
+
+  if (existing?.discountId) {
+    await syncCombinations(admin, existing.discountId, existing.allowShopifyDiscounts);
+    return existing.discountId;
+  }
 
   const functionId = await resolveFunctionId(admin);
   const { json } = rulesetPayload(rules);
@@ -138,11 +168,7 @@ export async function ensureDiscount(
         title: "Mannon wholesale pricing",
         // No end date: wholesale pricing is not a promotion.
         startsAt: new Date().toISOString(),
-        combinesWith: {
-          orderDiscounts: true,
-          productDiscounts: false,
-          shippingDiscounts: true,
-        },
+        combinesWith: combinesWith(existing?.allowShopifyDiscounts ?? false),
         metafields: [
           {
             namespace: MANNON_NAMESPACE,
@@ -171,7 +197,13 @@ export async function ensureDiscount(
 
   await db.shop.update({
     where: { shop },
-    data: { discountId, discountFunctionId: functionId },
+    // The combinations are set on the create, so record them as pushed — a
+    // fresh discount does not need an update call to say what it already says.
+    data: {
+      discountId,
+      discountFunctionId: functionId,
+      combinationsHash: existing?.allowShopifyDiscounts ? "allow" : "deny",
+    },
   });
 
   await recordAudit({
@@ -258,4 +290,36 @@ export async function publishRuleset(
   });
 
   return { status: "published", ruleCount: rules.length, bytes };
+}
+
+/**
+ * Push the combination choice to the live discount.
+ *
+ * Hashed against `combinationsHash` so a rule save does not spend an API call
+ * re-stating a setting that has not moved.
+ */
+async function syncCombinations(
+  admin: AdminGraphql,
+  discountId: string,
+  allowShopifyDiscounts: boolean,
+): Promise<void> {
+  const shop = shopScope.require("syncCombinations");
+  const want = allowShopifyDiscounts ? "allow" : "deny";
+  const record = await db.shop.findUnique({ where: { shop } });
+  if (record?.combinationsHash === want) return;
+
+  await runMutation<void>(
+    admin,
+    "discountAutomaticAppUpdate(combinesWith)",
+    UPDATE_DISCOUNT,
+    { id: discountId, discount: { combinesWith: combinesWith(allowShopifyDiscounts) } },
+    (data) => {
+      const payload = data.discountAutomaticAppUpdate as {
+        userErrors: { message: string }[];
+      };
+      return { result: undefined, userErrors: payload.userErrors };
+    },
+  );
+
+  await db.shop.update({ where: { shop }, data: { combinationsHash: want } });
 }

@@ -55,6 +55,8 @@ export interface ListRulesOptions {
   pageSize?: number;
   sort?: "priority" | "name" | "updatedAt" | "usage";
   direction?: "asc" | "desc";
+  /** Only active rules set to combine — what Settings links to. */
+  combinable?: boolean;
 }
 
 export interface RuleListPage {
@@ -96,6 +98,11 @@ export async function listRules(options: ListRulesOptions = {}): Promise<RuleLis
     ...(options.search
       ? { name: { contains: options.search, mode: "insensitive" as const } }
       : {}),
+    // Settings' discount-combination card says "this affects 3 active rules"
+    // and links here. The link carried `?combinable=1` and this loader ignored
+    // it, so a merchant told a number landed on the whole list — including
+    // drafts and archived rules — and could not check it.
+    ...(options.combinable ? { combinable: true, status: "ACTIVE" as const } : {}),
   };
 
   const [rows, total, totalUnfiltered] = await Promise.all([

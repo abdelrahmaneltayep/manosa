@@ -3,9 +3,19 @@
 Hat: senior QA engineer who did not write this code and does not trust it.
 Date: 2026-09-11 · Branch: `claude/mannon-b2b-wholesale-oc5b18`
 
-> **Status: gate clean. The independent cold read has not run yet.**
+> **Status: clean pass, after a FAIL and a full fix round.** The independent
+> cold read returned **FAIL** on 23 findings — 1 P0, 5 P1, 9 P2, 8 P3. All are
+> fixed; `qa/6.4/COLD-READ.md` has the evidence and §9 below summarises.
+> This is the second run.
 >
-> The headline find is not in the new code: **`pausedAt` had existed since 0.1
+> The P0 is the one worth remembering: **the Notifications section could not be
+> saved at all.** Its Verify form was nested inside the section's form, which
+> is not legal HTML, so every submit in that card carried `intent=verify` and
+> pressing Save returned an unhandled 501. Fifteen assertions on the HTML
+> string passed throughout, because a string can hold a `<form>` no browser
+> will ever build.
+>
+> The other headline find is not in the new code: **`pausedAt` had existed since 0.1
 > and stopped nothing that mattered.** It was read in exactly one place, so
 > "pause the app" stopped the storefront blocks and left the discount Function
 > pricing every checkout. See §7 and `docs/adr/0026`.
@@ -68,8 +78,8 @@ New:
 - `tests/integration/settings.test.ts` — 14 (saving, pausing, the view, both
   tenants)
 
-**Whole suite: 2,069 unit + integration across 111 files, green.**
-**Playwright: 399 passed.** `npm run lint`, `npx tsc --noEmit`, `npm run
+**Whole suite: 2,075 unit + integration across 111 files, green.**
+**Playwright: 402 passed.** `npm run lint`, `npx tsc --noEmit`, `npm run
 build`, `npm run format:check` clean.
 
 ### Abuse cases, results
@@ -196,3 +206,79 @@ for themselves why nothing sends. The reason now renders in that branch too.
 - The embedded admin. No Polaris, no App Bridge, no iframe here.
 - A real dev store, and Built for Shopify budgets at p75.
 - The independent cold read, which has not run yet.
+
+## 9. The cold read, and the round that followed
+
+**Verdict: FAIL** — 1 P0, 5 P1, 9 P2, 8 P3, every one reproducible from the
+tree. All fixed. The cold read also re-derived six of this report's own claims
+and found them true, including "the three pause tests were watched fail".
+
+### P0 — the Notifications section could never be saved
+
+A `<form>` inside a `<form>` is dropped by the parser and its inputs join the
+outer one, so the section's Save posted `intent=verify` and got a 501. Proven
+in Chromium against the capture this repo shipped: **six forms, not seven.**
+
+Fixed by giving `Section` an `after` slot that renders inside the card but
+outside the form. And the class of defect is now guarded:
+`tests/e2e/settings-forms.spec.ts` parses the real captures in a browser and
+asserts what each section would post. **Watched fail** against the original
+nested form before the fix went in.
+
+### The five P1s
+
+- **Five new settings were write-only** while the copy promised storefront and
+  checkout behaviour. `allowShopifyDiscounts` now sets the discount's
+  `combinesWith` and is kept in step after creation (it was three hardcoded
+  booleans inside a create-once path); `showCompareAt` gates `wasPrice` in both
+  storefront blocks; `hidePricesFromGuests` is enforced at the App Proxy, not
+  in the theme; `taxDisplay` is sent to both blocks. **`taxExemptNeedsApproval`
+  was removed** — nothing in this app exempts anybody automatically, so the
+  toggle described a feature the product does not have, and a control for
+  imaginary behaviour is worse than no control.
+- **Pause and resume were atomic in one direction only.** A failed publish
+  during pause left the banner claiming "no wholesale price is being applied
+  anywhere" while checkout kept discounting, and wrote no audit row. A failed
+  resume was worse: quotes and the agent priced wholesale while the metafield
+  was still empty — quoted one price, charged another. Now: the audit row is
+  written before the publish; `pausePublishedAt` records whether the empty
+  ruleset actually landed, and the banner says "did not reach Shopify" when it
+  did not; resume restores `pausedAt` if its publish fails, because staying
+  paused is the safe direction.
+- **The display preview invented a price** — a hardcoded 30% discount labelled
+  "A buyer will read:", still shown on a *paused* shop. It now runs the shop's
+  own highest-priority rule through `previewFor`, names that rule, and is blank
+  when there is nothing to price from.
+- **Two sender states were unreachable** and the tests reached them by
+  hand-setting columns no writer sets — the exact anti-pattern `PROGRESS.md`
+  warns about. The `verified` and `failed` screens, the DNS table and the
+  Verify button are all removed until a provider exists; the page says plainly
+  that a domain cannot be checked yet.
+
+### The P2s and P3s
+
+The Verify button was enabled whenever `MANNON_EMAIL_FROM` was set — true of
+every real deployment — and always 501'd (gone with the button). The reminder
+note was false: `quoteReminderDays` was read live for sent quotes, so raising
+it would have fired a burst of "expiring" mail at buyers; the window is now
+copied onto the quote at send, like the expiry date. The buyer count was
+case-sensitive while the rest of the app lowercases, so a shop tagged
+`Wholesale` was told **0** buyers would be affected by a rename. `?combinable=1`
+is now honoured by the Pricing loader. Checkboxes are read by presence rather
+than the string `"on"`, and carry an explicit `value="on"`. A failed save
+echoes what was typed instead of redrawing the stored value. The paused banner
+now renders on **every** admin page, not only this one. Pausing no longer
+creates a discount for a shop that has none. `readDays` takes plain digits
+only (`0x10` stored 16 days). `?saved=` must name a real section. The audit no
+longer counts a derived field. A pause requires its confirmation **server-side**
+— a plain POST used to pause with nothing asked, and the unit test claimed a
+protection the route did not provide. A second pause no longer moves "Paused
+since". The Limits page's link into a Settings page with no editor is now a
+sentence instead of a dead end.
+
+### The four tests the cold read prescribed
+
+All four exist and all four were watched fail against the bug they guard: the
+browser-level form parse (P0), pause and resume with a throwing admin, a
+tag count with the case flipped, and a checkbox round-trip across four
+plausible submitted values.

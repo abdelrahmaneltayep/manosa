@@ -157,6 +157,14 @@ export async function withProxy<T>(
     // The blocks go quiet rather than pricing from a stale idea of them.
     if (record.pausedAt) throw new Response("App paused", { status: 503 });
 
+    // Settings: "A visitor who is not signed in sees no price and no
+    // add-to-cart, rather than a retail price they would never pay." Enforced
+    // here rather than in the theme, because a block that hides a price it was
+    // already sent is a block whose HTML still carries it.
+    if (record.hidePricesFromGuests && !context.customerId) {
+      throw new Response("Sign in to see prices", { status: 403 });
+    }
+
     // A proxy request can only come from a theme that is rendering our blocks,
     // so this is the one honest signal that the app embed is live — no
     // `themes` scope, no guess. Stamped at most hourly: the home page wants to

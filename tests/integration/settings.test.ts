@@ -53,6 +53,13 @@ const fakeAdmin = () => {
   };
 };
 
+/** An admin whose every call fails, for the paths that matter when it does. */
+const brokenAdmin = () => ({
+  graphql: vi.fn(async () => {
+    throw new Error("Shopify is down");
+  }),
+});
+
 async function installShop(shop: string) {
   await shopScope.run(shop, async () => {
     await db.shop.create({
@@ -284,6 +291,92 @@ describe("pausing", () => {
     });
   });
 
+  it("does not claim a pause reached checkout when the publish failed", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await rule("Wholesale 20%");
+      // The publish is the part that can fail, and it is the only part that
+      // reaches Shopify. Before this, the page went on saying "No wholesale
+      // price is being applied anywhere" while checkout kept discounting.
+      await expect(pauseApp({ admin: brokenAdmin(), actor: ACTOR })).rejects.toThrow();
+
+      const view = await settingsView({ locale: "en", t });
+      expect(view.danger.paused).toBe(true);
+      expect(view.danger.reachedCheckout).toBe(false);
+
+      // And the audit row exists, because it is written before the publish —
+      // an app paused with no record of who paused it is Invariant 5 broken
+      // on the most consequential control on the page.
+      expect(await db.auditLog.count({ where: { action: "settings.app_paused" } })).toBe(
+        1,
+      );
+    });
+  });
+
+  it("stays paused when a resume cannot reach checkout", async () => {
+    await installShop(ALPHA);
+    const { admin } = fakeAdmin();
+
+    await inAlpha(async () => {
+      await rule("Wholesale 20%");
+      await pauseApp({ admin, actor: ACTOR });
+
+      // Half a resume is the dangerous direction: our code would price
+      // wholesale in quotes and for the agents while Shopify's metafield is
+      // still the empty one — a buyer quoted one price and charged another.
+      await expect(resumeApp({ admin: brokenAdmin(), actor: ACTOR })).rejects.toThrow();
+
+      const shop = await db.shop.findUniqueOrThrow({ where: { shop: ALPHA } });
+      expect(shop.pausedAt).not.toBeNull();
+      expect((await activeEngineRules()).rules).toHaveLength(0);
+    });
+  });
+
+  it("does not move the paused date, or log twice, on a second pause", async () => {
+    await installShop(ALPHA);
+    const { admin } = fakeAdmin();
+
+    await inAlpha(async () => {
+      await rule("Wholesale 20%");
+      const first = await pauseApp({
+        admin,
+        actor: ACTOR,
+        now: new Date("2026-09-01T10:00:00Z"),
+      });
+      const second = await pauseApp({
+        admin,
+        actor: ACTOR,
+        now: new Date("2026-09-20T10:00:00Z"),
+      });
+
+      expect(second.pausedAt?.toISOString()).toBe(first.pausedAt?.toISOString());
+      expect(await db.auditLog.count({ where: { action: "settings.app_paused" } })).toBe(
+        1,
+      );
+    });
+  });
+
+  it("does not create a discount for a shop that has none", async () => {
+    await shopScope.run(ALPHA, async () => {
+      await db.shop.create({ data: { ...tenant(), planKey: "growth" } });
+    });
+    const { admin, calls } = fakeAdmin();
+
+    await inAlpha(async () => {
+      await rule("Wholesale 20%");
+      await pauseApp({ admin, actor: ACTOR });
+
+      // Switching the app off is not a reason to create a live automatic
+      // discount in somebody's Shopify admin — and on a shop with no deployed
+      // Function it also meant the merchant could not pause at all.
+      expect(calls).toHaveLength(0);
+      expect(
+        (await db.shop.findUniqueOrThrow({ where: { shop: ALPHA } })).discountId,
+      ).toBeNull();
+    });
+  });
+
   it("pauses one shop and leaves the other pricing", async () => {
     await installShop(ALPHA);
     await installShop(BETA);
@@ -341,33 +434,72 @@ describe("the view", () => {
     });
   });
 
-  it("says the sender was never checked rather than that it failed", async () => {
+  it("counts buyers whose tag differs only in case", async () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
-      const none = await settingsView({ locale: "en", t });
-      expect(none.sender.status).toBe("none");
-
       await db.shop.update({
         where: { shop: ALPHA },
-        data: { senderEmail: "orders@shop.com", senderDomain: "shop.com" },
+        data: { wholesaleTag: "Wholesale" },
       });
-      const unchecked = await settingsView({ locale: "en", t });
-      // Not "unverified": this app has not looked, which is a different claim
-      // from having looked and found the records missing.
-      expect(unchecked.sender.status).toBe("unchecked");
+      await db.customer.create({
+        data: { ...tenant(), customerId: "gid://c/1", tags: ["wholesale"] },
+      });
 
-      await db.shop.update({
-        where: { shop: ALPHA },
-        data: { senderCheckedAt: new Date(), senderCheckError: "No TXT record found." },
-      });
-      expect((await settingsView({ locale: "en", t })).sender.status).toBe("failed");
+      // Every other tag comparison in this app lowercases — the tagging rules,
+      // the order sync, the pricing engine's eligibility. Matching exactly
+      // meant the field whose only job is to warn read **0** for a shop whose
+      // buyers the engine prices as wholesale, and a merchant renamed the tag
+      // believing nobody was affected.
+      const view = await settingsView({ locale: "en", t });
+      expect(view.wholesale.taggedBuyers).toBe(1);
+    });
+  });
 
-      await db.shop.update({
-        where: { shop: ALPHA },
-        data: { senderVerifiedAt: new Date() },
-      });
-      expect((await settingsView({ locale: "en", t })).sender.status).toBe("verified");
+  it("keeps a checkbox on when the form posts it back unchanged", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await db.shop.update({ where: { shop: ALPHA }, data: { showCompareAt: true } });
+
+      // What a browser posts for a ticked `s-checkbox value="on"`. The reader
+      // tests presence rather than the literal "on", so a component that
+      // submits something else cannot silently save every box as off — which
+      // would read as data loss, not as a bug.
+      for (const posted of ["on", "true", "", "1"]) {
+        await db.shop.update({ where: { shop: ALPHA }, data: { showCompareAt: false } });
+        await saveSettings(
+          "display",
+          body({ showCompareAt: posted, taxDisplay: "excl" }),
+          { actor: ACTOR },
+        );
+        const shop = await db.shop.findUniqueOrThrow({ where: { shop: ALPHA } });
+        expect(shop.showCompareAt, `posted ${JSON.stringify(posted)}`).toBe(true);
+      }
+
+      // And an absent field is genuinely off.
+      await saveSettings("display", body({ taxDisplay: "excl" }), { actor: ACTOR });
+      expect(
+        (await db.shop.findUniqueOrThrow({ where: { shop: ALPHA } })).showCompareAt,
+      ).toBe(false);
+    });
+  });
+
+  it("refuses a day count that is not plainly a number of days", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      // `Number("0x10")` is 16, so this used to store sixteen days.
+      for (const value of ["0x10", "+9", "7.5", "1e3", " ", "-3"]) {
+        await expect(
+          saveSettings(
+            "orders",
+            body({ quoteExpiryDays: "30", quoteReminderDays: value }),
+            { actor: ACTOR },
+          ),
+          value,
+        ).rejects.toBeInstanceOf(SettingsInvalid);
+      }
     });
   });
 

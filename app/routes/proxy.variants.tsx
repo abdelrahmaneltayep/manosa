@@ -108,9 +108,12 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         variantId: entry.variantId,
         unitPrice: formatCurrency(priced.unitPrice, locale),
         // Only when it differs — a "was" price equal to the "now" price is
-        // a strikethrough that says nothing.
+        // a strikethrough that says nothing — and only when the merchant
+        // wants it shown at all. Settings offers "Off if your trade buyers
+        // should never see the retail price", and this block used to send it
+        // regardless, so that setting promised something it never did.
         wasPrice:
-          priced.unitPrice.amount === listPrice.amount
+          !record?.showCompareAt || priced.unitPrice.amount === listPrice.amount
             ? null
             : formatCurrency(listPrice, locale),
         // Which rule did it. A price a buyer cannot account for is one they
@@ -120,7 +123,15 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     });
 
     return json(
-      { ok: true as const, variants, quantity },
+      {
+        ok: true as const,
+        variants,
+        quantity,
+        // Settings → "Show prices as". Display only: Shopify still decides
+        // what is charged. Sent here because a setting about what a buyer
+        // reads has to reach the thing the buyer reads.
+        taxDisplay: record?.taxDisplay === "incl" ? ("incl" as const) : ("excl" as const),
+      },
       {
         // A buyer's own prices, so never a shared cache. Briefly private-cached
         // so paging through variants does not re-ask on every keystroke.

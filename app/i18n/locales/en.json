@@ -1349,7 +1349,7 @@
     "previewHeading": "What a buyer sees",
     "previewBody": "Written by the same code that runs at checkout, so this is the wording and the number your buyer gets.",
     "previewCart": "A cart of {{amount}}",
-    "previewEdit": "Change this wording in Settings",
+    "previewEdit": "This wording is not editable yet — the storefront strings editor is coming in Settings.",
     "lockedHeading": "Order limits are on a paid plan",
     "lockedBody": "Limits you've already set keep working — nothing is deleted. Upgrade to {{plan}} to change them.",
     "lockedAction": "See plans",
@@ -2600,11 +2600,12 @@
       "taxHelp": "Display only. Shopify still decides what is charged at checkout.",
       "taxExcl": "Excluding tax",
       "taxIncl": "Including tax",
-      "previewLabel": "A buyer will read:",
+      "previewLabel": "Example — a buyer matching “{{rule}}” reads:",
       "taxNote": {
         "excl": "Excluding tax",
         "incl": "Including tax"
-      }
+      },
+      "previewNone": "No example yet: this shop has no active pricing rule to price one from."
     },
     "discounts": {
       "heading": "Discount combinations",
@@ -2623,9 +2624,7 @@
       "requireVatLabel": "Require a VAT id before a buyer can be tax-exempt",
       "requireVatHelp": "Turning this on does not change anyone who is already exempt.",
       "exemptWithoutVat_one": "{{count}} buyer is tax-exempt with no VAT id on file. They stay exempt.",
-      "exemptWithoutVat_other": "{{count}} buyers are tax-exempt with no VAT id on file. They stay exempt.",
-      "needsApprovalLabel": "A person has to approve tax exemption",
-      "needsApprovalHelp": "Off means an application that meets your criteria is exempted without anyone looking."
+      "exemptWithoutVat_other": "{{count}} buyers are tax-exempt with no VAT id on file. They stay exempt."
     },
     "orders": {
       "heading": "Orders and quotes",
@@ -2647,18 +2646,7 @@
       "noneWithFallback": "No sender is set, so mail goes out from {{from}}.",
       "noneAtAll": "No sender is configured, so Mannon cannot send mail at all. Nothing is queued and nothing is lost — the messages are recorded and can be sent once a sender exists.",
       "fallback": "Until this domain is verified, mail goes out from {{from}}.",
-      "status": {
-        "unchecked": "Not checked yet",
-        "failed": "Records not found",
-        "verified": "Verified"
-      },
-      "checkedAt": "Last checked {{when}}.",
-      "recordsHeading": "Add these DNS records",
-      "colKind": "Type",
-      "colHost": "Host",
-      "colValue": "Value",
-      "verify": "Check the records",
-      "cannotVerify": "No mail provider is connected, so there is nothing to check against yet."
+      "cannotVerify": "Mannon cannot check a domain's DNS records yet — no mail provider is connected. Mail keeps going out from the address above until one is."
     },
     "danger": {
       "heading": "Danger zone",
@@ -2677,7 +2665,10 @@
       "pausedSince": "Paused {{when}}.",
       "resume_one": "Resume, and apply {{count}} rule again",
       "resume_other": "Resume, and apply {{count}} rules again",
-      "uninstallPolicy": "If you uninstall Mannon, everything it stored about your shop is deleted within 48 hours, and your Shopify data is never touched."
+      "uninstallPolicy": "If you uninstall Mannon, everything it stored about your shop is deleted within 48 hours, and your Shopify data is never touched.",
+      "pausedNotAtCheckout": "Mannon is paused here, but the change did not reach Shopify — checkout is still applying wholesale prices. Press Pause again to retry.",
+      "pausedEverywhere": "No wholesale price is being applied — at checkout, on your storefront blocks, in quotes or for the agents. Nothing has been deleted.",
+      "pausedSettingsLink": "Resume in Settings"
     },
     "issue": {
       "wholesaleTag": {

@@ -31,6 +31,9 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       search: url.searchParams.get("search") ?? undefined,
       page: Number(url.searchParams.get("page") ?? 1) || 1,
       sort: (url.searchParams.get("sort") as "priority" | "name" | "usage") ?? "priority",
+      // Settings links here with the count it showed. Ignoring this meant the
+      // merchant was told "3 rules" and shown seven.
+      combinable: url.searchParams.get("combinable") === "1",
     });
 
     const shop = await db.shop.findUnique({

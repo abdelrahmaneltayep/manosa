@@ -18,6 +18,10 @@ import { withAdmin } from "~/shopify.server";
  * failure belongs to that section and leaves the rest of the page alone.
  */
 
+/** A section name this app itself redirected with, or nothing. */
+const savedSection = (value: string | null): string | null =>
+  value !== null && isSection(value) ? value : null;
+
 export const loader = ({ request }: LoaderFunctionArgs) =>
   withAdmin(request, async () => {
     const url = new URL(request.url);
@@ -28,7 +32,10 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       view: await settingsView({
         locale,
         t,
-        saved: url.searchParams.get("saved"),
+        // Only a section this app just redirected to. Passing the query
+        // parameter through meant any link with `?saved=tax` rendered "Saved."
+        // under a card where nothing had been.
+        saved: savedSection(url.searchParams.get("saved")),
         confirming: url.searchParams.get("confirm") === "pause",
       }),
     });
@@ -44,8 +51,16 @@ export const action = ({ request }: ActionFunctionArgs) =>
     const actor = { type: "STAFF" as const, id: session.id };
 
     if (section === "danger") {
-      if (intent === "pause") await pauseApp({ admin, actor });
-      else if (intent === "resume") await resumeApp({ admin, actor });
+      if (intent === "pause") {
+        // The confirm is not a courtesy. Without this, a plain POST of
+        // `section=danger&intent=pause` paused a shop with nothing asked —
+        // and `tests/unit/settings.test.ts` claimed a protection the route
+        // did not provide.
+        if (form.get("confirm") !== "pause") {
+          return redirect("/app/settings?confirm=pause");
+        }
+        await pauseApp({ admin, actor });
+      } else if (intent === "resume") await resumeApp({ admin, actor });
       else throw new Response("Unknown intent", { status: 400 });
 
       // Redirected, so a refresh cannot pause twice and the confirm state in
@@ -73,6 +88,9 @@ export const action = ({ request }: ActionFunctionArgs) =>
               t,
               failedSection: section,
               issues: error.issues,
+              // What they typed, back in the fields, so the bad value is the
+              // one they can see and fix.
+              echo: form,
             }),
           },
           { status: 422 },
