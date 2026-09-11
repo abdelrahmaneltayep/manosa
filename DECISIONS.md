@@ -8,6 +8,30 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-11 — No API keys page until there is an API
+
+§8 asks for "public API keys, webhooks, ERP sync, POS toggle". A read of the
+routes says there is no public API to key: the 53 routes are the embedded
+admin, the App Proxy, two public-by-design pages (the registration form and
+the quote accept link), Shopify's inbound webhook endpoint, a bearer-token
+internal job runner, and a health check.
+
+So a keys page would hand a merchant a credential that authenticates nothing —
+they could create it, copy it, paste it into their ERP, and get 404 on every
+call. That is the third time this shape has come up: `taxExemptNeedsApproval`
+in 6.4 (shipped, caught by the cold read, removed) and the auto-approve toggle
+in 6.5 (not shipped, for this reason). It is the worst of the three, because a
+credential implies a contract.
+
+Deferred, with the dependency named: a read API is its own task — auth,
+scopes, rate limits, versioning, pagination, and a documented shape — and the
+keys page comes after it. Recorded here and in `PROGRESS.md` so it is deferred
+rather than forgotten.
+
+Rejected: shipping the page against the App Proxy's existing signature scheme.
+That is Shopify's signature over Shopify's request, not a credential a
+merchant's own systems can present.
+
 ## 2026-09-11 — Two agent permissions, not the checklist's three
 
 §8 asks for screen / draft / **auto-approve**. The first two gate behaviour

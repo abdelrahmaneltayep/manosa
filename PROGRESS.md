@@ -40,10 +40,27 @@ Current task: 6.5 ✦ Agent controls [done, cold read pending] · 6.6 API keys +
 ## Next up
 
 - **Run the cold read on 6.5** — it has not had one
-- 6.6 API keys (create/revoke, last-used, scoped, secret shown once) and
-  translations (storefront strings per language, ✦ fill for the missing ones,
-  a human-review flag, export/import). Brand-voice samples are stored but not
-  yet read by any prompt — wiring them into the drafting prompts is 6.6 too.
+- 6.6 Translations — the storefront strings a merchant cannot currently
+  change, per language, with the ✦ fill for missing ones, a `needsReview`
+  flag per string, and export/import. Brand-voice samples are stored but read
+  by no prompt yet; wiring them into the drafting prompts is 6.6 too.
+  - Scope it to what a buyer actually reads and the merchant cannot touch:
+    `limit` (8 strings), `approval` (31), and the buyer-facing part of `forms`
+    (198) and `quotes` (100). **Not** the theme blocks' own headings — those
+    are `block.settings` in the liquid, already editable in the theme editor,
+    and taking them over would be wrong.
+  - `LimitsPage` currently says "this wording is not editable yet", which 6.4
+    put there. That is a promise to keep.
+- **API keys are NOT in 6.6, and the reason matters.** §8 lists "public API
+  keys, webhooks, ERP sync". **There is no public API.** All 53 routes are the
+  admin, the App Proxy, two public-by-design pages (`f.$publicId`,
+  `q.$publicId`), Shopify's inbound `webhooks.$`, a bearer-token
+  `internal.jobs.run`, and `healthz`. A keys page would issue credentials that
+  authenticate nothing — a merchant could create a key, paste it into an ERP,
+  and get 404 on every call. That is the `taxExemptNeedsApproval` mistake
+  (6.4, caught by the cold read) and the auto-approve toggle (6.5, avoided) a
+  third time. A read API is its own task: auth, scopes, rate limits,
+  versioning, pagination. Then the keys page.
 - 6.7 polish (including orders-over-time, below) — see `DECISIONS.md` for the splits
 - **Orders-over-time** — `pages-features.md` §7 asks for it and the checklist
   does not; deferred to 6.7 with a written decision, not forgotten
