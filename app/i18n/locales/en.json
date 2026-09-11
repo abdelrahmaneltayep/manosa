@@ -2574,5 +2574,135 @@
       "open_agent": "Open the Buyer Agent",
       "open_forms": "Open your registration forms"
     }
+  },
+  "settings": {
+    "heading": "Settings",
+    "save": "Save",
+    "saved": "Saved.",
+    "saveFailed": "Nothing was saved. Fix what is marked above and try again.",
+    "wholesale": {
+      "heading": "Wholesale",
+      "body": "The tags Mannon uses to recognise a trade buyer and a trade order.",
+      "tagLabel": "Wholesale customer tag",
+      "tagHelp_one": "Renaming this does not re-tag anyone. {{count}} buyer carries the current tag and would stop being recognised.",
+      "tagHelp_other": "Renaming this does not re-tag anyone. {{count}} buyers carry the current tag and would stop being recognised.",
+      "orderTagLabel": "Wholesale order tag",
+      "orderTagHelp": "Put on every order a trade buyer places, so you can find them in Shopify's own admin too."
+    },
+    "display": {
+      "heading": "Storefront display",
+      "body": "What a trade buyer reads on a product page.",
+      "compareAtLabel": "Show the retail price struck through",
+      "compareAtHelp": "Off if your trade buyers should never see the retail price.",
+      "hideGuestsLabel": "Hide prices from signed-out visitors",
+      "hideGuestsHelp": "A visitor who is not signed in sees no price and no add-to-cart, rather than a retail price they would never pay.",
+      "taxLabel": "Show prices as",
+      "taxHelp": "Display only. Shopify still decides what is charged at checkout.",
+      "taxExcl": "Excluding tax",
+      "taxIncl": "Including tax",
+      "previewLabel": "A buyer will read:",
+      "taxNote": {
+        "excl": "Excluding tax",
+        "incl": "Including tax"
+      }
+    },
+    "discounts": {
+      "heading": "Discount combinations",
+      "body": "Whether a wholesale price may stack with a Shopify discount code.",
+      "warning": "Stacking is how a trade price becomes a giveaway. With this on, a buyer who already has your wholesale price can apply a code on top of it.",
+      "affects_one": "This affects {{count}} active rule that is set to combine.",
+      "affects_other": "This affects {{count}} active rules that are set to combine.",
+      "affectsNone": "No active rule is set to combine, so nothing changes today.",
+      "seeRules": "See which rules",
+      "allowLabel": "Allow Shopify discount codes on wholesale prices",
+      "allowHelp": "Each rule still decides for itself. This is the store-wide gate."
+    },
+    "tax": {
+      "heading": "Tax",
+      "body": "What it takes for a buyer to be treated as tax-exempt.",
+      "requireVatLabel": "Require a VAT id before a buyer can be tax-exempt",
+      "requireVatHelp": "Turning this on does not change anyone who is already exempt.",
+      "exemptWithoutVat_one": "{{count}} buyer is tax-exempt with no VAT id on file. They stay exempt.",
+      "exemptWithoutVat_other": "{{count}} buyers are tax-exempt with no VAT id on file. They stay exempt.",
+      "needsApprovalLabel": "A person has to approve tax exemption",
+      "needsApprovalHelp": "Off means an application that meets your criteria is exempted without anyone looking."
+    },
+    "orders": {
+      "heading": "Orders and quotes",
+      "body": "How long a quote stands, and whether in-person orders follow online limits.",
+      "posLabel": "Orders placed in person ignore order limits",
+      "posHelp": "A minimum written for a website is not usually a rule about a till.",
+      "expiryLabel": "A quote stands for (days)",
+      "expiryHelp": "Copied onto each quote when it is sent.",
+      "reminderLabel": "Warn the buyer this many days before it expires",
+      "reminderHelp": "Sent once per quote. Has to be fewer days than the quote stands for.",
+      "outstanding_one": "{{count}} quote is already out. Its dates were fixed when it was sent and this does not move them.",
+      "outstanding_other": "{{count}} quotes are already out. Their dates were fixed when they were sent and this does not move them."
+    },
+    "notifications": {
+      "heading": "Notifications",
+      "body": "The address Mannon sends registration and order mail from.",
+      "senderLabel": "Send from",
+      "senderHelp": "Use an address on a domain you control. Changing it means verifying that domain again.",
+      "noneWithFallback": "No sender is set, so mail goes out from {{from}}.",
+      "noneAtAll": "No sender is configured, so Mannon cannot send mail at all. Nothing is queued and nothing is lost — the messages are recorded and can be sent once a sender exists.",
+      "fallback": "Until this domain is verified, mail goes out from {{from}}.",
+      "status": {
+        "unchecked": "Not checked yet",
+        "failed": "Records not found",
+        "verified": "Verified"
+      },
+      "checkedAt": "Last checked {{when}}.",
+      "recordsHeading": "Add these DNS records",
+      "colKind": "Type",
+      "colHost": "Host",
+      "colValue": "Value",
+      "verify": "Check the records",
+      "cannotVerify": "No mail provider is connected, so there is nothing to check against yet."
+    },
+    "danger": {
+      "heading": "Danger zone",
+      "body": "Switching Mannon off without losing anything.",
+      "pause": "Pause Mannon",
+      "willStop_one": "Pausing stops {{count}} pricing rule from applying, anywhere.",
+      "willStop_other": "Pausing stops {{count}} pricing rules from applying, anywhere.",
+      "confirmHeading": "Pause Mannon?",
+      "confirmBody_one": "{{count}} pricing rule stops applying — at checkout, on the storefront blocks, in quotes and for the agents. Trade buyers pay your retail prices until you resume.",
+      "confirmBody_other": "{{count}} pricing rules stop applying — at checkout, on the storefront blocks, in quotes and for the agents. Trade buyers pay your retail prices until you resume.",
+      "nothingDeleted": "Nothing is deleted. Your rules, groups, buyers, quotes and orders all stay exactly as they are, and resuming puts them straight back.",
+      "confirmPause": "Yes, pause Mannon",
+      "cancel": "Cancel",
+      "pausedHeading": "Mannon is paused",
+      "pausedBody": "No wholesale price is being applied anywhere. Nothing has been deleted.",
+      "pausedSince": "Paused {{when}}.",
+      "resume_one": "Resume, and apply {{count}} rule again",
+      "resume_other": "Resume, and apply {{count}} rules again",
+      "uninstallPolicy": "If you uninstall Mannon, everything it stored about your shop is deleted within 48 hours, and your Shopify data is never touched."
+    },
+    "issue": {
+      "wholesaleTag": {
+        "required": "Give the tag a name. Without one, no buyer can be recognised as wholesale.",
+        "comma": "Shopify splits tags on commas, so a comma here would become two tags and neither would be this one.",
+        "tooLong": "Shopify tags are 40 characters at most."
+      },
+      "wholesaleOrderTag": {
+        "required": "Give the order tag a name, or trade orders cannot be told apart in Shopify.",
+        "comma": "Shopify splits tags on commas, so a comma here would become two tags and neither would be this one.",
+        "tooLong": "Shopify tags are 40 characters at most."
+      },
+      "taxDisplay": {
+        "choice": "Pick one of the two options."
+      },
+      "quoteExpiryDays": {
+        "range": "Between 1 and 365 days."
+      },
+      "quoteReminderDays": {
+        "range": "Between 1 and 364 days.",
+        "afterExpiry": "The warning has to come before the quote expires, so this has to be fewer days than the quote stands for."
+      },
+      "senderEmail": {
+        "email": "That does not look like an email address. Use one like orders@yourshop.com."
+      }
+    }
   }
 }

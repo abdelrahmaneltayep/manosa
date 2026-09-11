@@ -116,8 +116,26 @@ export async function getRule(id: string): Promise<PricingRuleRow | null> {
   return db.pricingRule.findUnique({ where: { id } });
 }
 
-/** Every rule that can price something right now — what checkout gets. */
+/**
+ * Every rule that can price something right now — what checkout gets.
+ *
+ * **A paused shop has none.** This is the single place every pricing surface
+ * reads from — the ruleset publish, quotes, PO-to-order, quick order and the
+ * Buyer Agent — so pausing here is the only way "pause the app" can mean what
+ * the Danger zone says it means. Nothing is deleted: the rules are still in
+ * the table and resuming is one write.
+ *
+ * Shopify's Function is the exception, because it reads a metafield rather
+ * than calling us. Pausing republishes an empty ruleset for it; see
+ * `app/lib/settings/pause.server.ts`.
+ */
 export async function activeEngineRules() {
+  const shop = await db.shop.findUnique({
+    where: { shop: shopScope.require("activeEngineRules") },
+    select: { pausedAt: true },
+  });
+  if (shop?.pausedAt) return toEngineRules([]);
+
   const rows = await db.pricingRule.findMany({
     where: { status: "ACTIVE", archivedAt: null },
     orderBy: [{ priority: "asc" }, { createdAt: "asc" }],

@@ -1,0 +1,99 @@
+<!doctype html><html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><title>Settings — 12-settings-arabic</title><style>
+ body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+   margin:0;padding:1.5rem;background:#f6f6f7;color:#1c1d2b}
+ .note{background:#fff4e4;border:1px solid #e0b252;border-radius:8px;padding:.75rem 1rem;
+   margin-bottom:1.25rem;font-size:12px;color:#5e4200}
+ s-page,s-section,s-box{display:block}
+ s-section,s-box{background:#fff;border:1px solid #e3e3e3;border-radius:10px;
+   padding:1rem;margin-bottom:1rem}
+ s-stack{display:flex;gap:.45rem}
+ s-stack[direction=block]{flex-direction:column;align-items:flex-start}
+ s-stack[direction=inline]{flex-direction:row;align-items:center;flex-wrap:wrap}
+ s-heading{display:block;font-weight:700;margin:.25rem 0}
+ s-page[heading]::before{content:attr(heading);display:block;font-size:20px;
+   font-weight:800;margin-bottom:1rem}
+ s-section[heading]::before{content:attr(heading);display:block;font-weight:700;
+   margin-bottom:.5rem}
+ s-banner[heading]::before{content:attr(heading);display:block;font-weight:700}
+ s-paragraph{display:block;margin:.35rem 0}
+ s-banner{display:block;border-inline-start:4px solid #8a8a8a;background:#fafafa;
+   padding:.75rem 1rem;margin:.5rem 0;border-radius:6px}
+ s-banner[tone=critical]{border-color:#d64545;background:#fdeaea}
+ s-banner[tone=warning]{border-color:#b7791f;background:#fff2dd}
+ s-banner[tone=info]{border-color:#2f6bd6;background:#eaf1ff}
+ s-banner[tone=success]{border-color:#1f8a53;background:#e7f7ee}
+ s-badge{display:inline-block;background:#eef0ff;color:#4f46e5;border-radius:999px;
+   padding:.1rem .55rem;font-size:12px;margin-inline-end:.4rem}
+ /* Tones, so a capture can show what the checklist asks for — "overdue rows
+    red" is not verifiable against a page where every badge looks the same. */
+ s-badge[tone=critical]{background:#fdeaea;color:#a11f1f}
+ s-badge[tone=warning]{background:#fff2dd;color:#7a5200}
+ s-badge[tone=success]{background:#e7f7ee;color:#166b41}
+ s-badge[tone=neutral]{background:#f0f0f0;color:#4a4a4a}
+ s-button{display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;
+   padding:.45rem .9rem;margin-inline-end:.5rem;font-weight:700}
+ s-button[variant=tertiary]{background:transparent;color:#4f46e5;font-weight:600}
+ s-button[disabled]{opacity:.45}
+ s-table{display:table;width:100%;border-collapse:collapse}
+ s-table-body{display:table-row-group}
+ s-table-header-row,s-table-row{display:table-row}
+ s-table-header,s-table-cell{display:table-cell;padding:.4rem .5rem;
+   border-bottom:1px solid #eee;text-align:start;vertical-align:top}
+ s-table-header{font-weight:700}
+ s-text-field,s-number-field,s-money-field,s-select,s-text-area,s-date-field,
+ s-search-field,s-checkbox{display:block;margin:.4rem 0}
+ s-text-field::before,s-number-field::before,s-money-field::before,
+ s-select::before,s-text-area::before,s-date-field::before,
+ s-search-field::before,s-checkbox::before{content:attr(label);display:block;
+   font-weight:600;font-size:12px;margin-bottom:.15rem}
+ /* The help text under a field, and whether a box is ticked.
+    Both were invisible in every capture ever taken, because the stand-in had
+    no rule for either — and on a settings page "details" carries most of the
+    "what this change affects" copy and "checked" is the whole point of the
+    control. The stand-in only shows what it has a rule for: an attribute with
+    no rule reads as absent, however many assertions pass on it. Only two
+    pseudo-elements exist per element and "::after" is the value, so the help
+    text rides with the label. */
+ s-text-field[details]::before,s-number-field[details]::before,
+ s-money-field[details]::before,s-select[details]::before,
+ s-text-area[details]::before,s-date-field[details]::before{
+   content:attr(label) "\A" attr(details);white-space:pre-wrap;font-weight:600}
+ s-checkbox::before{content:"☐  " attr(label)}
+ s-checkbox[checked]::before{content:"☑  " attr(label)}
+ s-checkbox[details]::before{content:"☐  " attr(label) "\A" attr(details);
+   white-space:pre-wrap}
+ s-checkbox[checked][details]::before{content:"☑  " attr(label) "\A" attr(details);
+   white-space:pre-wrap}
+ s-text-field::after,s-number-field::after,s-money-field::after,
+ s-select::after,s-text-area::after,s-date-field::after{
+   content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
+   padding:.35rem .5rem;min-height:1.1em;background:#fff;color:#444}
+ /* Errors are red, inline, beside the field — a convention a capture cannot
+    show unless the stand-in renders the attribute. "terms-settings-error" was
+    byte-identical to "terms-settings" for three milestones because of this. */
+ s-text-field[error],s-number-field[error],s-money-field[error],
+ s-select[error],s-text-area[error],s-date-field[error],s-checkbox[error]{
+   border-inline-start:3px solid #d64545;padding-inline-start:.5rem}
+ s-text-field[error]::after,s-number-field[error]::after,s-money-field[error]::after,
+ s-select[error]::after,s-text-area[error]::after,s-date-field[error]::after{
+   content:attr(value) "\A⚠ " attr(error);white-space:pre-wrap;
+   border-color:#d64545;background:#fdeaea;color:#8a1f1f}
+ s-checkbox[error]::after{content:"⚠ " attr(error);display:block;
+   color:#8a1f1f;font-size:12px}
+ s-ordered-list{display:block;padding-inline-start:1.2rem}
+ s-unordered-list{display:block;padding-inline-start:1.1rem}
+ s-list-item{display:list-item;margin:.3rem 0}
+ s-link{color:#4f46e5;text-decoration:underline;margin-inline-end:.6rem}
+ s-text[accessibilityvisibility=exclusive]{position:absolute;width:1px;height:1px;
+   overflow:hidden;clip-path:inset(50%)}
+ ui-save-bar{display:none}
+ /* A real s-select renders its own menu; here the options would otherwise
+    print as a run-on line of text next to the field. */
+ s-option{display:none}
+</style></head><body>
+<div class="note"><strong>QA capture — structure only.</strong> Polaris web components
+are not upgraded here: this build environment has no egress to Shopify's CDN, so the
+styling below is a plain stand-in and is <em>not</em> what a merchant sees. What this
+capture verifies is which content and which states render.</div>
+<s-page heading="الإعدادات"><s-section heading="الجملة"><form method="post"><input type="hidden" name="section" value="wholesale"/><ui-save-bar id="settings-wholesale-save-bar"><button type="submit" variant="primary"></button><button type="reset"></button></ui-save-bar><s-stack direction="block" gap="base"><s-paragraph color="subdued">الوسوم التي يتعرّف بها منّون على مشتري الجملة وعلى طلب الجملة.</s-paragraph><s-text-field name="wholesaleTag" label="وسم عميل الجملة" details="تغيير الاسم لا يُعيد وسم أحد. يحمل الوسم الحالي 34 مشترياً وسيتوقف التعرّف عليهم." value="wholesale"></s-text-field><s-text-field name="wholesaleOrderTag" label="وسم طلب الجملة" details="يُوضع على كل طلب يقدّمه مشتري جملة، لتجده في لوحة شوبيفاي نفسها أيضاً." value="wholesale"></s-text-field><s-button type="submit" variant="primary">حفظ</s-button></s-stack></form></s-section><s-section heading="العرض في المتجر"><form method="post"><input type="hidden" name="section" value="display"/><ui-save-bar id="settings-display-save-bar"><button type="submit" variant="primary"></button><button type="reset"></button></ui-save-bar><s-stack direction="block" gap="base"><s-paragraph color="subdued">ما يقرأه مشتري الجملة في صفحة المنتج.</s-paragraph><s-checkbox name="showCompareAt" label="إظهار سعر التجزئة مشطوباً" details="أوقفه إذا كان يجب ألّا يرى مشترو الجملة سعر التجزئة إطلاقاً." checked="true"></s-checkbox><s-checkbox name="hidePricesFromGuests" label="إخفاء الأسعار عن الزوار غير المسجّلين" details="الزائر غير المسجّل لا يرى سعراً ولا زر إضافة إلى السلة، بدلاً من سعر تجزئة لن يدفعه أبداً."></s-checkbox><s-select name="taxDisplay" label="إظهار الأسعار" details="للعرض فقط. شوبيفاي هو من يحدّد ما يُحصَّل عند الدفع." value="excl"><s-option value="excl">غير شاملة الضريبة</s-option><s-option value="incl">شاملة الضريبة</s-option></s-select><s-box padding="base" borderWidth="base" borderRadius="base"><s-stack direction="block" gap="small-100"><s-text color="subdued">سيقرأ المشتري:</s-text><s-stack direction="inline" gap="small" alignItems="center"><s-text type="strong">$28.00</s-text><s-text color="subdued"><s>$40.00</s></s-text></s-stack><s-text color="subdued">Excluding tax</s-text></s-stack></s-box><s-button type="submit" variant="primary">حفظ</s-button></s-stack></form></s-section><s-section heading="الجمع مع الخصومات"><form method="post"><input type="hidden" name="section" value="discounts"/><ui-save-bar id="settings-discounts-save-bar"><button type="submit" variant="primary"></button><button type="reset"></button></ui-save-bar><s-stack direction="block" gap="base"><s-paragraph color="subdued">هل يجوز أن يُجمع سعر الجملة مع كود خصم من شوبيفاي.</s-paragraph><s-banner tone="warning"><s-paragraph>الجمع هو ما يحوّل سعر الجملة إلى هدية. بتفعيل هذا، يستطيع مشترٍ لديه سعر الجملة أن يضيف كوداً فوقه.</s-paragraph><s-paragraph>يؤثّر هذا في 3 قواعد نشطة مضبوطة على الجمع. <s-link href="/app/pricing?combinable=1">اعرض القواعد</s-link></s-paragraph></s-banner><s-checkbox name="allowShopifyDiscounts" label="السماح بأكواد خصم شوبيفاي على أسعار الجملة" details="كل قاعدة تقرّر لنفسها أيضاً. هذا هو المفتاح العام للمتجر."></s-checkbox><s-button type="submit" variant="primary">حفظ</s-button></s-stack></form></s-section><s-section heading="الضريبة"><form method="post"><input type="hidden" name="section" value="tax"/><ui-save-bar id="settings-tax-save-bar"><button type="submit" variant="primary"></button><button type="reset"></button></ui-save-bar><s-stack direction="block" gap="base"><s-paragraph color="subdued">ما يلزم لاعتبار المشتري معفياً من الضريبة.</s-paragraph><s-checkbox name="requireVatForTaxExempt" label="اشتراط رقم ضريبي قبل إعفاء المشتري" details="تفعيل هذا لا يغيّر أحداً معفياً بالفعل."></s-checkbox><s-text color="subdued">مشتريان معفيان من الضريبة بلا رقم ضريبي مسجّل. يبقيان معفيين.</s-text><s-checkbox name="taxExemptNeedsApproval" label="يجب أن يوافق شخص على الإعفاء الضريبي" details="إيقافه يعني إعفاء أي طلب يستوفي شروطك دون أن ينظر فيه أحد." checked="true"></s-checkbox><s-button type="submit" variant="primary">حفظ</s-button></s-stack></form></s-section><s-section heading="الطلبات وعروض الأسعار"><form method="post"><input type="hidden" name="section" value="orders"/><ui-save-bar id="settings-orders-save-bar"><button type="submit" variant="primary"></button><button type="reset"></button></ui-save-bar><s-stack direction="block" gap="base"><s-paragraph color="subdued">كم يبقى عرض السعر قائماً، وهل تتبع الطلبات الحضورية حدود الطلب الإلكترونية.</s-paragraph><s-checkbox name="posBypassesLimits" label="الطلبات الحضورية تتجاوز حدود الطلب" details="الحد الأدنى المكتوب لموقع إلكتروني ليس عادةً قاعدة على نقطة البيع." checked="true"></s-checkbox><s-number-field name="quoteExpiryDays" label="يبقى عرض السعر قائماً (بالأيام)" details="يُنسخ على كل عرض سعر عند إرساله." value="14"></s-number-field><s-number-field name="quoteReminderDays" label="نبّه المشتري قبل انتهائه بهذا العدد من الأيام" details="يُرسل مرة واحدة لكل عرض. يجب أن يكون أقل من مدة بقاء العرض." value="3"></s-number-field><s-text color="subdued">هناك 5 عروض أسعار مُرسلة بالفعل. ثُبّتت تواريخها عند الإرسال وهذا لا يحرّكها.</s-text><s-button type="submit" variant="primary">حفظ</s-button></s-stack></form></s-section><s-section heading="الإشعارات"><form method="post"><input type="hidden" name="section" value="notifications"/><ui-save-bar id="settings-notifications-save-bar"><button type="submit" variant="primary"></button><button type="reset"></button></ui-save-bar><s-stack direction="block" gap="base"><s-paragraph color="subdued">العنوان الذي يرسل منه منّون بريد التسجيل والطلبات.</s-paragraph><s-text-field name="senderEmail" label="الإرسال من" details="استخدم عنواناً على نطاق تملكه. تغييره يعني التحقق من النطاق من جديد." value=""></s-text-field><s-stack direction="block" gap="small"><s-banner tone="info"><s-paragraph>لم يُضبط مُرسل، لذا يخرج البريد من mannon@mannonapp.com.</s-paragraph></s-banner></s-stack><s-button type="submit" variant="primary">حفظ</s-button></s-stack></form></s-section><s-section heading="منطقة الخطر"><s-stack direction="block" gap="base"><s-paragraph color="subdued">إيقاف منّون دون فقدان أي شيء.</s-paragraph><s-stack direction="block" gap="small"><s-text color="subdued">الإيقاف يمنع تطبيق 7 قواعد تسعير، في كل مكان.</s-text><s-button href="/app/settings?confirm=pause">إيقاف منّون مؤقتاً</s-button></s-stack><s-text color="subdued">إذا أزلت منّون، يُحذف كل ما خزّنه عن متجرك خلال ٤٨ ساعة، ولا تُمسّ بيانات شوبيفاي الخاصة بك أبداً.</s-text></s-stack></s-section></s-page></body></html>

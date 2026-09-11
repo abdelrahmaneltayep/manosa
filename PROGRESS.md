@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-11T10:30:00Z
+Updated: 2026-09-11T11:45:00Z
 Current milestone: 6 — Analytics
-Current task: 6.3 ✦ ask-your-data + monthly review [done] · 6.4 Settings [next]
+Current task: 6.4 Settings, part one [done, cold read pending] · 6.5 Settings, part two [next]
 
 ## Done
 
@@ -33,15 +33,11 @@ Current task: 6.3 ✦ ask-your-data + monthly review [done] · 6.4 Settings [nex
 - [x] 6.2 the Analytics page — seven charts, their states, CSV per chart, the currency/timezone footer — commits `ad7a048` + fix round — QA: `qa/6.2/REPORT.md` (cold read returned FAIL on 20 findings, 3 of them P0 — `qa/6.2/COLD-READ.md`. All fixed; 16 captures from 13 distinct renders.)
 - [x] 6.3 ✦ ask-your-data + ✦ monthly review — commits `7a05849` + this one — QA: `qa/6.3/REPORT.md` (cold read returned FAIL on 22 findings, 2 P0 — the answer's citation rendered a raw i18n key for three of seven charts, and the review re-introduced the refund double-subtraction in a figure kept forever. All fixed, gate re-run clean — `qa/6.3/COLD-READ.md`. 17 captures; `docs/adr/0025`. The gate's own step 3 had separately found `11-review-why.png` byte-identical to `10-review.png`, and chasing that found the same defect in 1.3, 2.3, 3.2, 4.4 and 6.2 — one a real product bug — so a guard now fails any two captures in a set that render the same.)
 
+- [x] 6.4 Settings, part one — sections with a save bar each, wholesale tags, display, discount combinations, tax, orders and quotes, notifications with sender verification, danger zone — commit `PENDING` — QA: `qa/6.4/REPORT.md` (found that `pausedAt` had existed since 0.1 and stopped nothing at checkout; `docs/adr/0026`. Six `Shop` columns a merchant could not change are now editable. The capture stand-in had no rule for `details` or `checked`, so field help text and checkbox state were invisible in **every** capture in the repo.)
+
 ## Next up
 
-- 6.4 Settings, part one — the section shell and save bar, display, discount
-  combinations (with "affects 3 active rules"), tax, notifications and email
-  domain verification, danger zone; and the settings scattered across other
-  pages brought into one place. **Five `Shop` fields are written by nothing
-  today and a merchant cannot change them at all:** `requireVatForTaxExempt`,
-  `wholesaleOrderTag`, `quoteExpiryDays`, `quoteReminderDays`, `pausedAt`.
-  `wholesaleTag` is only ever set by the setup wizard.
+- **Run the cold read on 6.4** — it has not had one
 - 6.5 Settings, part two — API keys, translations with the ✦ fill, agent
   controls (permission toggles, brand voice, briefing mutes, filtered audit log)
 - 6.6 polish (including orders-over-time, below) — see `DECISIONS.md` for why §8
@@ -377,3 +373,19 @@ Neither is blocking; both would change product decisions if answered.
   the side it was tested. The four zones in its test topped out at UTC+11; the
   bug started at UTC+12. It is a binary search now, on a fifteen-minute grid
   because Kathmandu and Chatham are not on the hour.
+
+- **The capture stand-in only shows what it has a CSS rule for.** Three times
+  now: `[error]` (invisible for nine tasks), then `details` and `checked`
+  (invisible in _every_ capture ever taken, until 6.4 — which made a settings
+  page's help text and every tick mark unreadable). Before trusting a capture
+  of an attribute-driven state, check `STYLES` in
+  `tests/support/state-capture.tsx` renders that attribute. Assertions passing
+  on an attribute prove nothing about whether a reader can see it.
+- **A flag is not a feature.** `pausedAt` existed from 0.1, was read in one
+  place, and "pause the app" left the discount Function pricing every
+  checkout. When a column implies behaviour, grep every read of it before
+  believing the behaviour exists — `docs/adr/0026`.
+- **Careful with backticks and `\\` inside the `STYLES` template literal.**
+  A backtick in a CSS comment ends the literal; `\A` is a JS escape, so CSS
+  needs `\\A`; and `\26A0` is a legacy octal escape that esbuild refuses —
+  use the glyph. All three cost a round trip this session.

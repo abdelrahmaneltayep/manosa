@@ -47,6 +47,24 @@
  s-select::before,s-text-area::before,s-date-field::before,
  s-search-field::before,s-checkbox::before{content:attr(label);display:block;
    font-weight:600;font-size:12px;margin-bottom:.15rem}
+ /* The help text under a field, and whether a box is ticked.
+    Both were invisible in every capture ever taken, because the stand-in had
+    no rule for either — and on a settings page "details" carries most of the
+    "what this change affects" copy and "checked" is the whole point of the
+    control. The stand-in only shows what it has a rule for: an attribute with
+    no rule reads as absent, however many assertions pass on it. Only two
+    pseudo-elements exist per element and "::after" is the value, so the help
+    text rides with the label. */
+ s-text-field[details]::before,s-number-field[details]::before,
+ s-money-field[details]::before,s-select[details]::before,
+ s-text-area[details]::before,s-date-field[details]::before{
+   content:attr(label) "\A" attr(details);white-space:pre-wrap;font-weight:600}
+ s-checkbox::before{content:"☐  " attr(label)}
+ s-checkbox[checked]::before{content:"☑  " attr(label)}
+ s-checkbox[details]::before{content:"☐  " attr(label) "\A" attr(details);
+   white-space:pre-wrap}
+ s-checkbox[checked][details]::before{content:"☑  " attr(label) "\A" attr(details);
+   white-space:pre-wrap}
  s-text-field::after,s-number-field::after,s-money-field::after,
  s-select::after,s-text-area::after,s-date-field::after{
    content:attr(value);display:block;border:1px solid #d5d5d5;border-radius:6px;
