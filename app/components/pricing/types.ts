@@ -53,6 +53,14 @@ export interface RuleListView {
   atRuleLimit: boolean;
   /** ✦ Describe a rule needs the AI layer (phase 4.2). */
   aiAvailable: boolean;
+  /**
+   * How long an archived rule stays restorable.
+   *
+   * From `ARCHIVE_RETENTION_DAYS`, not typed into the page: the same number
+   * appears in the audit entry the merchant reads and in the job that enforces
+   * it, and two of the three being right is the kind of drift nobody notices.
+   */
+  archiveRetentionDays: number;
 }
 
 export interface TierView {

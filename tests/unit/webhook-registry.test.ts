@@ -14,21 +14,44 @@ import {
  * Deliberately not a general TOML parser — this asserts on one known shape, and
  * a dependency here would just be another thing to keep current.
  */
-function declaredSubscriptions(): { topic: string; uri: string }[] {
+function declaredSubscriptions(): {
+  topic: string;
+  uri: string;
+  compliance: boolean;
+}[] {
   const toml = readFileSync(resolve(process.cwd(), "shopify.app.toml"), "utf8");
   const blocks = toml.split(/\[\[webhooks\.subscriptions\]\]/).slice(1);
 
   return blocks.flatMap((block) => {
     const body = block.split(/\n\[/)[0]!;
     const uri = body.match(/uri\s*=\s*"([^"]+)"/)?.[1];
-    const topicsRaw = body.match(/topics\s*=\s*\[([^\]]+)\]/)?.[1];
+    // The two keys are told apart deliberately. `compliance_topics` ends in
+    // `topics`, so a regex for one matches the other — which is how the three
+    // mandatory privacy topics shipped under the wrong key, registered with
+    // nobody, with this test still green.
+    const compliance = /(^|\s)compliance_topics\s*=/.test(body);
+    const topicsRaw = body.match(
+      /(?:^|\s)(?:compliance_)?topics\s*=\s*\[([^\]]+)\]/,
+    )?.[1];
     if (!uri || !topicsRaw) return [];
     return [...topicsRaw.matchAll(/"([^"]+)"/g)].map((m) => ({
       topic: m[1]!,
       uri,
+      compliance,
     }));
   });
 }
+
+/**
+ * Shopify's mandatory privacy topics.
+ *
+ * They are not registered through the Admin API like every other subscription:
+ * `@shopify/shopify-api`'s `register.ts` skips any topic in its `privacyTopics`
+ * list. They reach an app only because the app's configuration declares them as
+ * `compliance_topics`, and under any other key Shopify is never told where to
+ * send them.
+ */
+const COMPLIANCE_TOPICS = ["customers/data_request", "customers/redact", "shop/redact"];
 
 describe("webhook registry", () => {
   it("normalises Shopify's topic header format", () => {
@@ -61,6 +84,22 @@ describe("webhook registry", () => {
    *
    * Both are silent in production and obvious here.
    */
+  it("declares every privacy topic under `compliance_topics`, and nothing else", () => {
+    const declared = declaredSubscriptions();
+
+    for (const topic of COMPLIANCE_TOPICS) {
+      const entry = declared.find((one) => one.topic === topic);
+      expect(entry, `${topic} is not declared at all`).toBeDefined();
+      expect(entry!.compliance, `${topic} is declared as a plain topic`).toBe(true);
+    }
+
+    // And the reverse: an ordinary topic under `compliance_topics` would never
+    // be registered either.
+    for (const entry of declared.filter((one) => one.compliance)) {
+      expect(COMPLIANCE_TOPICS, entry.topic).toContain(entry.topic);
+    }
+  });
+
   it("declares exactly the registered topics in shopify.app.toml", () => {
     const declared = declaredSubscriptions();
     expect(declared.length).toBeGreaterThan(0);

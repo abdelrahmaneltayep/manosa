@@ -85,7 +85,13 @@ export async function ensureShopRecord(admin?: AdminGraphql) {
 
   const restored = await db.shop.update({
     where: { shop },
-    data: { uninstalledAt: null },
+    // `piiPurgedAt` goes with `uninstalledAt`, and forgetting it was a silent
+    // one-way door: the purge skips any shop that has one, so a merchant who
+    // uninstalled, was purged, reinstalled and traded for a year was **never
+    // purged again** — under copy promising deletion within 48 hours. The
+    // stamp records that *the last uninstall* was dealt with; a new install is
+    // a new life, and nothing in it has been purged.
+    data: { uninstalledAt: null, piiPurgedAt: null },
   });
   const cancelled = await cancelPendingJobs("shop.purge_pii");
 

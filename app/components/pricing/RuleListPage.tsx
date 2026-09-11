@@ -86,7 +86,7 @@ function EmptyState({ view }: { view: RuleListView }) {
         <s-stack direction="block" gap="small">
           <s-heading>{t("pricing.list.emptyArchivedHeading")}</s-heading>
           <s-paragraph color="subdued">
-            {t("pricing.list.emptyArchivedBody", { count: 30 })}
+            {t("pricing.list.emptyArchivedBody", { count: view.archiveRetentionDays })}
           </s-paragraph>
           <s-link href="?">{t("pricing.list.tabActive")}</s-link>
         </s-stack>

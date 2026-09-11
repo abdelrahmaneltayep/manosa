@@ -12,6 +12,7 @@ import {
   removeSample,
 } from "~/lib/settings/brand-voice.server";
 import { ensureAuditPurgeScheduled } from "~/lib/jobs/handlers/purge-audit.server";
+import { ensureRetentionScheduled } from "~/lib/jobs/handlers/purge-retention.server";
 import { pauseApp, resumeApp } from "~/lib/settings/pause.server";
 import { isSection, saveSettings, SettingsInvalid } from "~/lib/settings/settings.server";
 import { settingsView } from "~/lib/settings/view-model.server";
@@ -35,8 +36,10 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     const t = translate(await getFixedT(locale));
 
     // Settings prints "kept for 365 days". The page that makes a promise is
-    // the page that has to schedule it.
+    // the page that has to schedule it — and the same is true of the five
+    // other windows the danger zone now states.
     await ensureAuditPurgeScheduled();
+    await ensureRetentionScheduled();
 
     return json({
       view: await settingsView({

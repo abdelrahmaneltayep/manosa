@@ -49,17 +49,29 @@ export async function handleCustomersDataRequest({ shop, payload }: WebhookConte
     action: "privacy.data_requested",
     summary:
       total === 0
-        ? `A buyer asked what Mannon holds about them. Mannon holds nothing about this person.`
+        ? `A buyer asked what Mannon holds about them. Mannon holds nothing about this person, so there is nothing to send.`
         : `A buyer asked what Mannon holds about them: ${total} record(s) across ${Object.entries(
             counts,
           )
             .filter(([, count]) => count > 0)
             .map(([area]) => area)
-            .join(", ")}. Open their buyer page to see it.`,
+            .join(
+              ", ",
+            )}. Open this entry to download all of it — you have 30 days to answer them.`,
     subject: { type: "Shop", id: shop },
     // The shape of what is held, never the contents: an audit entry is read in
     // a list, and answering a question about somebody's data by copying it
     // somewhere new is not an answer.
-    metadata: { ...counts, customerId: identity.customerId ?? null },
+    // The shape, and an identifier that is this app's own — never the
+    // address. The download link needs *something* to key on, and putting a
+    // buyer's email into a log a merchant reads for twelve months would answer
+    // a question about their data by copying it somewhere new. A form-only
+    // applicant is keyed on their application id instead, which is how the
+    // export finds an address it never stored here.
+    metadata: {
+      ...counts,
+      customerId: identity.customerId ?? null,
+      submissionId: (held.applications[0] as { id?: string } | undefined)?.id ?? null,
+    },
   });
 }

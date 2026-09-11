@@ -257,6 +257,108 @@ describe("customers/redact", () => {
     });
   });
 
+  it("takes them out of the audit trail, and leaves the trail", async () => {
+    await seedBuyer(ALPHA);
+    await inAlpha(async () => {
+      // The three shapes an entry can carry a person in: as the actor, as the
+      // subject, and inside somebody else's sentence.
+      await db.auditLog.create({
+        data: {
+          ...tenant(),
+          actorType: "BUYER",
+          actorId: BUYER,
+          actorLabel: EMAIL,
+          ip: "203.0.113.7",
+          action: "form.submitted",
+          summary: `${EMAIL} applied to Trade application.`,
+          metadata: { to: EMAIL },
+        },
+      });
+      await db.auditLog.create({
+        data: {
+          ...tenant(),
+          actorType: "STAFF",
+          action: "pricing_rule.created",
+          summary: "Created a rule.",
+        },
+      });
+    });
+
+    await deliver("customers/redact", ALPHA, { customer: { id: 1, email: EMAIL } });
+
+    await inAlpha(async () => {
+      const rows = await db.auditLog.findMany();
+      const text = JSON.stringify(rows);
+
+      // Not a word of them anywhere — including the structured half, which no
+      // text scan of the summary would reach.
+      expect(text).not.toContain(EMAIL);
+      expect(text).not.toContain("203.0.113.7");
+
+      // And the trail is still a trail: the unrelated entry is untouched, and
+      // an audit log with entries silently missing is not one to rely on.
+      expect(rows.some((row) => row.action === "pricing_rule.created")).toBe(true);
+    });
+  });
+
+  it("takes them out of a monthly review without deleting the review", async () => {
+    await seedBuyer(ALPHA);
+    await inAlpha(async () => {
+      await db.monthlyReview.create({
+        data: {
+          ...tenant(),
+          month: "2026-08",
+          sections: [],
+          facts: { slots: { n1: "Acme Ltd", f1: "$4,300.00" }, topBuyerEmail: EMAIL },
+        },
+      });
+    });
+
+    await deliver("customers/redact", ALPHA, { customer: { id: 1, email: EMAIL } });
+
+    await inAlpha(async () => {
+      const review = await db.monthlyReview.findFirstOrThrow();
+      const facts = JSON.stringify(review.facts);
+
+      // Kept for ever by design, so a merchant can compare March with March.
+      // A year of reviews should not develop holes because somebody asked to
+      // be forgotten — the name comes out and the figures stay.
+      expect(facts).not.toContain(EMAIL);
+      expect(facts).toContain("$4,300.00");
+    });
+  });
+
+  it("takes the buyer's own words off a quote it keeps", async () => {
+    await seedBuyer(ALPHA);
+    await inAlpha(async () => {
+      await db.quote.create({
+        data: {
+          ...tenant(),
+          number: "Q-1001",
+          publicId: "quote-1",
+          customerId: BUYER,
+          email: EMAIL,
+          company: "Acme Ltd",
+          currencyCode: "USD",
+          subtotal: 10_000,
+          // Documented in the schema as "what the buyer asked for, in their
+          // words" — which routinely means an address and a phone number.
+          requestNote: "Dana Bright, 12 Mill Lane, Leeds — call me on 07700 900123.",
+        },
+      });
+    });
+
+    await deliver("customers/redact", ALPHA, { customer: { id: 1, email: EMAIL } });
+
+    await inAlpha(async () => {
+      const quote = await db.quote.findFirstOrThrow();
+      expect(quote.requestNote).toBeNull();
+      expect(quote.email).toBeNull();
+      // The amount stays: it is the merchant's own record.
+      expect(quote.subtotal).toBe(10_000);
+    });
+  });
+
   it("says what it did, without saying who", async () => {
     await seedBuyer(ALPHA);
     await deliver("customers/redact", ALPHA, { customer: { id: 1, email: EMAIL } });

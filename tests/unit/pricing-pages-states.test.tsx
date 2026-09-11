@@ -82,6 +82,7 @@ const listView = (overrides: Partial<RuleListView> = {}): RuleListView => ({
   publishError: null,
   atRuleLimit: false,
   aiAvailable: false,
+  archiveRetentionDays: 30,
   ...overrides,
 });
 

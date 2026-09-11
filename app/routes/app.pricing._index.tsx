@@ -12,6 +12,7 @@ import { loadEntitlements } from "~/lib/billing/entitlements.server";
 import { RulesetTooLargeError } from "~/lib/pricing/ruleset.server";
 import {
   archiveRule,
+  ARCHIVE_RETENTION_DAYS,
   listRules,
   restoreRule,
   RULES_PAGE_SIZE,
@@ -64,6 +65,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         : null,
       publishError: url.searchParams.get("publishError") as RuleListView["publishError"],
       atRuleLimit: limit !== null && page.totalUnfiltered >= limit,
+      archiveRetentionDays: ARCHIVE_RETENTION_DAYS,
       // ✦ Describe a rule works whenever there is a key to ask with.
       aiAvailable: (await aiGate("draft")).allowed,
     };

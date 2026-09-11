@@ -50,16 +50,22 @@ api_version = "2025-07"
   uri = "/webhooks/app/uninstalled"
 
   # Shopify's three mandatory privacy topics.
+  #
+  # `compliance_topics`, not `topics`. They are not registered through the API
+  # like every other subscription — `@shopify/shopify-api`'s own `register.ts`
+  # skips any topic in `privacyTopics` — so declaring them as `topics` here
+  # means Shopify is never told where to send them and the handlers never run.
+  # The feature ships inert and app review rejects the app.
   [[webhooks.subscriptions]]
-  topics = [ "customers/data_request" ]
+  compliance_topics = [ "customers/data_request" ]
   uri = "/webhooks/customers/data-request"
 
   [[webhooks.subscriptions]]
-  topics = [ "customers/redact" ]
+  compliance_topics = [ "customers/redact" ]
   uri = "/webhooks/customers/redact"
 
   [[webhooks.subscriptions]]
-  topics = [ "shop/redact" ]
+  compliance_topics = [ "shop/redact" ]
   uri = "/webhooks/shop/redact"
 
   [[webhooks.subscriptions]]

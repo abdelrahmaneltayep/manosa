@@ -6,6 +6,7 @@ import { expireQuotes } from "~/lib/jobs/handlers/expire-quotes.server";
 import { decideApplications } from "~/lib/jobs/handlers/decide-applications.server";
 import { screenApplications } from "~/lib/jobs/handlers/screen-applications.server";
 import { purgeShopPii } from "~/lib/jobs/handlers/purge-shop-pii.server";
+import { purgeRetention } from "~/lib/jobs/handlers/purge-retention.server";
 import { purgeAudit } from "~/lib/jobs/handlers/purge-audit.server";
 import { purgeConversations } from "~/lib/jobs/handlers/purge-conversations.server";
 
@@ -29,6 +30,9 @@ export const JOB_HANDLERS = {
   /// Checklist §8: the audit log keeps twelve months. This is what makes the
   /// schema comment true rather than aspirational.
   "audit.purge": purgeAudit,
+  /// The other five tables that only ever grew, each with a window stated
+  /// somewhere and nothing behind it until the release pass.
+  "retention.purge": purgeRetention,
 } as const;
 
 export type JobKind = keyof typeof JOB_HANDLERS;

@@ -595,6 +595,10 @@ function DangerZone({ view }: { view: SettingsView }) {
         {/* The checklist asks for the uninstall data policy to be *stated*,
             not linked to a legal page nobody opens. */}
         <s-text color="subdued">{t("settings.danger.uninstallPolicy")}</s-text>
+        {/* What Mannon stops keeping, and when. Every one of these windows is
+            enforced by a job; a retention sentence with nothing behind it is
+            the shape this repo keeps finding. */}
+        <s-text color="subdued">{t("settings.danger.retentionPolicy")}</s-text>
       </s-stack>
     </s-section>
   );

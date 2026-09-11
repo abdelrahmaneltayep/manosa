@@ -2758,7 +2758,8 @@
       "uninstallPolicy": "If you uninstall Mannon, everything it stored about your shop is deleted within 48 hours, and your Shopify data is never touched.",
       "pausedNotAtCheckout": "Mannon is paused here, but the change did not reach Shopify — checkout is still applying wholesale prices. Press Pause again to retry.",
       "pausedEverywhere": "No wholesale price is being applied — at checkout, on your storefront blocks, in quotes or for the agents. Nothing has been deleted.",
-      "pausedSettingsLink": "Resume in Settings"
+      "pausedSettingsLink": "Resume in Settings",
+      "retentionPolicy": "Mannon does not keep everything for ever. Buyer conversations go after 90 days, messages sent to buyers and your history log after 12 months, form view counts after 90 days, and an archived pricing rule 30 days after you archive it — which is how long you have to restore it."
     },
     "issue": {
       "wholesaleTag": {

@@ -1,6 +1,8 @@
 # QA — 7.2 The three mandatory privacy topics, and a purge that reaches every table
 
-Date: 2026-09-11 · Gate: **pass**
+Date: 2026-09-11 · Gate: **pass after a fix round** · Cold read: **FAIL** on
+three P0s and seven P1s — see `COLD-READ.md`. This file describes the code as
+it stands after those were fixed; §9 lists what the first pass got wrong.
 
 ## 1. Test plan
 
@@ -101,3 +103,69 @@ Recorded in `DECISIONS.md`.
 - The uploaded files are rows in Postgres (`FormUpload.content`), so deleting
   the row is the whole deletion. If they ever move to object storage, that
   becomes a second place this has to reach — noted in `PROGRESS.md`.
+
+
+---
+
+## 8. Retention (the other half of 7.2)
+
+Five tables that only ever grew, each with a window stated somewhere and
+nothing behind it: `WebhookDelivery` (30 days), `FormEvent` (90, and the
+conversion rate is computed over 30 — asserted), `RuleImportDraft` (7, against
+a one-hour undo), archived `PricingRule`s (30, which is the number the audit
+entry already tells the merchant), and `EmailMessage` (12 calendar months, the
+same as the audit log). One job rather than five: the same question asked of
+five tables, all wanting to run daily, and five self-requeueing jobs is five
+chances for one to stop.
+
+The windows are now **stated** in Settings beside the uninstall policy, and the
+page that states them is the page that schedules the job — the rule this repo
+arrived at when `purgeAudit` was written. `tests/integration/retention.test.ts`
+is 9 tests.
+
+## 9. What the first pass of this gate missed
+
+The cold read returned FAIL on three P0s and seven P1s. Reading them in order,
+three are worth writing down:
+
+1. **`shop/redact` wrote the very flag the purge checks before deleting.** The
+   purge refuses to run on a shop without `uninstalledAt`; the handler stamped
+   one on and queued the purge for *now*. So one delivery for a shop whose
+   `app/uninstalled` we had missed — or one replay with an unseen webhook id —
+   deleted a live merchant's entire dataset with their staff still logged in.
+   My own test asserted the tombstone was written and never called
+   `runDueJobs()`, so it proved the first half of the bug and called it the
+   feature.
+2. **A reinstall never cleared `piiPurgedAt`.** The purge skips any shop that
+   has one. Install → uninstall → purge → reinstall → trade for a year →
+   uninstall deleted **nothing**, silently, for ever. It pre-dates this task;
+   what this task did was turn it from two merchant fields into the whole
+   buyer dataset.
+3. **The coverage guard was vacuous where it mattered.** It classified nine of
+   thirty-two models as personal by looking for eleven field names, and the
+   buyer's uploaded trade licence was not among them — `FormUpload`'s columns
+   are `fieldKey`, `fileName`, `contentType`, `byteSize`, `content`. The guard
+   could be deleted from the purge and every test stayed green. It is a **total
+   map** now: every model in the schema has a written disposition, and a new
+   one fails the build until somebody says what happens to it. Rewriting it
+   that way immediately found `AiRun`, which nothing had ever deleted.
+
+And one that would have shipped the whole feature inert: the three topics were
+declared with `topics = [...]` in `shopify.app.toml`. Privacy topics are not
+registered through the API — `@shopify/shopify-api`'s own `register.ts` skips
+every topic in its `privacyTopics` list — so they reach an app only under
+`compliance_topics`. Shopify would never have been told where to send them.
+`compliance_topics` ends in `topics`, so the drift test's regex matched both
+and stayed green; it now tells them apart and requires each privacy topic under
+the right key.
+
+Also fixed: the person survived their own redaction in the audit log (as actor,
+as subject and inside other people's sentences, in `summary` **and** in
+`metadata`), in a quote's `requestNote` — documented in the schema as "what the
+buyer asked for, in their words" — and in a monthly review's stored facts,
+which are kept for ever by design. The `data_request` answer pointed at a buyer
+page that loads none of the seven areas and does not exist at all for a
+form-only applicant; it is a real download now, keyed on ids this app owns
+rather than on the address, because putting a buyer's email into a log a
+merchant reads for twelve months answers a question about their data by copying
+it somewhere new.

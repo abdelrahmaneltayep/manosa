@@ -128,7 +128,21 @@ export function readDay(value: string | null | undefined): Date | null {
 const rawId = (id: string) => id.slice(id.indexOf(":") + 1);
 
 /** The page an audit row points at, by the family of thing it happened to. */
-function hrefForAudit(row: { action: string }): string | null {
+function hrefForAudit(row: { action: string; metadata?: unknown }): string | null {
+  // The one entry whose link is the answer to a legal request: it carries the
+  // buyer's identifiers so the merchant can download what this app holds.
+  // Without it the entry said "open their buyer page", which loads none of the
+  // seven areas and does not exist at all for a form-only applicant.
+  if (row.action === "privacy.data_requested") {
+    const meta = (row.metadata ?? {}) as Record<string, unknown>;
+    const query = new URLSearchParams();
+    if (typeof meta.customerId === "string") query.set("customer", meta.customerId);
+    if (typeof meta.submissionId === "string") {
+      query.set("submission", meta.submissionId);
+    }
+    return query.size > 0 ? `/app/privacy/export?${query.toString()}` : null;
+  }
+
   if (row.action.startsWith("pricing_rule.") || row.action.startsWith("pricing."))
     return "/app/pricing";
   if (row.action.startsWith("form.")) return "/app/customers/applications";
