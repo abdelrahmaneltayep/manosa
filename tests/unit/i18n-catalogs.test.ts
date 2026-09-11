@@ -132,6 +132,9 @@ describe("translation catalogs", () => {
       "home.heading",
       // "12 × SKU-1" — a quantity, a multiplication sign, and their own words.
       "po.requested",
+      // A product name. Every Arabic string that *talks about* Claude is
+      // translated; this one is only the name, in the actor filter.
+      "activity.actor.agent",
     ]);
     const untranslated = Object.keys(EN).filter(
       (key) => !allowed.has(key) && AR[key] !== undefined && EN[key] === AR[key],

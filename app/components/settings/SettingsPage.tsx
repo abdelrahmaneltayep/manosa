@@ -43,6 +43,7 @@ export function SettingsPage({ view }: { view: SettingsView }) {
       <Discounts view={view} />
       <Tax view={view} />
       <Orders view={view} />
+      <AgentControls view={view} />
       <Notifications view={view} />
       <DangerZone view={view} />
     </s-page>
@@ -361,6 +362,142 @@ function SenderStatus({ view }: { view: SettingsView }) {
       {/* Said plainly, because the alternative is a merchant waiting for a
           verification that is never going to run. */}
       <s-text color="subdued">{t("settings.notifications.cannotVerify")}</s-text>
+    </s-stack>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ✦ Agent controls — what Claude may do without being asked.
+ *
+ * Checklist §8. Until 6.5 there was no control at all: every ✦ surface asked
+ * only whether an API key was set, so a merchant who wanted drafted emails but
+ * not an opinion on their trade applicants had no way to say so.
+ *
+ * The third toggle §8 names — auto-approve — is deliberately absent. Nothing
+ * in this app approves an application without a person, and a switch for
+ * behaviour the product does not have is worse than no switch.
+ */
+function AgentControls({ view }: { view: SettingsView }) {
+  const { t } = useTranslation();
+  const { agent } = view;
+
+  return (
+    <Section id="agent" view={view} after={<BrandVoice view={view} />}>
+      {agent.noKey ? (
+        <s-banner tone="info">
+          <s-paragraph>{t("settings.agent.noKey")}</s-paragraph>
+        </s-banner>
+      ) : null}
+
+      <s-checkbox
+        name="aiMayScreen"
+        value="on"
+        label={t("settings.agent.screenLabel")}
+        details={t("settings.agent.screenHelp")}
+        {...whenChecked(agent.mayScreen)}
+      />
+      <s-checkbox
+        name="aiMayDraft"
+        value="on"
+        label={t("settings.agent.draftLabel")}
+        details={t("settings.agent.draftHelp")}
+        {...whenChecked(agent.mayDraft)}
+      />
+
+      {/* Invariant 3, stated where the toggles are: nothing here lets Claude
+          change a price, a customer or an order on its own. */}
+      <s-text color="subdued">{t("settings.agent.neverWrites")}</s-text>
+
+      {agent.mutedBriefings.length > 0 ? (
+        <s-stack direction="block" gap="small-100">
+          <s-text type="strong">{t("settings.agent.mutedHeading")}</s-text>
+          {/* Muted from the home page and readable nowhere until now, so a
+              merchant could silence a kind and never find it again. */}
+          <s-unordered-list>
+            {agent.mutedBriefings.map((muted) => (
+              <s-list-item key={muted.kind}>{muted.label}</s-list-item>
+            ))}
+          </s-unordered-list>
+          <s-text color="subdued">{t("settings.agent.mutedUndo")}</s-text>
+        </s-stack>
+      ) : null}
+
+      <s-stack direction="block" gap="small-100">
+        <s-link href={agent.auditHref}>{t("settings.agent.auditLink")}</s-link>
+        <s-text color="subdued">
+          {t("settings.agent.retention", { count: agent.retentionDays })}
+        </s-text>
+      </s-stack>
+    </Section>
+  );
+}
+
+/** The merchant's own writing, in its own form outside the section's. */
+function BrandVoice({ view }: { view: SettingsView }) {
+  const { t } = useTranslation();
+  const { agent } = view;
+  const full = agent.samples.length >= 5;
+
+  return (
+    <s-stack direction="block" gap="base">
+      <s-text type="strong">{t("settings.agent.voiceHeading")}</s-text>
+      <s-paragraph color="subdued">
+        {t("settings.agent.voiceBody", { count: agent.samplesWanted })}
+      </s-paragraph>
+
+      {agent.samples.length === 0 ? (
+        <s-text color="subdued">{t("settings.agent.voiceEmpty")}</s-text>
+      ) : (
+        agent.samples.map((sample) => (
+          <s-box key={sample.id} padding="base" borderWidth="base" borderRadius="base">
+            <s-stack direction="block" gap="small-100">
+              <s-text type="strong">{sample.label}</s-text>
+              {/* Shown in full. A sample a merchant cannot re-read is one they
+                  cannot decide to withdraw, and this is their own writing. */}
+              <s-paragraph>{sample.body}</s-paragraph>
+              <s-text color="subdued">
+                {t("settings.agent.voiceAdded", { when: sample.added })}
+              </s-text>
+              <form method="post">
+                <input type="hidden" name="section" value="agent" />
+                <input type="hidden" name="intent" value="removeSample" />
+                <input type="hidden" name="sampleId" value={sample.id} />
+                <s-button type="submit" variant="tertiary">
+                  {t("settings.agent.voiceRemove")}
+                </s-button>
+              </form>
+            </s-stack>
+          </s-box>
+        ))
+      )}
+
+      {full ? (
+        <s-text color="subdued">{t("settings.agent.voiceFull")}</s-text>
+      ) : (
+        <form method="post">
+          <input type="hidden" name="section" value="agent" />
+          <input type="hidden" name="intent" value="addSample" />
+          <s-stack direction="block" gap="small">
+            <s-text-field
+              name="label"
+              label={t("settings.agent.voiceLabelLabel")}
+              details={t("settings.agent.voiceLabelHelp")}
+              value=""
+              {...withError(issueFor(view.issues, "label"))}
+            />
+            <s-text-area
+              name="body"
+              label={t("settings.agent.voiceBodyLabel")}
+              details={t("settings.agent.voiceBodyHelp")}
+              value=""
+              {...withError(issueFor(view.issues, "body"))}
+            />
+            <s-button type="submit">{t("settings.agent.voiceAdd")}</s-button>
+          </s-stack>
+        </form>
+      )}
     </s-stack>
   );
 }

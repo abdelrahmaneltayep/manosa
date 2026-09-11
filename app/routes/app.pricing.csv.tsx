@@ -17,7 +17,7 @@ import {
   undoImport,
   UndoExpiredError,
 } from "~/lib/pricing/csv/import.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import {
   mapColumns,
   toColumnMapping,
@@ -314,7 +314,9 @@ async function mappingView(
     data: { ...tenant(), fileName, content, template },
   });
 
-  const proposed = isAiAvailable() ? await mapColumns(doc, template, { actorId }) : null;
+  const proposed = (await aiGate("draft")).allowed
+    ? await mapColumns(doc, template, { actorId })
+    : null;
 
   const guesses: ColumnGuess[] = proposed?.ok
     ? proposed.value.mappings

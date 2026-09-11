@@ -6,7 +6,7 @@ import { PurchaseOrderPage } from "~/components/orders/PurchaseOrderPage";
 import type { PoLineView, PurchaseOrderView } from "~/components/orders/types";
 import { db } from "~/db.server";
 import { detectLocale } from "~/i18n.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { MAX_PO_CHARS, readPurchaseOrder } from "~/lib/ai/prompts/purchase-order.server";
 import { recordAudit } from "~/lib/audit/record.server";
 import { MAX_FILE_BYTES } from "~/lib/pricing/csv/import.server";
@@ -90,7 +90,7 @@ async function baseView(
 ): Promise<PurchaseOrderView> {
   const entitlements = await loadEntitlements();
   const entitled = hasFeature(entitlements, "po_to_order");
-  const keyed = isAiAvailable();
+  const keyed = (await aiGate("draft")).allowed;
   const { rows, truncated } = await buyers(selectedId);
 
   return {

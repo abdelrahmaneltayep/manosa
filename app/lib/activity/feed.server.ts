@@ -91,6 +91,37 @@ const WANTS_ORDERS: Record<ActivityFilter, boolean> = {
 
 const AGENT_ACTORS: AuditActorType[] = ["MERCHANT_AGENT", "BUYER_AGENT"];
 
+/**
+ * Who did it, as checklist §8 asks the audit log to be filterable.
+ *
+ * The category filter above answers "what kind of thing happened". This
+ * answers the question a merchant actually opens the log with — *did a person
+ * do this, or did Claude?* — and the schema has carried
+ * `@@index([shop, actorType, createdAt])` for it since 0.2.
+ */
+export const ACTOR_FILTERS = ["anyone", "agent", "staff", "system"] as const;
+export type ActorFilter = (typeof ACTOR_FILTERS)[number];
+
+export const isActorFilter = (value: string): value is ActorFilter =>
+  (ACTOR_FILTERS as readonly string[]).includes(value);
+
+const ACTOR_TYPES: Record<ActorFilter, AuditActorType[] | null> = {
+  anyone: null,
+  agent: AGENT_ACTORS,
+  staff: ["STAFF"],
+  system: ["SYSTEM"],
+};
+
+/** An order row has no actor, so an actor filter excludes them all but "anyone". */
+const actorWantsOrders = (actor: ActorFilter) => actor === "anyone";
+
+/** `YYYY-MM-DD` from a date input, or null. Never a partial date. */
+export function readDay(value: string | null | undefined): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const at = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(at.getTime()) ? null : at;
+}
+
 /** Row ids carry their table (`audit:`/`order:`); the cursor wants the id. */
 const rawId = (id: string) => id.slice(id.indexOf(":") + 1);
 
@@ -124,11 +155,31 @@ export async function loadActivity(
     limit?: number;
     before?: string | null;
     filter?: ActivityFilter;
+    /** Who: a person, an agent, the system, or anyone. */
+    actor?: ActorFilter;
+    /** One exact action, e.g. "pricing_rule.created". */
+    action?: string | null;
+    /** Inclusive, in UTC days. `to` covers the whole of that day. */
+    from?: Date | null;
+    to?: Date | null;
   } = {},
 ): Promise<ActivityPage> {
   const limit = options.limit ?? HOME_ROWS;
   const filter = options.filter ?? "all";
+  const actor = options.actor ?? "anyone";
   shopScope.require("activity feed");
+
+  const actorTypes = ACTOR_TYPES[actor];
+  // `to` is a day, and a merchant asking for "up to the 3rd" means the whole
+  // of the 3rd — an exclusive bound at midnight would silently drop it.
+  const dayAfter = options.to
+    ? new Date(options.to.getTime() + 24 * 60 * 60 * 1000)
+    : null;
+  const window = {
+    ...(options.from ? { gte: options.from } : {}),
+    ...(dayAfter ? { lt: dayAfter } : {}),
+  };
+  const windowed = options.from || dayAfter;
 
   const cursor = readCursor(options.before);
 
@@ -152,6 +203,9 @@ export async function loadActivity(
     ...(prefixes && prefixes.length > 0
       ? { OR: prefixes.map((prefix) => ({ action: { startsWith: prefix } })) }
       : {}),
+    ...(actorTypes ? { actorType: { in: actorTypes } } : {}),
+    ...(options.action ? { action: options.action } : {}),
+    ...(windowed ? { createdAt: window } : {}),
   };
 
   const [audit, orders] = await Promise.all([
@@ -172,13 +226,14 @@ export async function loadActivity(
             actorLabel: true,
           },
         }),
-    WANTS_ORDERS[filter]
+    WANTS_ORDERS[filter] && actorWantsOrders(actor) && !options.action
       ? db.order.findMany({
           // Wholesale only. Retail orders are mirrored too, and a retail row
           // here links to `/app/orders`, which filters them out — a row the
           // merchant cannot then find.
           where: {
             isWholesale: true,
+            ...(windowed ? { processedAt: window } : {}),
             ...(cursor
               ? {
                   OR: [
@@ -247,4 +302,24 @@ export async function loadActivity(
     // would have given.
     nextCursor: full && last ? writeCursor(last.at, rawId(last.id)) : null,
   };
+}
+
+/**
+ * Every action this shop has actually recorded, newest use first.
+ *
+ * Built from the data rather than from a list of every action the codebase can
+ * write: a picker offering forty actions a shop has never performed is a
+ * picker nobody uses, and a hand-kept list is the registration step this repo
+ * has now forgotten three times.
+ */
+export async function recordedActions(): Promise<string[]> {
+  shopScope.require("recordedActions");
+
+  const rows = await db.auditLog.findMany({
+    distinct: ["action"],
+    orderBy: { action: "asc" },
+    select: { action: true },
+    take: 200,
+  });
+  return rows.map((row) => row.action);
 }

@@ -86,6 +86,37 @@ export interface SenderSettingsView {
   verifiable: boolean;
 }
 
+/** One sample of the merchant's own writing. */
+export interface BrandVoiceSampleView {
+  id: string;
+  label: string;
+  body: string;
+  added: string;
+}
+
+export interface AgentControlsView {
+  /**
+   * What Claude may do without being asked.
+   *
+   * Before 6.5 there was no such control: every ✦ surface asked only whether
+   * an API key was set, so "may Claude screen my applicants" had no answer a
+   * merchant could give.
+   */
+  mayScreen: boolean;
+  mayDraft: boolean;
+  /** Null when a key is set; otherwise the toggles are moot and say so. */
+  noKey: boolean;
+  /** The merchant's own writing, so generated copy sounds like them. */
+  samples: BrandVoiceSampleView[];
+  /** How many samples are worth having, from the checklist's "2-3". */
+  samplesWanted: number;
+  /** Briefing kinds the merchant asked not to see, and their labels. */
+  mutedBriefings: { kind: string; label: string }[];
+  /** Where the audit log lives, and how far back it goes. */
+  auditHref: string;
+  retentionDays: number;
+}
+
 export interface DangerZoneView {
   paused: boolean;
   pausedAt: string | null;
@@ -107,6 +138,7 @@ export interface SettingsView {
   discounts: DiscountSettingsView;
   tax: TaxSettingsView;
   orders: OrderSettingsView;
+  agent: AgentControlsView;
   sender: SenderSettingsView;
   danger: DangerZoneView;
   /** The section that was just saved, for the "Saved" confirmation. */

@@ -61,6 +61,20 @@ model Shop {
   /// type again" is about the type.
   briefingMuted String[]
 
+  // --- Agent controls (phase 6.5) ------------------------------------------
+  /// What Claude may do without being asked, per checklist §8.
+  ///
+  /// Before these existed, every ✦ surface was gated on `isAiAvailable()`
+  /// alone — so whether an environment variable was set was the only answer a
+  /// merchant had to "may Claude screen my applicants". A capability with no
+  /// switch is a decision this app made on their behalf.
+  /// Checklist §8 asks for a third — auto-approve — and it is deliberately
+  /// absent: nothing in this app approves an application without a person, so
+  /// a toggle for it would be a control for behaviour the product does not
+  /// have. It arrives with auto-approval, defaulting off (Invariant 3).
+  aiMayScreen Boolean @default(true)
+  aiMayDraft  Boolean @default(true)
+
   /// The last time this shop's storefront called our App Proxy.
   ///
   /// This is how the setup checklist knows the theme blocks are live without
@@ -1638,4 +1652,27 @@ enum AgentRole {
   BUYER
   AGENT
   MERCHANT
+}
+
+// ---------------------------------------------------------------------------
+// Brand voice (phase 6.5)
+// ---------------------------------------------------------------------------
+
+/// A message the merchant actually sent, kept so generated copy sounds like
+/// them rather than like a model.
+///
+/// Checklist §8: "paste 2-3 of your emails → Claude matches your tone". Stored
+/// as the merchant's own words and shown back to them in full, because a
+/// sample they cannot re-read is one they cannot withdraw.
+model BrandVoiceSample {
+  id    String @id @default(cuid())
+  shop  String
+  /// What this sample is, in the merchant's words: "how I welcome a new buyer".
+  label String
+  body  String
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@index([shop, createdAt])
 }

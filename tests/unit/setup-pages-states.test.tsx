@@ -88,6 +88,18 @@ const log = (overrides: Partial<ActivityLogView> = {}): ActivityLogView => ({
   ],
   filter: "all",
   filters: ["all", "orders", "registrations", "pricing"],
+  actor: "anyone",
+  actors: ["anyone", "agent", "staff", "system"],
+  action: "",
+  actions: [
+    { value: "pricing_rule.created", label: "Pricing" },
+    { value: "form.approved", label: "Registrations" },
+  ],
+  from: "",
+  to: "",
+  retentionDays: 365,
+  keptFrom: "2025-06-01",
+  filtered: false,
   nextHref: "/app/activity?filter=all&before=2026-05-29T09%3A00%3A00.000Z",
   ...overrides,
 });

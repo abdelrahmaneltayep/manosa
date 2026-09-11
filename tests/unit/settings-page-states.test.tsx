@@ -59,6 +59,25 @@ const view = (overrides: Partial<SettingsView> = {}): SettingsView => ({
     quoteReminderDays: 3,
     quotesOutstanding: 5,
   },
+  agent: {
+    mayScreen: true,
+    mayDraft: true,
+    noKey: false,
+    samples: [
+      {
+        id: "s1",
+        label: "How I welcome a new buyer",
+        body: "Hi Sam — lovely to have you on board. Your trade prices are live now, so anything you add to the basket comes through at your rate. Shout if a line looks wrong.",
+        added: "2026-08-14",
+      },
+    ],
+    samplesWanted: 3,
+    mutedBriefings: [
+      { kind: "rules_unused", label: "Pricing rules that priced nothing" },
+    ],
+    auditHref: "/app/activity",
+    retentionDays: 365,
+  },
   sender: {
     senderEmail: "",
     senderDomain: null,
@@ -328,6 +347,54 @@ describe("the settings page", () => {
     expect(html).toContain("no active pricing rule to price one from");
     expect(html).not.toContain("$");
     capture("14-display-no-example", html);
+  });
+
+  it("says what Claude may do, and that it never writes on its own", () => {
+    const html = render(<SettingsPage view={view()} />);
+
+    // Before 6.5 there was no control at all: every ✦ surface asked only
+    // whether an API key was set.
+    expect(html).toContain("Let Claude read new registration applications");
+    expect(html).toContain("Let Claude draft messages, rules and reviews");
+    expect(html).toContain("Nothing here lets Claude change a price");
+    // Muted from the home page and readable nowhere until now.
+    expect(html).toContain("Pricing rules that priced nothing");
+    expect(html).toContain("kept for 365 days");
+    // No capture: the agent card is part of the default page, already
+    // captured whole as "01-settings". A second copy of it under a section's
+    // name would make the set look like it covers a state it does not.
+  });
+
+  it("shows the merchant their own writing in full", () => {
+    const html = render(<SettingsPage view={view()} />);
+
+    // A sample a merchant cannot re-read is one they cannot withdraw.
+    expect(html).toContain("How I welcome a new buyer");
+    expect(html).toContain("lovely to have you on board");
+    expect(html).toContain("Remove this sample");
+  });
+
+  it("says the toggles decide nothing without a key", () => {
+    const html = render(
+      <SettingsPage
+        view={view({
+          agent: {
+            mayScreen: false,
+            mayDraft: true,
+            noKey: true,
+            samples: [],
+            samplesWanted: 3,
+            mutedBriefings: [],
+            auditHref: "/app/activity",
+            retentionDays: 365,
+          },
+        })}
+      />,
+    );
+
+    expect(html).toContain("nothing here runs whichever way these are set");
+    expect(html).toContain("No samples yet");
+    capture("15-agent-no-key", html);
   });
 
   it("states the uninstall policy rather than linking to it", () => {

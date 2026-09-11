@@ -6,7 +6,7 @@ import { ReviewPage } from "~/components/analytics/ReviewPage";
 import type { ReviewsView } from "~/components/analytics/types";
 import { db } from "~/db.server";
 import { detectLocale } from "~/i18n.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { listReviews, readReviewFor } from "~/lib/analytics/review-run.server";
 import { reviewsView, reviewView } from "~/lib/analytics/review-view.server";
 import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
@@ -37,7 +37,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     ]);
 
     const entitled = hasFeature(entitlements, "merchant_agent");
-    const key = isAiAvailable();
+    const key = (await aiGate("draft")).allowed;
 
     // Queued here as well as from the charts page, so a merchant who lands
     // straight on this URL still starts getting reviews.

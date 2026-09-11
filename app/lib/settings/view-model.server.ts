@@ -8,7 +8,10 @@ import type {
 import { db } from "~/db.server";
 import type { Translate } from "~/i18n/translate";
 import { emailSender } from "~/lib/email/send.server";
+import { isAiAvailable } from "~/lib/ai/client.server";
+import { AUDIT_RETENTION_DAYS } from "~/lib/jobs/handlers/purge-audit.server";
 import { activeEngineRules } from "~/lib/pricing/rules.server";
+import { SAMPLES_WANTED, listSamples } from "~/lib/settings/brand-voice.server";
 import { previewFor } from "~/lib/pricing/view-model.server";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 import type { SettingsIssue } from "~/lib/settings/settings.server";
@@ -126,7 +129,7 @@ export async function settingsView(options: {
   // The shop first: the tag it currently uses decides which buyers to count.
   const shop = await db.shop.findUniqueOrThrow({ where: { shop: name } });
 
-  const [taggedBuyers, combinableRules, ruleCount, exemptWithoutVat, quotesOut] =
+  const [taggedBuyers, combinableRules, ruleCount, exemptWithoutVat, quotesOut, samples] =
     await Promise.all([
       // Buyers carrying the tag today. Renaming it does not move them, which
       // is exactly what the copy beside the field has to say.
@@ -145,6 +148,7 @@ export async function settingsView(options: {
       db.pricingRule.count({ where: { status: "ACTIVE", archivedAt: null } }),
       db.customer.count({ where: { taxExempt: true, vatNumber: null } }),
       db.quote.count({ where: { status: "SENT" } }),
+      listSamples(),
     ]);
 
   const typed = (key: string, fallback: string): string => {
@@ -192,6 +196,29 @@ export async function settingsView(options: {
         typed("quoteReminderDays", String(shop.quoteReminderDays)),
       ),
       quotesOutstanding: quotesOut,
+    },
+    agent: {
+      mayScreen: shop.aiMayScreen,
+      mayDraft: shop.aiMayDraft,
+      // With no key the toggles decide nothing, and the card says so rather
+      // than letting a merchant switch something that was never on.
+      noKey: !isAiAvailable(),
+      samples: samples.map((sample) => ({
+        id: sample.id,
+        label: sample.label,
+        body: sample.body,
+        added: sample.createdAt.toISOString().slice(0, 10),
+      })),
+      samplesWanted: SAMPLES_WANTED,
+      // Muted from the home page and, until now, readable nowhere — so a
+      // merchant who silenced a kind of briefing item could never find it
+      // again to change their mind.
+      mutedBriefings: [...new Set(shop.briefingMuted)].map((kind) => ({
+        kind,
+        label: t(`settings.agent.briefingKind.${kind}`),
+      })),
+      auditHref: "/app/activity",
+      retentionDays: AUDIT_RETENTION_DAYS,
     },
     sender: {
       senderEmail: typed("senderEmail", shop.senderEmail ?? ""),

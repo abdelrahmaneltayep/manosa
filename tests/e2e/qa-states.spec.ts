@@ -178,6 +178,9 @@ test.describe("Ask-your-data and monthly review states", () => {
 });
 
 test.describe("Settings page states", () => {
+  // 6.5's agent-controls states live here too: they are cards on the same
+  // page, and splitting one page's captures across two directories would mean
+  // `expectDistinct` could not compare them.
   captureSuite("6.4");
 });
 

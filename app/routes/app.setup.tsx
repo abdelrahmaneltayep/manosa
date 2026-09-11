@@ -6,7 +6,7 @@ import { WizardPage } from "~/components/setup/WizardPage";
 import type { WizardPlanView, WizardView } from "~/components/setup/types";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate, type Translate } from "~/i18n/translate";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import {
   draftSetupPlan,
   readSetupPlan,
@@ -121,7 +121,7 @@ async function baseView(): Promise<{
 }> {
   const entitlements = await loadEntitlements();
   const entitled = hasFeature(entitlements, "merchant_agent");
-  const keyed = isAiAvailable();
+  const keyed = (await aiGate("draft")).allowed;
   const shop = await db.shop.findUnique({
     where: { shop: shopScope.require("setup wizard") },
   });

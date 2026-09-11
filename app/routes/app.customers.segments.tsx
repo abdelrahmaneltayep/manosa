@@ -7,7 +7,7 @@ import type { SegmentDraftView, SegmentsView } from "~/components/customers/type
 import { db } from "~/db.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate, type Translate } from "~/i18n/translate";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import {
   draftSegment,
   resolveSegment,
@@ -127,7 +127,7 @@ async function baseView(request: Request): Promise<SegmentsView> {
   const t = translate(await getFixedT(detectLocale(request)));
 
   return {
-    aiAvailable: isAiAvailable(),
+    aiAvailable: (await aiGate("draft")).allowed,
     sentence: "",
     examples: EXAMPLE_KEYS.map((key) => t(key)),
     failure: null,

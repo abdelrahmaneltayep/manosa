@@ -1,7 +1,7 @@
 import { Prisma, type MonthlyReview } from "@prisma/client";
 
 import { db } from "~/db.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { writeMonthlyReview } from "~/lib/ai/prompts/monthly-review.server";
 import type { AiDeps } from "~/lib/ai/run.server";
 import {
@@ -59,7 +59,7 @@ export async function generateMonthlyReview(
   // The product works with the key unset: the page says the review is off
   // rather than showing an empty card, and the figures are still on the
   // analytics page either way.
-  if (!isAiAvailable() && !deps.messages) {
+  if (!(await aiGate("draft")).allowed && !deps.messages) {
     return { review: null, skipped: "no_key", failure: null };
   }
 

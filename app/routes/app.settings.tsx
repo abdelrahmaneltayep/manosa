@@ -6,6 +6,11 @@ import { SettingsPage } from "~/components/settings/SettingsPage";
 import type { SettingsView } from "~/components/settings/types";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate } from "~/i18n/translate";
+import {
+  addSample,
+  BrandVoiceInvalid,
+  removeSample,
+} from "~/lib/settings/brand-voice.server";
 import { pauseApp, resumeApp } from "~/lib/settings/pause.server";
 import { isSection, saveSettings, SettingsInvalid } from "~/lib/settings/settings.server";
 import { settingsView } from "~/lib/settings/view-model.server";
@@ -69,6 +74,47 @@ export const action = ({ request }: ActionFunctionArgs) =>
     }
 
     if (!isSection(section)) throw new Response("Unknown section", { status: 400 });
+
+    // The merchant's own writing, added and removed from its own form — which
+    // lives outside the section's form, because a form inside a form is not a
+    // form and the Notifications card proved it.
+    if (section === "agent" && (intent === "addSample" || intent === "removeSample")) {
+      try {
+        if (intent === "removeSample") {
+          await removeSample((form.get("sampleId") ?? "").toString(), { actor });
+        } else {
+          await addSample(
+            {
+              label: (form.get("label") ?? "").toString(),
+              body: (form.get("body") ?? "").toString(),
+            },
+            { actor },
+          );
+        }
+      } catch (error) {
+        if (error instanceof BrandVoiceInvalid) {
+          return json(
+            {
+              view: await settingsView({
+                locale,
+                t,
+                failedSection: section,
+                issues: [
+                  {
+                    field: error.issue === "label" ? "label" : "body",
+                    code: error.issue,
+                  },
+                ],
+                echo: form,
+              }),
+            },
+            { status: 422 },
+          );
+        }
+        throw error;
+      }
+      return redirect("/app/settings?saved=agent");
+    }
 
     if (intent === "verify") {
       // The provider that would check the records is not configured here, and

@@ -2198,7 +2198,22 @@
       "registrationsCurrent": "Registrations ✓",
       "pricing": "Pricing",
       "pricingCurrent": "Pricing ✓"
-    }
+    },
+    "actorLabel": "Who",
+    "actionLabel": "Action",
+    "actionAny": "Any action",
+    "fromLabel": "From",
+    "toLabel": "To",
+    "apply": "Apply",
+    "clear": "Clear filters",
+    "actor": {
+      "anyone": "Anyone",
+      "agent": "Claude",
+      "staff": "Your staff",
+      "system": "Mannon itself"
+    },
+    "retention_one": "Kept for {{count}} day — this log goes back to {{from}}.",
+    "retention_other": "Kept for {{count}} days — this log goes back to {{from}}."
   },
   "agent": {
     "scripted": {
@@ -2638,6 +2653,47 @@
       "outstanding_one": "{{count}} quote is already out. Its dates were fixed when it was sent and this does not move them.",
       "outstanding_other": "{{count}} quotes are already out. Their dates were fixed when they were sent and this does not move them."
     },
+    "agent": {
+      "heading": "✦ Agent controls",
+      "body": "What Claude may do without being asked.",
+      "noKey": "No Anthropic API key is configured, so nothing here runs whichever way these are set.",
+      "screenLabel": "Let Claude read new registration applications",
+      "screenHelp": "It says what an application looks like and why. It has never approved or rejected anybody, and it cannot.",
+      "draftLabel": "Let Claude draft messages, rules and reviews",
+      "draftHelp": "Everything it writes arrives as a draft with your name on the Save button.",
+      "neverWrites": "Nothing here lets Claude change a price, a customer or an order on its own. Every change it suggests is one you press.",
+      "mutedHeading": "Briefing items you asked not to see",
+      "mutedUndo": "Unmute one from the briefing on your home page the next time it would have appeared.",
+      "auditLink": "Read the full activity log",
+      "retention_one": "Every action Claude or your staff take is recorded there, and kept for {{count}} day.",
+      "retention_other": "Every action Claude or your staff take is recorded there, and kept for {{count}} days.",
+      "voiceHeading": "Your writing",
+      "voiceBody_one": "Paste {{count}} message you have actually sent a buyer, and Claude will match your tone instead of inventing one.",
+      "voiceBody_other": "Paste {{count}} messages you have actually sent a buyer, and Claude will match your tone instead of inventing one.",
+      "voiceEmpty": "No samples yet. Without them, generated messages use a plain, neutral tone.",
+      "voiceAdded": "Added {{when}}.",
+      "voiceRemove": "Remove this sample",
+      "voiceFull": "That is as many samples as Claude reads. Remove one to add another.",
+      "voiceLabelLabel": "What this is",
+      "voiceLabelHelp": "For you, not for Claude — “how I welcome a new buyer”.",
+      "voiceBodyLabel": "The message",
+      "voiceBodyHelp": "Paste it as you sent it. It is stored as written and shown back to you here.",
+      "voiceAdd": "Add this sample",
+      "briefingKind": {
+        "applications_waiting": "Applications waiting for a decision",
+        "screening_flagged": "Applications worth a closer look",
+        "invoices_overdue": "Overdue invoices",
+        "credit_exceeded": "Buyers over their credit limit",
+        "quotes_expiring": "Quotes about to expire",
+        "orders_needing_resync": "Orders that did not sync",
+        "rules_unused": "Pricing rules that priced nothing",
+        "no_active_rules": "No active pricing rules",
+        "buyers_gone_quiet": "Buyers who have gone quiet",
+        "wholesale_week": "How the wholesale week went",
+        "form_never_opened": "A registration form nobody has opened",
+        "uploads_unscanned": "Uploaded files that were never virus-scanned"
+      }
+    },
     "notifications": {
       "heading": "Notifications",
       "body": "The address Mannon sends registration and order mail from.",
@@ -2693,6 +2749,14 @@
       },
       "senderEmail": {
         "email": "That does not look like an email address. Use one like orders@yourshop.com."
+      },
+      "label": {
+        "label": "Give the sample a name, so you can tell your samples apart."
+      },
+      "body": {
+        "body": "Paste the message itself. An empty sample teaches Claude nothing.",
+        "tooLong": "That is longer than Claude reads. Paste one message rather than a thread.",
+        "tooMany": "That is as many samples as Claude reads. Remove one to add another."
       }
     }
   }

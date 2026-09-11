@@ -1,5 +1,5 @@
 import { db } from "~/db.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { generateBriefing } from "~/lib/agent/briefing.server";
 import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { enqueueJob } from "~/lib/jobs/queue.server";
@@ -40,7 +40,10 @@ export async function dailyBriefing() {
   if (!hasFeature(entitlements, "merchant_agent")) {
     return { skipped: "not on this plan" as const };
   }
-  if (!isAiAvailable()) return { skipped: "no key" as const };
+  // Not just the key: a merchant who switched drafting off should not get a
+  // briefing written for them every morning regardless.
+  const gate = await aiGate("draft");
+  if (!gate.allowed) return { skipped: gate.blockedBy };
 
   const { briefing, failure } = await generateBriefing({
     locale: record.primaryLocale,

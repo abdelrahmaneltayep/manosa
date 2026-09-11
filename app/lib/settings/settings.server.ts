@@ -22,6 +22,7 @@ export const SECTIONS = [
   "discounts",
   "tax",
   "orders",
+  "agent",
   "notifications",
 ] as const;
 export type SettingsSection = (typeof SECTIONS)[number];
@@ -136,6 +137,9 @@ export async function saveSettings(
 
       case "discounts":
         return { allowShopifyDiscounts: on("allowShopifyDiscounts") };
+
+      case "agent":
+        return { aiMayScreen: on("aiMayScreen"), aiMayDraft: on("aiMayDraft") };
 
       case "tax":
         return { requireVatForTaxExempt: on("requireVatForTaxExempt") };

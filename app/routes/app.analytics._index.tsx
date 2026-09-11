@@ -4,7 +4,7 @@ import { useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 
 import { AnalyticsPage } from "~/components/analytics/AnalyticsPage";
 import type { AnalyticsView, AskView } from "~/components/analytics/types";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { askYourData } from "~/lib/analytics/ask.server";
 import { ensureMonthlyReviewScheduled } from "~/lib/jobs/handlers/monthly-review.server";
 import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
@@ -67,7 +67,7 @@ async function askView(
 ): Promise<AskView> {
   const entitlements = await loadEntitlements();
   const entitled = hasFeature(entitlements, "merchant_agent");
-  const key = isAiAvailable();
+  const key = (await aiGate("draft")).allowed;
 
   return {
     available: entitled && key,

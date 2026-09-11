@@ -8,6 +8,30 @@ file is the running log, including the small calls that never earned an ADR.
 
 ---
 
+## 2026-09-11 — Two agent permissions, not the checklist's three
+
+§8 asks for screen / draft / **auto-approve**. The first two gate behaviour
+this app has; the third gates behaviour it does not — there is no path in the
+product that approves an application without a person. 6.4 shipped a toggle
+for an imaginary tax-exemption flow and the cold read caught it, so: two
+toggles now, the third with auto-approval itself, defaulting off.
+
+Rejected: shipping it disabled "so the default is recorded" — a default is
+already recorded by the column, and a switch that does nothing is a claim the
+product cannot keep. `docs/adr/0027`.
+
+## 2026-09-11 — Settings part two is agent controls; API keys and translations move to 6.6
+
+The earlier split put API keys, translations and agent controls together in
+6.5. Reading the code showed agent controls alone is a full task: three
+permission columns threaded through fifteen call sites, a brand-voice model, a
+briefing-mute view, three new audit-log filters, and the twelve-month
+retention job that the schema has promised since 0.2 with nothing behind it.
+
+So 6.5 is agent controls, 6.6 is API keys and translations, 6.7 is polish.
+Same reasoning as splitting §8 in the first place: a task whose QA gate cannot
+walk its own states is a task that has not been scoped.
+
 ## 2026-09-11 — Settings is two tasks, and polish moves to 6.6
 
 Checklist §8 asks for eight areas — display, discount combinations, tax,

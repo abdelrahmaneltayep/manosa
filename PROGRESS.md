@@ -1,8 +1,8 @@
 # Progress
 
-Updated: 2026-09-11T13:15:00Z
+Updated: 2026-09-11T14:30:00Z
 Current milestone: 6 — Analytics
-Current task: 6.4 Settings, part one [done] · 6.5 Settings, part two [next]
+Current task: 6.5 ✦ Agent controls [done, cold read pending] · 6.6 API keys + translations [next]
 
 ## Done
 
@@ -35,29 +35,18 @@ Current task: 6.4 Settings, part one [done] · 6.5 Settings, part two [next]
 
 - [x] 6.4 Settings, part one — sections with a save bar each, wholesale tags, display, discount combinations, tax, orders and quotes, notifications with sender verification, danger zone — commits `cf22fd7` + fix round — QA: `qa/6.4/REPORT.md` (cold read returned FAIL on 23 findings, 1 P0 — the Notifications section could not be saved at all, because its Verify form was nested inside the section's form. All fixed — `qa/6.4/COLD-READ.md`. Also found `pausedAt` had existed since 0.1 and stopped nothing at checkout; `docs/adr/0026`. Six `Shop` columns a merchant could not change are now editable. The capture stand-in had no rule for `details` or `checked`, so field help text and checkbox state were invisible in **every** capture in the repo.)
 
+- [x] 6.5 ✦ Agent controls — permission toggles wired through every ✦ surface, brand-voice samples, the muted-briefing list, the audit log filterable by actor/action/date, and the twelve-month retention job — commit `PENDING` — QA: `qa/6.5/REPORT.md` (`docs/adr/0027`. **There was no AI permission control anywhere before this** — every ✦ surface gated on `isAiAvailable()` alone — and **nothing enforced the audit retention** the schema has promised since 0.2.)
+
 ## Next up
 
-- 6.5 Settings, part two — API keys, translations with the ✦ fill, agent
-  controls. Scoped, with what is actually missing found by reading the code:
-  - **There is no AI permission toggle anywhere.** Every ✦ surface is gated on
-    `isAiAvailable()` alone — `aiScreening: isAiAvailable()`
-    (`app.customers.applications.tsx:172`) is the entirety of "may Claude
-    screen my applicants". Needs `aiMayScreen` / `aiMayDraft` /
-    `aiMayAutoApprove`, the last defaulting **off** (Invariant 3).
-  - **Nothing enforces the audit log's 12-month retention.** The schema
-    comment promises it and `purge-conversations` exists for `AgentMessage`,
-    but no job trims `AuditLog`. A promise nothing enforces.
-  - The audit log filters by **category only** (`all/orders/registrations/
-pricing`); §8 asks for actor, action and date. The indexes are already
-    there: `@@index([shop, actorType, createdAt])`, `([shop, action, …])`.
-  - `Shop.briefingMuted` is written by the home page and readable nowhere —
-    a merchant who muted a briefing kind cannot find it again.
-  - Full plan in the scratchpad; brand voice, API keys and translations all
-    need new models.
-- 6.6 polish (including orders-over-time, below) — see `DECISIONS.md` for why §8
-  is two tasks
+- **Run the cold read on 6.5** — it has not had one
+- 6.6 API keys (create/revoke, last-used, scoped, secret shown once) and
+  translations (storefront strings per language, ✦ fill for the missing ones,
+  a human-review flag, export/import). Brand-voice samples are stored but not
+  yet read by any prompt — wiring them into the drafting prompts is 6.6 too.
+- 6.7 polish (including orders-over-time, below) — see `DECISIONS.md` for the splits
 - **Orders-over-time** — `pages-features.md` §7 asks for it and the checklist
-  does not; deferred to 6.6 with a written decision, not forgotten
+  does not; deferred to 6.7 with a written decision, not forgotten
 - 5.2 has one unfinished piece: the widget's greeting is personalised by name
   only. Tier and last order need a `hello` intent on `proxy.agent.tsx`
 - 7.1–7.3 Release

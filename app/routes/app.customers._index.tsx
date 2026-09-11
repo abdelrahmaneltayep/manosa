@@ -5,7 +5,7 @@ import { useLoaderData } from "@remix-run/react";
 import { CustomerListPage } from "~/components/customers/CustomerListPage";
 import type { CustomerListView } from "~/components/customers/types";
 import { db } from "~/db.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate } from "~/i18n/translate";
 import {
@@ -76,7 +76,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       wholesaleTag: settings.wholesaleTag,
       atRiskDays: AT_RISK_DAYS,
       // ✦ The segment builder needs the AI layer, which lands in phase 4.3.
-      aiAvailable: isAiAvailable(),
+      aiAvailable: (await aiGate("draft")).allowed,
     };
 
     return json({ view });

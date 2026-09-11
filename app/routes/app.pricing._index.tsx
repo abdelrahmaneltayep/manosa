@@ -5,7 +5,7 @@ import { useLoaderData } from "@remix-run/react";
 import { RuleListPage } from "~/components/pricing/RuleListPage";
 import type { RuleListView } from "~/components/pricing/types";
 import { db } from "~/db.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate } from "~/i18n/translate";
 import { loadEntitlements } from "~/lib/billing/entitlements.server";
@@ -65,7 +65,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       publishError: url.searchParams.get("publishError") as RuleListView["publishError"],
       atRuleLimit: limit !== null && page.totalUnfiltered >= limit,
       // ✦ Describe a rule works whenever there is a key to ask with.
-      aiAvailable: isAiAvailable(),
+      aiAvailable: (await aiGate("draft")).allowed,
     };
 
     return json({ view });

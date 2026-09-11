@@ -18,7 +18,7 @@ import {
 import { loadSetup } from "~/lib/setup/checklist.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate, type Translate } from "~/i18n/translate";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import {
   briefingFailure,
   latestBriefing,
@@ -120,7 +120,8 @@ export async function buildView(
     where: { shop: shopScope.require("home") },
   });
   const entitlements = await loadEntitlements(now);
-  const agentAvailable = isAiAvailable() && hasFeature(entitlements, "merchant_agent");
+  const agentAvailable =
+    (await aiGate("draft")).allowed && hasFeature(entitlements, "merchant_agent");
 
   const url = new URL(request.url);
   const requested = Number(url.searchParams.get("period"));

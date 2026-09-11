@@ -6,7 +6,7 @@ import { DescribeRulePage } from "~/components/pricing/DescribeRulePage";
 import type { DescribeRuleView } from "~/components/pricing/types";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate, type Translate } from "~/i18n/translate";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { draftRuleFromSentence } from "~/lib/ai/prompts/rule-from-sentence.server";
 import { recordAudit } from "~/lib/audit/record.server";
 import { loadEntitlements } from "~/lib/billing/entitlements.server";
@@ -59,7 +59,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 
     return json({
       view: describeView({
-        aiAvailable: isAiAvailable(),
+        aiAvailable: (await aiGate("draft")).allowed,
         sentence: "",
         atRuleLimit: await atRuleLimit(new Date()),
         t,
@@ -119,7 +119,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     if (intent === "discard") return redirect("/app/pricing");
 
-    const aiAvailable = isAiAvailable();
+    const aiAvailable = (await aiGate("draft")).allowed;
     const currencyCode = await shopCurrency();
     const limited = await atRuleLimit(now);
     const common = { aiAvailable, atRuleLimit: limited, t };

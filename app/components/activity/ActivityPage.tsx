@@ -26,9 +26,52 @@ export function ActivityPage({ view }: { view: ActivityLogView }) {
             ))}
           </s-stack>
 
+          {/* Actor, action and date — §8's three, as a GET form so a filtered
+              log is a URL a merchant can keep or send to somebody. */}
+          <form method="get">
+            <input type="hidden" name="filter" value={view.filter} />
+            <s-stack direction="inline" gap="small" alignItems="end">
+              <s-select name="actor" label={t("activity.actorLabel")} value={view.actor}>
+                {view.actors.map((actor) => (
+                  <s-option key={actor} value={actor}>
+                    {t(`activity.actor.${actor}`)}
+                  </s-option>
+                ))}
+              </s-select>
+              <s-select
+                name="action"
+                label={t("activity.actionLabel")}
+                value={view.action}
+              >
+                <s-option value="">{t("activity.actionAny")}</s-option>
+                {view.actions.map((action) => (
+                  <s-option key={action.value} value={action.value}>
+                    {action.label}
+                  </s-option>
+                ))}
+              </s-select>
+              <s-date-field
+                name="from"
+                label={t("activity.fromLabel")}
+                value={view.from}
+              />
+              <s-date-field name="to" label={t("activity.toLabel")} value={view.to} />
+              <s-button type="submit">{t("activity.apply")}</s-button>
+              {view.filtered ? (
+                <s-link href={`/app/activity?filter=${view.filter}`}>
+                  {t("activity.clear")}
+                </s-link>
+              ) : null}
+            </s-stack>
+          </form>
+
           {view.rows.length === 0 ? (
             <s-paragraph>
-              {t(view.filter === "all" ? "activity.empty" : "activity.emptyFiltered")}
+              {t(
+                view.filtered || view.filter !== "all"
+                  ? "activity.emptyFiltered"
+                  : "activity.empty",
+              )}
             </s-paragraph>
           ) : (
             <s-stack direction="block" gap="small">
@@ -64,6 +107,15 @@ export function ActivityPage({ view }: { view: ActivityLogView }) {
           {view.nextHref ? (
             <s-button href={view.nextHref}>{t("activity.more")}</s-button>
           ) : null}
+
+          {/* Stated, not discovered. A merchant answering "who changed this
+              price" needs to know how far back they can still ask. */}
+          <s-text color="subdued">
+            {t("activity.retention", {
+              count: view.retentionDays,
+              from: view.keptFrom,
+            })}
+          </s-text>
         </s-stack>
       </s-section>
     </s-page>

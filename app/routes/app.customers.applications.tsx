@@ -6,7 +6,7 @@ import { ApplicationsPage } from "~/components/customers/ApplicationsPage";
 import type { ApplicationsView } from "~/components/customers/types";
 import { db } from "~/db.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { draftEmail } from "~/lib/ai/prompts/email-draft.server";
 import { canSendEmail } from "~/lib/email/send.server";
 import { isRejectionReason, REJECTION_REASONS } from "~/lib/forms/approval";
@@ -169,7 +169,7 @@ async function buildView(request: Request): Promise<ApplicationsView> {
           }
         : null,
     rejectionReasons: [...REJECTION_REASONS],
-    aiScreening: isAiAvailable(),
+    aiScreening: (await aiGate("screen")).allowed,
     emailDraft: {
       drafted: draft?.ok === true,
       failure: draft && !draft.ok ? draft.reason : null,

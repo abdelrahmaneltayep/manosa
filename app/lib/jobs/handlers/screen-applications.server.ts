@@ -1,5 +1,5 @@
 import { db } from "~/db.server";
-import { isAiAvailable } from "~/lib/ai/client.server";
+import { aiGate } from "~/lib/ai/permissions.server";
 import { domainOf } from "~/lib/forms/approval";
 import { screenSubmission } from "~/lib/forms/screening.server";
 import { shopScope } from "~/lib/tenant/shop-context.server";
@@ -35,9 +35,11 @@ export async function screenApplications() {
 
   if (waiting.length === 0) return { examined: 0, recommended: 0, look: 0, failed: 0 };
 
-  // With no key there is nothing to ask. Marked OFF rather than left WAITING:
-  // a queue that says "checking…" forever is a worse lie than "not screened".
-  if (!isAiAvailable()) {
+  // Three reasons this can be off — the merchant switched screening off, the
+  // plan does not include it, or there is no key — and `aiGate` is the only
+  // place that knows all three. Marked OFF rather than left WAITING: a queue
+  // that says "checking…" forever is a worse lie than "not screened".
+  if (!(await aiGate("screen")).allowed) {
     await db.formSubmission.updateMany({
       where: { id: { in: waiting.map((row) => row.id) } },
       data: { screening: "OFF", screenedAt: new Date() },
