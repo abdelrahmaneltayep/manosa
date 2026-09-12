@@ -1,4 +1,9 @@
 import { runMutation, type AdminGraphql } from "~/lib/pricing/admin-graphql.server";
+import {
+  PRODUCT_COLLECTIONS_FIELD,
+  productCollectionIds,
+  type ProductCollectionsMetafield,
+} from "~/lib/pricing/product-collections.server";
 
 /**
  * The Admin API calls the quote features make: finding something to quote, and
@@ -108,6 +113,7 @@ const VARIANT_SEARCH = `#graphql
         product {
           id
           title
+          ${PRODUCT_COLLECTIONS_FIELD}
         }
       }
     }
@@ -121,6 +127,14 @@ export interface VariantMatch {
   /** A decimal string in the shop's currency, as Shopify sends it. */
   price: string;
   productId: string;
+  /**
+   * The product's published collection membership, as checkout sees it.
+   *
+   * Carried on the match rather than fetched again at pricing time: a quote
+   * priced without it locks a number checkout will not honour, and a second
+   * fetch would be a second answer.
+   */
+  collectionIds: string[];
 }
 
 interface VariantNode {
@@ -128,7 +142,7 @@ interface VariantNode {
   title: string | null;
   sku: string | null;
   price: string | null;
-  product: { id: string; title: string | null } | null;
+  product: ({ id: string; title: string | null } & ProductCollectionsMetafield) | null;
 }
 
 /** How many matches a merchant is shown at once. */
@@ -201,6 +215,7 @@ export async function searchVariantsResult(
         sku: node.sku?.trim() || null,
         price: node.price ?? "0",
         productId: node.product?.id ?? node.id,
+        collectionIds: productCollectionIds(node.product),
       })),
     };
   } catch (error) {

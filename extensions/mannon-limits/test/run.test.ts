@@ -27,6 +27,7 @@ const limit = (overrides: Partial<OrderLimit> = {}): OrderLimit => ({
 
 function input(options: {
   limits?: OrderLimit[];
+  currency?: string;
   messages?: Partial<typeof DEFAULT_MESSAGES>;
   subtotal?: string;
   quantity?: number;
@@ -45,7 +46,10 @@ function input(options: {
   return {
     cart: {
       cost: {
-        subtotalAmount: { amount: options.subtotal ?? "250.00", currencyCode: "USD" },
+        subtotalAmount: {
+          amount: options.subtotal ?? "250.00",
+          currencyCode: options.currency ?? "USD",
+        },
       },
       lines: [{ quantity: options.quantity ?? 10 }],
       buyerIdentity: {
@@ -221,5 +225,55 @@ describe("it never blocks a whole store", () => {
     // No tier means the group limit does not apply, and there is no store-wide
     // one, so nothing blocks.
     expect(run(noFacts).errors).toEqual([]);
+  });
+});
+
+/**
+ * The cart's subtotal read a hundred times too high in every zero-decimal
+ * currency, and a thousand times too low in every three-decimal one.
+ *
+ * The app stores a limit through `parseMoney`, which knows each currency's
+ * exponent: a ¥1,000 minimum is 1000 minor units. The Function read the cart
+ * with a hardcoded `Math.round(amount * 100)` — so a ¥1,000 cart came to
+ * 100,000 and cleared a ¥1,000 minimum it should have failed, on every yen
+ * store, every time.
+ */
+describe("reading the cart's money in the store's own currency", () => {
+  const jpy = (value: string) => parseMoney(value, "JPY");
+
+  it("fails a yen cart below a yen minimum", () => {
+    const result = run(
+      input({
+        currency: "JPY",
+        subtotal: "800.0",
+        limits: [limit({ minSubtotal: jpy("1000") })],
+      }),
+    );
+
+    expect(result.errors).toHaveLength(1);
+  });
+
+  it("passes a yen cart above the same minimum", () => {
+    const result = run(
+      input({
+        currency: "JPY",
+        subtotal: "1200.0",
+        limits: [limit({ minSubtotal: jpy("1000") })],
+      }),
+    );
+
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it("blocks a yen cart over a yen maximum", () => {
+    const result = run(
+      input({
+        currency: "JPY",
+        subtotal: "50000.0",
+        limits: [limit({ maxSubtotal: jpy("10000") })],
+      }),
+    );
+
+    expect(result.errors).toHaveLength(1);
   });
 });

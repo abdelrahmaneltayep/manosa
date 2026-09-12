@@ -175,6 +175,7 @@ describe("the rehearsal's cart card", () => {
     title: "Blue Mug — Large",
     variantId: "gid://shopify/ProductVariant/1",
     productId: "gid://shopify/Product/1",
+    collectionIds: [],
     quantity: 100,
     unitPrice: "$6.50",
     lineTotal: "$650.00",

@@ -283,7 +283,14 @@
       "unreadableHeading_many": "تتعذّر قراءة {{count}} قاعدة",
       "unreadableHeading_other": "تتعذّر قراءة {{count}} قاعدة",
       "unreadableBody": "هي لا تُطبَّق عند الدفع. هذا خطأ في مانون وليس منك — تواصل معنا وسنصلحه.",
-      "csvLink": "استيراد أو تصدير ملف CSV"
+      "csvLink": "استيراد أو تصدير ملف CSV",
+      "collectionsPendingHeading_zero": "لا توجد قواعد تستخدم المجموعات",
+      "collectionsPendingHeading_one": "قاعدة واحدة تستخدم المجموعات، وكتالوجك ما زال يُنشَر",
+      "collectionsPendingHeading_two": "قاعدتان تستخدمان المجموعات، وكتالوجك ما زال يُنشَر",
+      "collectionsPendingHeading_few": "{{count}} قواعد تستخدم المجموعات، وكتالوجك ما زال يُنشَر",
+      "collectionsPendingHeading_many": "{{count}} قاعدة تستخدم المجموعات، وكتالوجك ما زال يُنشَر",
+      "collectionsPendingHeading_other": "{{count}} قاعدة تستخدم المجموعات، وكتالوجك ما زال يُنشَر",
+      "collectionsPendingBody": "يعرف الدفع المجموعات التي ينتمي إليها المنتج من مانون، وقد نشرنا {{published}} منتجًا حتى الآن. وإلى أن ينتهي ذلك، قد لا تستثني القاعدة التي تستثني مجموعةً تلك المجموعة عند الدفع. يعمل هذا وحده ولا يحتاج منك شيئًا."
     },
     "status": {
       "draft": "مسودة",

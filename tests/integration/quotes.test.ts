@@ -166,6 +166,7 @@ const line = (overrides: Record<string, unknown> = {}) => ({
   sku: "MUG-BL-L",
   quantity: 100,
   listPrice: money(1000, "USD"),
+  collectionIds: [] as string[],
   ...overrides,
 });
 

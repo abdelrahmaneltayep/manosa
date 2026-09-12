@@ -1,8 +1,9 @@
 # Progress
 
-Updated: 2026-09-11T18:30:00Z
+Updated: 2026-09-12T15:00:00Z
 Current milestone: 6 — Analytics
-Current task: 7.1 / 7.2 / 7.3 [done] — milestone 7 complete. Submission is stop condition #1.
+Current task: the pricing P0s from the 1.1/1.2 cold read [done]. The five
+billing P0s from the 0.3 cold read are next and are **not yet fixed**.
 
 ## Done
 
@@ -37,17 +38,19 @@ Current task: 7.1 / 7.2 / 7.3 [done] — milestone 7 complete. Submission is sto
 
 - [x] 6.5 ✦ Agent controls — permission toggles wired through every ✦ surface, brand-voice samples, the muted-briefing list, the audit log filterable by actor/action/date, and the twelve-month retention job — commit `5babb43` + fix round — QA: `qa/6.5/REPORT.md` (cold read returned FAIL on 25 findings, 1 P0 — **the gate did not gate the POST**: every call site put `aiGate(...).allowed` in a _view_ and never read it as a condition, so four ✦ surfaces still called Claude after a merchant switched it off. All fixed — `qa/6.5/COLD-READ.md`. `docs/adr/0027`. **There was no AI permission control anywhere before this** — every ✦ surface gated on `isAiAvailable()` alone — and **nothing enforced the audit retention** the schema has promised since 0.2.)
 
-- [x] 6.6 Translations — every buyer-facing string editable per language, ✦ wording suggested in the merchant's own voice, a review flag per string, export **and** import — commit `2ecabba` — QA: `qa/6.6/REPORT.md` (`docs/adr/0028`). The ✦ half nearly shipped inert for the fourth time: both catalogues ship complete, so "fill what is missing" would have had nothing to do on any store. It suggests wording over the strings a merchant has **not** written instead, which is also the first thing to read the 6.5 brand-voice samples. `StorefrontString` was not in the uninstall purge — the lesson from 6.4, applied before the cold read this time. **The cold read still returned FAIL on four P0s** (`qa/6.6/COLD-READ.md`), the worst a cross-tenant leak *outbound to buyers*: `addResource` writes into the object it is handed, so one shop's saved string rewrote the shipped catalogue for the whole process. Fixed in `aac76e3`: overrides are their own i18next namespace; the editable set is now ~50 genuinely buyer-facing keys rather than 534 mostly-admin ones; the checkout message is editable for real; an ✦ suggestion no longer reaches a buyer before a person accepts it; the page is one form with a save bar.
+- [x] 6.6 Translations — every buyer-facing string editable per language, ✦ wording suggested in the merchant's own voice, a review flag per string, export **and** import — commit `2ecabba` — QA: `qa/6.6/REPORT.md` (`docs/adr/0028`). The ✦ half nearly shipped inert for the fourth time: both catalogues ship complete, so "fill what is missing" would have had nothing to do on any store. It suggests wording over the strings a merchant has **not** written instead, which is also the first thing to read the 6.5 brand-voice samples. `StorefrontString` was not in the uninstall purge — the lesson from 6.4, applied before the cold read this time. **The cold read still returned FAIL on four P0s** (`qa/6.6/COLD-READ.md`), the worst a cross-tenant leak _outbound to buyers_: `addResource` writes into the object it is handed, so one shop's saved string rewrote the shipped catalogue for the whole process. Fixed in `aac76e3`: overrides are their own i18next namespace; the editable set is now ~50 genuinely buyer-facing keys rather than 534 mostly-admin ones; the checkout message is editable for real; an ✦ suggestion no longer reaches a buyer before a person accepts it; the page is one form with a save bar.
 
 - [x] 6.7 (part) Orders over time — an eighth chart, counts not money, with its own whole-number axis — commit `7dcd13e` — QA: `qa/6.7/REPORT.md`. Closes the `pages-features.md` §7 line deferred at 6.2. The ✦ chart menu was a hand-kept list **inside the prompt**: adding a chart to `CHART_KEYS` satisfied the validator while the model was never told it existed, so nothing could route to it. Generated from an exhaustive record now, with a test.
 
 - [x] 6.7 (part two) The three things that were registered and never built — the reorder chip (hardcoded `false` since 2.1), the net-terms risk signal (`terms_risk`: a prompt version, no prompt, no caller, no screen) and the widget greeting's tier and last order (open since 5.2) — commit `e9b2703` — QA: `qa/6.7/REPORT.md`. **Neither chip needed a model**: both are arithmetic on rows this app already stores, so `reorder_prediction` and `terms_risk` are deleted from the AI registry rather than left as names for features that do not exist. Found on the way: the Buyer Agent block was at **99.2% of its byte budget** because the guard counted `{% comment %}` and `{% schema %}`, neither of which Shopify ever serves — so the budget was pushing against documenting storefront code.
 
-- [x] 7.2 (part) Privacy — Shopify's three mandatory topics (`customers/data_request`, `customers/redact`, `shop/redact`), which this app subscribed to **none** of, and a shop purge that finally reaches the buyers — commit `89de3d3` — QA: `qa/7.2/REPORT.md`. The purge cleared the *merchant's* two contact fields and left every buyer's name, address, phone, VAT number, form answers, uploaded documents and every message sent to them behind, under copy promising deletion within 48 hours. **The cold read returned FAIL on three P0s and seven P1s** (`qa/7.2/COLD-READ.md`) — fixed in `390523c`. The worst: `shop/redact` wrote the very `uninstalledAt` the purge checks before deleting, so one delivery for a shop whose uninstall we had missed wiped a **live, trading merchant**; a reinstall never cleared `piiPurgedAt`, so a shop that had ever been purged could never be purged again; and the three topics were declared as `topics` rather than `compliance_topics`, which means Shopify is never told where to send them and the whole feature ships inert. Plus the retention sweep for the five tables that only ever grew.
+- [x] 7.2 (part) Privacy — Shopify's three mandatory topics (`customers/data_request`, `customers/redact`, `shop/redact`), which this app subscribed to **none** of, and a shop purge that finally reaches the buyers — commit `89de3d3` — QA: `qa/7.2/REPORT.md`. The purge cleared the _merchant's_ two contact fields and left every buyer's name, address, phone, VAT number, form answers, uploaded documents and every message sent to them behind, under copy promising deletion within 48 hours. **The cold read returned FAIL on three P0s and seven P1s** (`qa/7.2/COLD-READ.md`) — fixed in `390523c`. The worst: `shop/redact` wrote the very `uninstalledAt` the purge checks before deleting, so one delivery for a shop whose uninstall we had missed wiped a **live, trading merchant**; a reinstall never cleared `piiPurgedAt`, so a shop that had ever been purged could never be purged again; and the three topics were declared as `topics` rather than `compliance_topics`, which means Shopify is never told where to send them and the whole feature ships inert. Plus the retention sweep for the five tables that only ever grew.
 
 - [x] 7.1 A deployment that says what is wrong with it — a boot-time environment check, `/healthz/ready`, and a drift guard holding the variable list, the code and `.env.example` together — commit `806d591` — QA: `qa/7.1/REPORT.md`. **The app booted happily without `SHOPIFY_API_SECRET`**, which does not refuse a webhook — it verifies it against an empty key, so a forged delivery for any shop is accepted. And **nothing anywhere said the job runner had stopped**: every promise this app makes on a schedule, the 48-hour GDPR purge included, runs only because an external cron POSTs `/internal/jobs/run`, and a cron that is never set up looks exactly like one that is. The drift guard found `SHOPIFY_DISCOUNT_FUNCTION_ID` documented nowhere — without it wholesale prices are right in the admin and never applied at checkout.
 
-- [x] 7.3 Submission readiness — `npm run release:check` — commit `80daff7` — QA: `qa/7.3/REPORT.md`. **Shopify's own self-review requirements could not be fetched**: `shopify.dev` is blocked by this environment's network policy (`shopify doc fetch` → 403), and the skill that runs that review says never to work from a remembered list. So this is explicitly *not* a compliance report — it is the subset a machine can check from inside the repo. It found one real blocker: every URL in `shopify.app.toml` is still `https://localhost:3000`, which Shopify calls for OAuth, webhooks and the App Proxy, so a submission on that file is rejected before anybody reads the listing. Known since 3.4 and never checked.
+- [x] 7.3 Submission readiness — `npm run release:check` — commit `80daff7` — QA: `qa/7.3/REPORT.md`. **Shopify's own self-review requirements could not be fetched**: `shopify.dev` is blocked by this environment's network policy (`shopify doc fetch` → 403), and the skill that runs that review says never to work from a remembered list. So this is explicitly _not_ a compliance report — it is the subset a machine can check from inside the repo. It found one real blocker: every URL in `shopify.app.toml` is still `https://localhost:3000`, which Shopify calls for OAuth, webhooks and the App Proxy, so a submission on that file is rejected before anybody reads the listing. Known since 3.4 and never checked.
+
+- [x] **The four pricing P0s** from `qa/1.1-1.2/COLD-READ.md` — commit `PENDING` — QA: `qa/pricing-p0/REPORT.md` (`docs/adr/0029`). The two worst were one root cause in two directions: **nothing taught anything outside the checkout Function which collections a product is in.** (1) `$app:mannon.collections` was written only by two webhooks, both of which fire on _change_, so a store installing with an existing catalogue sent every product to checkout with no collections — and _"20% off everything except Sale"_ then discounts exactly the products the merchant protected. There is a `products.backfill` job now, and the Pricing page says so while it runs. (2) `pricing.server.ts` hardcoded `collectionIds: []` in the **one** function that prices quick order, quotes, the Buyer Agent and PO-to-order: the block showed $8.00 and checkout charged $10.00, and a quote locked the wrong number for ever. Every surface now reads the _same metafield the Function reads_, and the field is required so no caller can forget. (3) `parseMoney` threw on `"1000.0"`, which is how Shopify serialises a **¥1,000** line — so every wholesale buyer in a zero-decimal-currency store paid retail, silently, for ever; and one odd amount cost the whole cart its discounts rather than one line. (4) The automatic discount was created with **no `discountClasses`** while the Function's first line refuses everything without `PRODUCT` — a discount that ran on every cart and was permitted to produce nothing. Found in passing, same class: order limits read the cart with a hardcoded `× 100`, so a ¥1,000 minimum passed a ¥1,000 cart on every yen store.
 
 ## Next up
 
@@ -170,6 +173,39 @@ Neither is blocking; both would change product decisions if answered.
 2. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
 
 ## Notes for my next self
+
+- **A metafield is the only thing checkout knows, and a webhook only fires on
+  change.** Every fact the discount Function needs — the ruleset, the buyer's
+  tags, the product's collections — reaches it through a metafield this app
+  writes, because the Function's input query is fixed at deploy time. So each
+  of those needs _both_ a webhook (for changes from now on) and a backfill (for
+  everything that already exists). Customers and orders had one; products did
+  not, for the whole of milestones 1 to 7. If you add a fourth such fact, the
+  backfill is part of the feature, not a follow-up.
+- **`collectionIds: []` in a shared pricing function is four different prices.**
+  The engine is pure and correct; it answers the context it is given. The bug
+  was never in `packages/pricing-engine` — it was that four callers handed it an
+  _incomplete_ context, so "one module, one answer" still produced four. Where
+  a caller cannot omit a field, make the type require it: making
+  `QuoteLineRequest.collectionIds` required found all eight call sites in one
+  `tsc` run, including two nobody had thought about.
+- **Read the same source as the thing you must agree with.** The storefront
+  could have asked Shopify for a product's collections directly and been
+  _fresher_ than checkout — and therefore wrong, because checkout reads the
+  metafield. Agreement beats freshness whenever a buyer is shown a number they
+  will later be charged.
+- **Shopify serialises `MoneyV2.amount` with a decimal point in every currency.**
+  A ¥1,000 line arrives as `"1000.0"`. Any parser that treats "digits past the
+  exponent" as "too much precision" refuses it. Trailing zeros are formatting;
+  only a _significant_ digit past the exponent is a rounding decision. Two
+  Functions had a money bug of this shape, in opposite directions.
+- **Never hardcode `× 100`.** `mannon-limits` did, so a ¥1,000 cart read as
+  ¥100,000 and cleared every minimum. `parseMoney` knows the exponent table;
+  there is no second place that should.
+- **A `try` around a whole loop is not a per-item guard.** The discount
+  Function's header promised "anything unexpected costs one line, not the
+  cart" and the code did the opposite, because the only `catch` was outside the
+  loop. Where a comment states a blast radius, check the brace it sits in.
 
 - **`Order.totalPrice` is ALREADY net of refunds.** It comes from Shopify's
   `current_total_price`. Never subtract `refundedAmount` from it —
@@ -456,9 +492,9 @@ Neither is blocking; both would change product decisions if answered.
   `tests/unit/capture-guard.test.ts` puts a real leak beside an exempt element
   and expects a failure.
 - **An `s-*` field is not a form control in a capture.** `s-text-area
-  name="value"` never reaches `FormData` in the browser here, because Polaris
+name="value"` never reaches `FormData` in the browser here, because Polaris
   never upgrades it. The e2e form-parser checks (the 6.4 nested-form net) can
-  see hidden inputs and form *count*, and cannot see what a merchant's typing
+  see hidden inputs and form _count_, and cannot see what a merchant's typing
   posts. Assert `s-*` fields as markup and say so in the report.
 - **The fourth inert control was caught before shipping, not after.** "✦ Fill
   missing translations" would have had nothing to do on any store, because both
@@ -467,7 +503,7 @@ Neither is blocking; both would change product decisions if answered.
   decoration. The three before it were `taxExemptNeedsApproval`, the
   auto-approve toggle and the API keys page.
 - **A closed list given to a model is a registration step too.** The ✦ ask
-  router validated the chart name against `CHART_KEYS` while the *menu* the
+  router validated the chart name against `CHART_KEYS` while the _menu_ the
   model chose from was typed out inside the prompt template. Adding a chart
   passed every test and could never be routed to. Both now come from one
   exhaustive `Record<ChartKey, string>`, checked by
@@ -538,7 +574,7 @@ Neither is blocking; both would change product decisions if answered.
   way immediately found `AiRun`, which nothing had ever deleted.
 - **A handler must not write the flag its own safety check reads.**
   `shop/redact` stamped `uninstalledAt` — the purge's only guard against
-  deleting a live shop — and then queued the purge for *now*. The test I wrote
+  deleting a live shop — and then queued the purge for _now_. The test I wrote
   asserted the stamp was written and never ran the job, so it proved the first
   half of the bug and called it the feature.
 - **`piiPurgedAt` is cleared on reinstall.** It was not, and the purge skips any

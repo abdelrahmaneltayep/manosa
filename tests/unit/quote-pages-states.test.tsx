@@ -365,12 +365,16 @@ describe("one quote", () => {
             results: [
               {
                 variantId: "v1",
+                productId: "gid://shopify/Product/1",
+                collectionIds: ["gid://shopify/Collection/sale"],
                 title: "Blue Mug — Large",
                 sku: "MUG-BL-L",
                 price: "10.00",
               },
               {
                 variantId: "v2",
+                productId: "gid://shopify/Product/1",
+                collectionIds: [],
                 title: "Blue Mug — Small",
                 sku: "MUG-BL-S",
                 price: "8.00",

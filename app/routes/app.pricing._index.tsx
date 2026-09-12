@@ -1,3 +1,4 @@
+import type { PricingRule } from "@mannon/pricing-engine";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
@@ -9,8 +10,10 @@ import { aiGate } from "~/lib/ai/permissions.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate } from "~/i18n/translate";
 import { loadEntitlements } from "~/lib/billing/entitlements.server";
+import { ruleUsesCollections } from "~/lib/pricing/product-collections.server";
 import { RulesetTooLargeError } from "~/lib/pricing/ruleset.server";
 import {
+  activeEngineRules,
   archiveRule,
   ARCHIVE_RETENTION_DAYS,
   listRules,
@@ -65,6 +68,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         : null,
       publishError: url.searchParams.get("publishError") as RuleListView["publishError"],
       atRuleLimit: limit !== null && page.totalUnfiltered >= limit,
+      collectionsPending: collectionsPending(shop, (await activeEngineRules()).rules),
       archiveRetentionDays: ARCHIVE_RETENTION_DAYS,
       // ✦ Describe a rule works whenever there is a key to ask with.
       aiAvailable: (await aiGate("draft")).allowed,
@@ -72,6 +76,26 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 
     return json({ view });
   });
+
+/**
+ * Is a collection rule live before checkout has been told what is in it?
+ *
+ * The membership reaches checkout only through a metafield this app writes,
+ * and a whole catalogue takes many queued pages. While that is running, a rule
+ * excluding a collection excludes nothing at checkout — the buyer is
+ * discounted on exactly the products the merchant protected. Nothing said so,
+ * which is Invariant 4: the merchant is told, with the count, rather than
+ * finding out from an order.
+ */
+function collectionsPending(
+  shop: { productsBackfilledAt: Date | null; productsPublished: number } | null,
+  rules: PricingRule[],
+): RuleListView["collectionsPending"] {
+  if (!shop || shop.productsBackfilledAt) return null;
+  const ruleCount = rules.filter(ruleUsesCollections).length;
+  if (ruleCount === 0) return null;
+  return { published: shop.productsPublished, ruleCount };
+}
 
 export const action = ({ request }: ActionFunctionArgs) =>
   withAdmin(request, async ({ admin, session }) => {

@@ -7,6 +7,7 @@ import { normalizeBuyerFacts, publishBuyerFacts } from "~/lib/pricing/buyer-fact
 import {
   ensureDiscount,
   publishRuleset,
+  repairDiscountClasses,
   RULESET_BYTE_LIMIT,
   RulesetTooLargeError,
   rulesetPayload,
@@ -84,6 +85,12 @@ const HAPPY = {
   MannonSetBuyerFacts: {
     metafieldsSet: { metafields: [{ id: "gid://mf/2" }], userErrors: [] },
   },
+  MannonUpdateDiscount: {
+    discountAutomaticAppUpdate: {
+      automaticAppDiscount: { discountId: DISCOUNT_ID },
+      userErrors: [],
+    },
+  },
 };
 
 async function installShop(shop: string) {
@@ -119,6 +126,142 @@ describe("publishing the ruleset", () => {
     expect(metafield.key).toBe("ruleset");
     expect(metafield.type).toBe("json");
     expect(JSON.parse(metafield.value as string).rules[0].id).toBe("wholesale-35");
+  });
+
+  /**
+   * The Function's first statement is
+   * `if (!input.discount.discountClasses.includes("PRODUCT")) return NOTHING`,
+   * and this field was not sent at all. Shopify decides per discount which
+   * classes a Function may generate, so the app's own discount was never
+   * granted the one class it exists to produce: it ran on every cart and was
+   * permitted to produce nothing, with no error anywhere.
+   */
+  it("grants the discount the PRODUCT class the Function requires", async () => {
+    await installShop(ALPHA);
+    const admin = fakeAdmin(HAPPY);
+
+    await inAlpha(() => publishRuleset(admin, [rule()]));
+
+    const create = callFor(admin, "MannonCreateDiscount");
+    const discount = create!.variables!.discount as Record<string, unknown>;
+    expect(discount.discountClasses).toEqual(["PRODUCT"]);
+
+    // And nothing else: Mannon changes a line's unit price. Asking for the
+    // order or shipping class would let a future bug apply one.
+    expect(discount.discountClasses).toHaveLength(1);
+  });
+
+  it("repairs a discount created before the class was sent, once", async () => {
+    await installShop(ALPHA);
+    // A shop whose discount predates the fix: it has an id and no stamp.
+    await inAlpha(() =>
+      db.shop.update({
+        where: { shop: ALPHA },
+        data: { discountId: DISCOUNT_ID, discountClassesAt: null },
+      }),
+    );
+
+    const admin = fakeAdmin(HAPPY);
+    await inAlpha(() => ensureDiscount(admin, [rule()]));
+
+    const classUpdate = admin.calls.find(
+      (call) =>
+        call.query.includes("MannonUpdateDiscount") &&
+        (call.variables?.discount as Record<string, unknown>)?.discountClasses !==
+          undefined,
+    );
+    expect(
+      (classUpdate!.variables!.discount as Record<string, unknown>).discountClasses,
+    ).toEqual(["PRODUCT"]);
+
+    // Stamped, so the next page view does not send it again.
+    const after = await inAlpha(() => db.shop.findUnique({ where: { shop: ALPHA } }));
+    expect(after!.discountClassesAt).not.toBeNull();
+
+    const second = fakeAdmin(HAPPY);
+    await inAlpha(() => ensureDiscount(second, [rule()]));
+    expect(
+      second.calls.filter((call) => call.query.includes("MannonUpdateDiscount")),
+    ).toHaveLength(0);
+  });
+
+  it("does not repair a discount it has just created", async () => {
+    await installShop(ALPHA);
+    const admin = fakeAdmin(HAPPY);
+
+    await inAlpha(() => ensureDiscount(admin, [rule()]));
+
+    // The create carried the classes, so nothing has to update them.
+    expect(
+      admin.calls.filter((call) => call.query.includes("MannonUpdateDiscount")),
+    ).toHaveLength(0);
+    const shop = await inAlpha(() => db.shop.findUnique({ where: { shop: ALPHA } }));
+    expect(shop!.discountClassesAt).not.toBeNull();
+  });
+
+  /**
+   * The repair has to reach a merchant who is not about to edit a rule.
+   *
+   * `ensureDiscount` runs on publish. A store whose rules were already set up
+   * would have had no wholesale pricing at checkout at all, for ever, with
+   * nothing anywhere telling them to go and touch a rule.
+   */
+  it("repairs from the layout loader, not only from a publish", async () => {
+    await installShop(ALPHA);
+    await inAlpha(() =>
+      db.shop.update({
+        where: { shop: ALPHA },
+        data: { discountId: DISCOUNT_ID, discountClassesAt: null },
+      }),
+    );
+
+    const admin = fakeAdmin(HAPPY);
+    await inAlpha(async () => {
+      const record = await db.shop.findUnique({ where: { shop: ALPHA } });
+      await repairDiscountClasses(admin, record!);
+    });
+
+    expect(
+      admin.calls.filter((call) => call.query.includes("MannonUpdateDiscount")),
+    ).toHaveLength(1);
+
+    // And never again, from any caller.
+    const second = fakeAdmin(HAPPY);
+    await inAlpha(async () => {
+      const record = await db.shop.findUnique({ where: { shop: ALPHA } });
+      await repairDiscountClasses(second, record!);
+    });
+    expect(second.calls).toHaveLength(0);
+  });
+
+  it("does not fail a page load when the repair cannot be made", async () => {
+    await installShop(ALPHA);
+    await inAlpha(() =>
+      db.shop.update({
+        where: { shop: ALPHA },
+        data: { discountId: DISCOUNT_ID, discountClassesAt: null },
+      }),
+    );
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const admin = fakeAdmin({
+      MannonUpdateDiscount: {
+        discountAutomaticAppUpdate: { userErrors: [{ message: "Shopify said no" }] },
+      },
+    });
+
+    await inAlpha(async () => {
+      const record = await db.shop.findUnique({ where: { shop: ALPHA } });
+      // Resolves. A merchant must not get an error page because a repair could
+      // not be made.
+      await expect(repairDiscountClasses(admin, record!)).resolves.toBeUndefined();
+    });
+
+    // And it is not stamped, so the next page view tries again.
+    const after = await inAlpha(() => db.shop.findUnique({ where: { shop: ALPHA } }));
+    expect(after!.discountClassesAt).toBeNull();
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 
   it("remembers the discount and does not create a second one", async () => {

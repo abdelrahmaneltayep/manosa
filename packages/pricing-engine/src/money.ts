@@ -80,16 +80,23 @@ export function parseMoney(value: string, currencyCode: string): Money {
   const [, sign, whole, fraction = ""] = match;
   const exponent = currencyExponent(currencyCode);
 
-  if (fraction.length > exponent) {
-    // Silently truncating here would be a rounding decision hidden inside a
-    // parser, which is exactly where a money bug goes unnoticed.
+  // Trailing zeros past the currency's exponent are formatting, not precision.
+  // Shopify serialises `MoneyV2.amount` with a decimal point whatever the
+  // currency — a JPY cart line arrives as "1000.0" — and refusing that made
+  // every zero-decimal-currency store checkout at retail, silently, for ever.
+  // Nothing is rounded away here: "1000.0" JPY is exactly 1000 yen.
+  const significant = fraction.replace(/0+$/, "");
+
+  if (significant.length > exponent) {
+    // Truncating a *significant* digit would be a rounding decision hidden
+    // inside a parser, which is exactly where a money bug goes unnoticed.
     throw new MoneyError(
       `"${value}" has more precision than ${currencyCode.toUpperCase()} allows ` +
         `(${exponent} decimal place${exponent === 1 ? "" : "s"}). Round before parsing.`,
     );
   }
 
-  const padded = fraction.padEnd(exponent, "0");
+  const padded = fraction.slice(0, exponent).padEnd(exponent, "0");
   const minor = Number(`${whole}${padded}`);
   if (!Number.isSafeInteger(minor)) {
     throw new MoneyError(`"${value}" ${currencyCode} is too large to represent exactly`);

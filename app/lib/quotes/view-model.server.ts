@@ -109,7 +109,21 @@ export interface DetailOptions {
   error: string | null;
   search: {
     query: string;
-    results: { variantId: string; title: string; sku: string | null; price: string }[];
+    results: {
+      variantId: string;
+      /**
+       * Carried through the form so the added line is priced with the whole
+       * context. Both of these used to be dropped between the search and the
+       * quote — `productId: null` and no collections — so adding a line by
+       * hand lost every product- and collection-scoped rule that the search
+       * result itself had matched.
+       */
+      productId: string;
+      collectionIds: string[];
+      title: string;
+      sku: string | null;
+      price: string;
+    }[];
     searched: boolean;
   };
 }
@@ -140,6 +154,7 @@ export function toQuoteDetailView(
               quantity: line.quantity,
               unitPrice: money(line.unitPrice, quote.currencyCode),
               listPrice: money(line.listPrice, quote.currencyCode),
+              collectionIds: line.collectionIds,
             },
             buyerFacts,
             rules,

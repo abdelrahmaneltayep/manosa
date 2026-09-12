@@ -2,6 +2,11 @@ import { money, parseMoney, type Money } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
+import {
+  PRODUCT_COLLECTIONS_FIELD,
+  productCollectionIds,
+  type ProductCollectionsMetafield,
+} from "~/lib/pricing/product-collections.server";
 import { activeEngineRules } from "~/lib/pricing/rules.server";
 import { formatCurrency } from "~/lib/money";
 import { priceLine, type BuyerForPricing } from "~/lib/quotes/pricing.server";
@@ -33,6 +38,7 @@ const VARIANTS_BY_SKU = `#graphql
           title
           handle
           status
+          ${PRODUCT_COLLECTIONS_FIELD}
         }
       }
     }
@@ -46,12 +52,14 @@ export interface VariantNode {
   availableForSale: boolean | null;
   inventoryQuantity: number | null;
   inventoryPolicy: string | null;
-  product: {
-    id: string;
-    title: string | null;
-    handle: string | null;
-    status: string | null;
-  } | null;
+  product:
+    | ({
+        id: string;
+        title: string | null;
+        handle: string | null;
+        status: string | null;
+      } & ProductCollectionsMetafield)
+    | null;
 }
 
 export type StockState = "in_stock" | "low" | "backorder" | "out_of_stock";
@@ -221,6 +229,9 @@ export async function priceQuickOrder(
         sku: node.sku,
         quantity: line.quantity,
         listPrice,
+        // The same metafield the checkout Function reads, so what this block
+        // shows and what checkout charges cannot disagree.
+        collectionIds: productCollectionIds(node.product),
       },
       buyer,
       rules,

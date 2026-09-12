@@ -31,6 +31,19 @@ import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 
 const asString = (form: FormData, key: string) => (form.get(key) ?? "").toString().trim();
 
+/**
+ * The collection ids the search result carried, as the form sends them.
+ *
+ * One hidden field with one id per line rather than JSON: a form field is a
+ * string, and a malformed JSON blob posted by hand would throw inside an
+ * action rather than simply price a line with fewer collections.
+ */
+const readCollectionIds = (form: FormData): string[] =>
+  asString(form, "collectionIds")
+    .split("\n")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
 /** The lines a quote already has, in the shape the pricing path takes. */
 function existingLines(quote: QuoteWithLines): QuoteLineRequest[] {
   return quote.lines.map((line) => ({
@@ -40,6 +53,7 @@ function existingLines(quote: QuoteWithLines): QuoteLineRequest[] {
     sku: line.sku,
     quantity: line.quantity,
     listPrice: money(line.listPrice, quote.currencyCode),
+    collectionIds: line.collectionIds,
   }));
 }
 
@@ -92,6 +106,8 @@ async function buildView(
       query,
       results: results.map((result) => ({
         variantId: result.id,
+        productId: result.productId,
+        collectionIds: result.collectionIds,
         title: result.title,
         sku: result.sku,
         price: result.price,
@@ -143,11 +159,16 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
         } else {
           lines.push({
             variantId,
-            productId: null,
+            // Both come back from the search result's own hidden fields. They
+            // were `null` and `[]` here, so a line added by hand was priced
+            // without the product- and collection-scoped rules that apply to
+            // it at checkout.
+            productId: asString(form, "productId") || null,
             title: asString(form, "title"),
             sku: asString(form, "sku") || null,
             quantity: Math.max(1, Math.trunc(quantity)),
             listPrice,
+            collectionIds: readCollectionIds(form),
           });
         }
 
@@ -166,6 +187,7 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
             sku: line.sku,
             quantity: line.quantity,
             listPrice: money(line.listPrice, quote.currencyCode),
+            collectionIds: line.collectionIds,
           }));
 
         if (lines.length === 0) {

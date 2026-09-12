@@ -841,7 +841,7 @@ The error names the fix: switch the language above, then import again.
 
 ## 2026-09-11 — "✦ Fill missing" became "✦ Suggest wording in your voice"
 
-Checklist §8 asks for *"✦ Fill missing with AI per language"*. Both catalogues
+Checklist §8 asks for _"✦ Fill missing with AI per language"_. Both catalogues
 this app ships are complete in both languages, so a button that fills what is
 missing would have had nothing to do on any store that ever installs it. The
 mechanism is unchanged — the same model call, the same batch, the same
@@ -899,3 +899,46 @@ Rejected: deleting orders on a buyer redaction (above), and redacting rather
 than deleting on a shop purge (it would leave a shop's whole order history
 sitting in this app for ever after they uninstalled, under copy promising it
 was gone in 48 hours).
+
+## 2026-09-12 — Every surface reads the metafield, not Shopify
+
+Collection membership reaches the checkout Function only through
+`$app:mannon.collections`, a metafield this app writes. Quick order, quotes,
+the Buyer Agent, PO-to-order and the theme's variants table all priced with
+`collectionIds: []`, so the price a buyer was shown and the price they were
+charged could differ by any rule that named a collection.
+
+All of them now read **the same metafield the Function reads**, through one
+module. The alternative — asking the Admin API for the product's real
+collections at pricing time — is more direct and more current, and that is the
+problem: it would be _fresher_ than the metafield, so on any product the
+backfill has not reached yet, the storefront would confidently show a price
+checkout will not honour. When a buyer is shown a number they will later be
+charged, agreeing with the thing that charges them beats being right sooner.
+
+One consequence is deliberate: a stale metafield makes both sides stale
+together. That is a correctness problem with one owner and one fix — the
+backfill — rather than a disagreement between two subsystems.
+
+Rejected: sending `product.collections` from Liquid (same freshness problem,
+plus it cannot be verified against `shopify.dev` from this environment); a
+mirrored `Product` table (a third copy of a fact Shopify already owns, with its
+own sync to go wrong).
+
+## 2026-09-12 — `parseMoney` accepts trailing zeros, and nothing else
+
+`parseMoney` threw on any digit past the currency's exponent, which was right
+in spirit and wrong in fact: Shopify serialises `MoneyV2.amount` with a decimal
+point in every currency, so a ¥1,000 cart line arrives as `"1000.0"`. The
+discount Function caught the throw and returned no operations, so every
+wholesale buyer in a zero-decimal-currency store paid retail, for ever.
+
+Trailing zeros carry no information — `"1000.0"` JPY is exactly 1000 yen — so
+accepting them is not a rounding decision hidden in a parser, which is the
+thing the original rule existed to prevent. A _significant_ digit past the
+exponent still throws.
+
+Rejected: normalising at each call site (four call sites, each one an
+opportunity to get it wrong differently); rounding in the parser (the exact
+hidden rounding decision the rule forbids); catching in the Function and
+falling back to retail (that is what it was already doing, silently).

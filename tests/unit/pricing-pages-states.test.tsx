@@ -73,6 +73,7 @@ const listView = (overrides: Partial<RuleListView> = {}): RuleListView => ({
   page: 1,
   pageSize: 50,
   totalUnfiltered: 0,
+  collectionsPending: null,
   search: "",
   archived: false,
   sort: "priority",
@@ -242,6 +243,45 @@ describe("rule list states", () => {
     capture("09-list-archived-empty", html);
     expect(html).toContain("Nothing archived");
     expect(html).toContain("30 days");
+  });
+
+  /**
+   * A rule that depends on collection membership, live before checkout has
+   * been told what is in them.
+   *
+   * The membership reaches checkout only through a metafield this app writes,
+   * and publishing a whole catalogue takes many queued pages. While that runs,
+   * a rule excluding a collection excludes nothing at checkout — the buyer is
+   * discounted on exactly the products the merchant protected. Nothing said
+   * so, which is Invariant 4.
+   */
+  it("partial — collection rules are live while the catalogue is still publishing", () => {
+    const html = render(
+      <RuleListPage
+        view={listView({
+          rows: [row()],
+          total: 1,
+          totalUnfiltered: 1,
+          collectionsPending: { published: 420, ruleCount: 2 },
+        })}
+      />,
+    );
+    capture("18-list-collections-pending", html);
+
+    // Pluralised on the rule count, and carrying the real published figure —
+    // not "some products", which is a sentence that tells a merchant nothing.
+    expect(html).toContain("2 rules use collections");
+    expect(html).toContain("420 products");
+    // It needs nothing from them, and says so rather than implying an action.
+    expect(html).toContain("runs on its own");
+  });
+
+  it("says nothing when no rule uses collections", () => {
+    const html = render(
+      <RuleListPage view={listView({ rows: [row()], total: 1, totalUnfiltered: 1 })} />,
+    );
+
+    expect(html).not.toContain("still publishing");
   });
 
   it("paginates past one page", () => {

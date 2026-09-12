@@ -30,6 +30,21 @@ export interface QuoteLineRequest {
   quantity: number;
   /** The variant's own price, as a decimal string, in the shop's currency. */
   listPrice: Money;
+  /**
+   * Which collections this product is in, as published to checkout.
+   *
+   * Required, and deliberately so. This was `collectionIds: []`, hardcoded one
+   * line below, in the one function that prices quick order, quotes, the Buyer
+   * Agent and PO-to-order — so a rule excluding a collection excluded nothing
+   * here and everything at checkout, and the buyer was shown a price they
+   * would not be charged. A caller that does not know has to say `[]` out
+   * loud; the type no longer says it for them.
+   *
+   * Read it with `productCollectionIds` from
+   * `~/lib/pricing/product-collections.server`, which reads the same metafield
+   * the checkout Function reads.
+   */
+  collectionIds: string[];
 }
 
 export interface PricedLine extends QuoteLineRequest {
@@ -74,7 +89,7 @@ export function priceLine(
       product: {
         productId: line.productId ?? line.variantId,
         variantId: line.variantId,
-        collectionIds: [],
+        collectionIds: line.collectionIds,
         price: line.listPrice,
         cost: null,
       },
@@ -139,6 +154,7 @@ export function priceDriftFor(
     quantity: number;
     unitPrice: Money;
     listPrice: Money;
+    collectionIds: string[];
   },
   buyer: BuyerForPricing,
   rules: PricingRule[],
@@ -151,6 +167,7 @@ export function priceDriftFor(
       title: "",
       quantity: line.quantity,
       listPrice: line.listPrice,
+      collectionIds: line.collectionIds,
     },
     buyer,
     rules,

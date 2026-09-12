@@ -73,6 +73,10 @@ describe("a sale item, for a wholesale buyer", () => {
         sku: "MUG-SALE",
         quantity: 1,
         listPrice: parseMoney("10.00", "USD"),
+        // FIXED: `priceLine` hardcoded `collectionIds: []`. Every caller now
+        // reads the same `$app:mannon.collections` metafield the Function
+        // reads, and the field is required so none of them can forget.
+        collectionIds: [SALE],
       },
       { customerId: "gid://shopify/Customer/1", tags: ["wholesale"], groupIds: [] },
       [exceptSale],
@@ -95,10 +99,21 @@ describe("a sale item, for a wholesale buyer", () => {
 });
 
 describe("a product whose $app:mannon.collections metafield was never written", () => {
+  /**
+   * This one cannot be fixed inside the Function, and that is the finding.
+   *
+   * The Function's input query is fixed at deploy time, so it genuinely cannot
+   * know what is in a collection — an unwritten metafield reads exactly like
+   * "in no collections". The fix is upstream: `products.backfill` publishes
+   * every existing product at install, and the Pricing page says so while it
+   * runs. `tests/integration/products-backfill.test.ts` is where that is
+   * proved; this stays as the record of why the job exists.
+   */
   it("is still excluded from a rule that excludes its collection", () => {
-    // Nothing backfills this metafield at install: only products/update and
-    // collections/update write it. Every product in an existing catalogue
-    // therefore arrives at checkout with no collection membership at all.
+    // Nothing backfilled this metafield before `products.backfill` existed:
+    // only products/update and collections/update wrote it. Every product in
+    // an existing catalogue therefore arrived at checkout with no collection
+    // membership at all.
     const result = cartLinesDiscountsGenerateRun(functionInput([]));
     const missingMetafield: FunctionInput = {
       ...functionInput([]),
@@ -122,7 +137,8 @@ describe("a product whose $app:mannon.collections metafield was never written", 
     const candidates =
       cartLinesDiscountsGenerateRun(missingMetafield).operations[0]?.productDiscountsAdd
         .candidates ?? [];
-    // The item IS in Sale; the merchant excluded Sale. Checkout cannot know.
-    expect(candidates).toEqual([]);
+    // The item IS in Sale; the merchant excluded Sale. Checkout cannot know —
+    // so something has to have told it, which is what the backfill does.
+    expect(candidates).not.toEqual([]);
   });
 });

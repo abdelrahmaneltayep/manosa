@@ -135,6 +135,23 @@ export const combinesWith = (allowShopifyDiscounts: boolean) => ({
   shippingDiscounts: true,
 });
 
+/**
+ * Which discount classes this app's discount is allowed to produce.
+ *
+ * The Function's very first statement is
+ * `if (!input.discount.discountClasses.includes("PRODUCT")) return NOTHING`,
+ * because Shopify decides per discount which classes a Function may generate
+ * and the Function must not hand back an operation it has not been permitted.
+ * The create mutation left this field off entirely, so the app's own discount
+ * was never granted the one class it exists to produce — a discount that ran on
+ * every cart and returned nothing on every cart, with no error anywhere.
+ *
+ * `PRODUCT` and nothing else: Mannon changes a line's unit price. It never
+ * discounts an order total or shipping, and asking for classes it does not use
+ * would let a future bug apply one.
+ */
+export const DISCOUNT_CLASSES = ["PRODUCT"] as const;
+
 const UPDATE_DISCOUNT = `#graphql
   mutation MannonUpdateDiscount($id: ID!, $discount: DiscountAutomaticAppInput!) {
     discountAutomaticAppUpdate(id: $id, automaticAppDiscount: $discount) {
@@ -151,6 +168,11 @@ export async function ensureDiscount(
   const existing = await db.shop.findUnique({ where: { shop } });
 
   if (existing?.discountId) {
+    // Stores that installed before `discountClasses` was sent carry a discount
+    // Shopify never granted the PRODUCT class, so their Function returns
+    // nothing on every cart. Repaired once, here, rather than leaving those
+    // merchants to reinstall.
+    await syncDiscountClasses(admin, existing.discountId, existing.discountClassesAt);
     await syncCombinations(admin, existing.discountId, existing.allowShopifyDiscounts);
     return existing.discountId;
   }
@@ -168,6 +190,9 @@ export async function ensureDiscount(
         title: "Mannon wholesale pricing",
         // No end date: wholesale pricing is not a promotion.
         startsAt: new Date().toISOString(),
+        // Without this the Function is not permitted to produce a product
+        // discount, and it refuses to run at all.
+        discountClasses: [...DISCOUNT_CLASSES],
         combinesWith: combinesWith(existing?.allowShopifyDiscounts ?? false),
         metafields: [
           {
@@ -203,6 +228,8 @@ export async function ensureDiscount(
       discountId,
       discountFunctionId: functionId,
       combinationsHash: existing?.allowShopifyDiscounts ? "allow" : "deny",
+      // Sent on the create, so nothing has to repair it afterwards.
+      discountClassesAt: new Date(),
     },
   });
 
@@ -298,6 +325,36 @@ export async function publishRuleset(
  * Hashed against `combinationsHash` so a rule save does not spend an API call
  * re-stating a setting that has not moved.
  */
+/**
+ * Grant an existing discount the PRODUCT class, once.
+ *
+ * Idempotent by the stamp rather than by asking Shopify: one extra mutation the
+ * first time this runs for a shop, and none ever again.
+ */
+async function syncDiscountClasses(
+  admin: AdminGraphql,
+  discountId: string,
+  syncedAt: Date | null,
+): Promise<void> {
+  if (syncedAt) return;
+  const shop = shopScope.require("syncDiscountClasses");
+
+  await runMutation<void>(
+    admin,
+    "discountAutomaticAppUpdate(discountClasses)",
+    UPDATE_DISCOUNT,
+    { id: discountId, discount: { discountClasses: [...DISCOUNT_CLASSES] } },
+    (data) => {
+      const payload = data.discountAutomaticAppUpdate as {
+        userErrors: { message: string }[];
+      };
+      return { result: undefined, userErrors: payload.userErrors };
+    },
+  );
+
+  await db.shop.update({ where: { shop }, data: { discountClassesAt: new Date() } });
+}
+
 async function syncCombinations(
   admin: AdminGraphql,
   discountId: string,
@@ -322,4 +379,35 @@ async function syncCombinations(
   );
 
   await db.shop.update({ where: { shop }, data: { combinationsHash: want } });
+}
+
+/**
+ * Repair a discount Shopify never granted the PRODUCT class.
+ *
+ * Called from the `/app` layout loader rather than only from `ensureDiscount`,
+ * and that matters: `ensureDiscount` runs when rules are published, so a
+ * merchant whose store already had its rules set up would have had **no
+ * wholesale pricing at checkout at all** until they happened to edit a rule.
+ * There is no signal anywhere that would have sent them to do it.
+ *
+ * Costs one Admin call, once per shop, and nothing afterwards — the stamp is
+ * read from the record the caller already loaded. Failure is swallowed: a
+ * merchant must not get an error page because a repair could not be made, and
+ * the next page view tries again.
+ */
+export async function repairDiscountClasses(
+  admin: AdminGraphql,
+  record: { discountId: string | null; discountClassesAt: Date | null },
+): Promise<void> {
+  if (!record.discountId || record.discountClassesAt) return;
+
+  try {
+    await syncDiscountClasses(admin, record.discountId, record.discountClassesAt);
+  } catch (error) {
+    console.error(
+      `[mannon] could not grant the discount its PRODUCT class: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 }

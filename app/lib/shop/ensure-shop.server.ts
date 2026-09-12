@@ -3,6 +3,7 @@ import { recordAudit, SYSTEM_ACTOR } from "~/lib/audit/record.server";
 import { nextRun as auditPurgeNextRun } from "~/lib/jobs/handlers/purge-audit.server";
 import { cancelPendingJobs, enqueueJob } from "~/lib/jobs/queue.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
+import { repairDiscountClasses } from "~/lib/pricing/ruleset.server";
 import { syncShopFacts } from "~/lib/shop/domains.server";
 import { shopScope, tenant } from "~/lib/tenant/shop-context.server";
 
@@ -32,6 +33,13 @@ export async function ensureShopRecord(admin?: AdminGraphql) {
 
   if (existing && !existing.uninstalledAt) {
     await refreshShopFacts(existing, admin);
+    // Once per shop, and only for a discount created before the app sent
+    // `discountClasses`: Shopify never granted it the one class the Function
+    // produces, so that store has no wholesale pricing at checkout at all.
+    // Here rather than in `ensureDiscount`, which runs only when rules are
+    // published — a merchant whose rules are already set up would never have
+    // reached it, and nothing would have told them to.
+    if (admin) await repairDiscountClasses(admin, existing);
     return existing;
   }
 
@@ -59,6 +67,15 @@ export async function ensureShopRecord(admin?: AdminGraphql) {
     // figures are not empty on a store that already sells wholesale.
     await enqueueJob({
       kind: "orders.backfill",
+      runAt: new Date(),
+      replacePending: true,
+    });
+    // And every existing product's collection membership, which reaches
+    // checkout only through a metafield this app writes. Without it a rule
+    // that excludes a collection excludes nothing at checkout, so the
+    // discount lands on exactly the products the merchant protected.
+    await enqueueJob({
+      kind: "products.backfill",
       runAt: new Date(),
       replacePending: true,
     });
@@ -117,6 +134,25 @@ export async function ensureShopRecord(admin?: AdminGraphql) {
     });
     await enqueueJob({
       kind: "orders.backfill",
+      runAt: new Date(),
+      replacePending: true,
+    });
+  }
+
+  // A reinstall may have missed a catalogue's worth of collection changes, and
+  // the metafields the app wrote before are still there — stale, which reads
+  // to checkout exactly like correct.
+  if (restored.productsBackfilledAt) {
+    await db.shop.update({
+      where: { shop },
+      data: {
+        productsBackfilledAt: null,
+        productsBackfillCursor: null,
+        productsPublished: 0,
+      },
+    });
+    await enqueueJob({
+      kind: "products.backfill",
       runAt: new Date(),
       replacePending: true,
     });

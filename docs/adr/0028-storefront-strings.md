@@ -86,7 +86,7 @@ to say it had happened.
   needed a way to allow this one page — whose job is to show a merchant those
   keys. It is per element (`data-string-key`), not per page, so a real leaked
   fallback elsewhere on the Translations page still fails. `tests/unit/
-  capture-guard.test.ts` holds it to that.
+capture-guard.test.ts` holds it to that.
 
 ## Rejected
 

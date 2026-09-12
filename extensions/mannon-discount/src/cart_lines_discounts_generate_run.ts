@@ -62,7 +62,16 @@ function generate(input: FunctionInput): CartLinesDiscountsGenerateRunResult {
     [];
 
   for (const line of input.cart.lines) {
-    const candidate = discountFor(line, { customer, subtotal, now, rules: usable });
+    // Per line, because the header above promises it: anything unexpected must
+    // cost one line, not the cart. One unreadable amount used to fall out to
+    // the catch in `cartLinesDiscountsGenerateRun` and charge every other line
+    // in the cart at retail too.
+    let candidate: ReturnType<typeof discountFor> = null;
+    try {
+      candidate = discountFor(line, { customer, subtotal, now, rules: usable });
+    } catch (error) {
+      console.error(`[mannon] skipping cart line ${line.id}`, error);
+    }
     if (candidate) candidates.push(candidate);
   }
 
@@ -126,9 +135,22 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
+/**
+ * The cart's subtotal, or null when it cannot be read.
+ *
+ * Null is honest and cheap: `cartSubtotal: null` makes the engine skip
+ * cart-value tiers and apply everything else, so an amount we cannot represent
+ * costs the buyer one kind of rule rather than every wholesale price in the
+ * cart.
+ */
 function readSubtotal(input: FunctionInput) {
   const { amount, currencyCode } = input.cart.cost.subtotalAmount;
-  return parseMoney(amount, currencyCode);
+  try {
+    return parseMoney(amount, currencyCode);
+  } catch (error) {
+    console.error("[mannon] cart subtotal could not be read", error);
+    return null;
+  }
 }
 
 function discountFor(
@@ -163,7 +185,10 @@ function discountFor(
       countryCode: "",
       currencyCode,
     },
-    cartSubtotal: shared.subtotal.currencyCode === currencyCode ? shared.subtotal : null,
+    cartSubtotal:
+      shared.subtotal && shared.subtotal.currencyCode === currencyCode
+        ? shared.subtotal
+        : null,
     now: shared.now,
   };
 

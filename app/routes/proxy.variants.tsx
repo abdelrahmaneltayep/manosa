@@ -5,10 +5,15 @@ import { json } from "@remix-run/node";
 import { db } from "~/db.server";
 import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { formatCurrency } from "~/lib/money";
+import {
+  fetchProductCollections,
+  ruleUsesCollections,
+} from "~/lib/pricing/product-collections.server";
 import { activeEngineRules } from "~/lib/pricing/rules.server";
 import { priceLine } from "~/lib/quotes/pricing.server";
 import { withProxy } from "~/lib/storefront/proxy.server";
 import { buyerFacts } from "~/lib/storefront/quick-order.server";
+import { unauthenticated } from "~/shopify.server";
 
 /**
  * Wholesale prices for the variants already on a product page.
@@ -88,6 +93,21 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       activeEngineRules(),
     ]);
 
+    // The theme sends ids and list prices; it cannot send collection
+    // membership as checkout sees it, and Liquid's own `product.collections`
+    // would be a *second* answer that disagrees with the Function the moment
+    // one of them lags. One batched read of the same metafield the Function
+    // reads — usually one product — so the block and checkout cannot differ.
+    // Only when a rule actually turns on collections: a store with none pays
+    // nothing for this.
+    const needsCollections = rules.some(ruleUsesCollections);
+    const collections = needsCollections
+      ? await fetchProductCollections(
+          (await unauthenticated.admin(context.shop)).admin,
+          requested.map((entry) => entry.productId ?? ""),
+        )
+      : new Map<string, string[]>();
+
     const variants = requested.map((entry) => {
       const listPrice = money(entry.priceMinor, currencyCode);
 
@@ -98,6 +118,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
           title: "",
           quantity,
           listPrice,
+          collectionIds: collections.get(entry.productId ?? "") ?? [],
         },
         buyer,
         rules,

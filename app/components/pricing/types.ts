@@ -51,6 +51,18 @@ export interface RuleListView {
   publishError: "failed" | "too_large" | null;
   /** Free plan has run out of rules. */
   atRuleLimit: boolean;
+  /**
+   * Set when a rule depends on collection membership that checkout has not
+   * been told about yet.
+   *
+   * Collection membership reaches the checkout Function only through a
+   * metafield this app writes, and publishing a whole catalogue takes many
+   * queued pages. Until that finishes, a rule that excludes a collection
+   * excludes nothing at checkout — so the merchant is told, rather than left
+   * to discover it on an order. Null when no rule uses collections, or when
+   * every product has been published.
+   */
+  collectionsPending: { published: number; ruleCount: number } | null;
   /** ✦ Describe a rule needs the AI layer (phase 4.2). */
   aiAvailable: boolean;
   /**

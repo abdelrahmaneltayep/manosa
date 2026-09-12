@@ -58,6 +58,8 @@ interface VariantSeed {
   productStatus?: string;
   productTitle?: string;
   handle?: string;
+  /** What the product's published collections metafield says. */
+  collections?: string[];
 }
 
 function fakeAdmin(variants: VariantSeed[] = []) {
@@ -85,6 +87,12 @@ function fakeAdmin(variants: VariantSeed[] = []) {
                     title: variant.productTitle ?? "Blue Mug",
                     handle: variant.handle ?? "blue-mug",
                     status: variant.productStatus ?? "ACTIVE",
+                    // The `$app:mannon.collections` metafield, exactly as the
+                    // checkout Function receives it. `undefined` here is a
+                    // product nobody has published yet.
+                    collections: variant.collections
+                      ? { jsonValue: variant.collections }
+                      : null,
                   },
                 })),
               },
@@ -594,5 +602,100 @@ describe("a signature that has been sitting around", () => {
         async () => "reached",
       ),
     ).rejects.toMatchObject({ status: 401 });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Shown and charged                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The block, the quote, the agent and the PO all priced with `collectionIds:
+ * []` — hardcoded, in the one function they share. So with the most ordinary
+ * wholesale rule there is, _"20% off everything except Sale"_, the quick-order
+ * block showed a sale item at $8.00 and checkout charged $10.00.
+ *
+ * The fix is not a second lookup: every surface reads the **same**
+ * `$app:mannon.collections` metafield the Function reads, so if it is stale
+ * both are stale together and they cannot disagree about the same product.
+ */
+describe("the price a buyer is shown and the price checkout charges", () => {
+  const SALE = "gid://shopify/Collection/sale";
+
+  const exceptSale: PricingRule = {
+    id: "new",
+    name: "Wholesale 20% (not sale items)",
+    status: "active",
+    priority: 100,
+    combinable: false,
+    kind: "percentage",
+    value: { percentage: 20 },
+    targets: { mode: "all", excludeCollectionIds: [SALE] },
+    audience: { mode: "tags", tags: ["wholesale"] },
+    markets: { mode: "all", marketIds: [] },
+    schedule: { startsAt: null, endsAt: null },
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+  } as PricingRule;
+
+  it("agree on a sale item the merchant excluded", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      await createRule(exceptSale, { admin: fakeAdmin(), actor });
+
+      const admin = fakeAdmin([
+        {
+          id: "gid://shopify/ProductVariant/1",
+          sku: "MUG-SALE",
+          price: "10.00",
+          collections: [SALE],
+        },
+      ]);
+      const buyer = await buyerFacts("gid://shopify/Customer/77");
+      const result = await priceList(admin, "MUG-SALE, 1", buyer);
+
+      // The merchant protected this collection. No discount, on either side.
+      expect(result.lines[0]!.unitPrice).toBe("$10.00");
+      expect(result.lines[0]!.wasPrice).toBeNull();
+    });
+  });
+
+  it("agree on a product that is not in the excluded collection", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      await createRule(exceptSale, { admin: fakeAdmin(), actor });
+
+      const admin = fakeAdmin([
+        {
+          id: "gid://shopify/ProductVariant/2",
+          sku: "MUG-FULL",
+          price: "10.00",
+          collections: ["gid://shopify/Collection/mugs"],
+        },
+      ]);
+      const buyer = await buyerFacts("gid://shopify/Customer/77");
+      const result = await priceList(admin, "MUG-FULL, 1", buyer);
+
+      expect(result.lines[0]!.unitPrice).toBe("$8.00");
+    });
+  });
+
+  it("asks Shopify for the same metafield the checkout Function reads", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await seedBuyer();
+      const admin = fakeAdmin([
+        { id: "gid://shopify/ProductVariant/1", sku: "MUG-BL-L", price: "10.00" },
+      ]);
+      const buyer = await buyerFacts("gid://shopify/Customer/77");
+      await priceList(admin, "MUG-BL-L, 1", buyer);
+
+      const lookup = admin.calls.find((query) => query.includes("MannonVariantsBySku"))!;
+      expect(lookup).toContain('metafield(namespace: "$app:mannon", key: "collections")');
+    });
   });
 });

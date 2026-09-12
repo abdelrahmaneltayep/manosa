@@ -48,6 +48,39 @@ describe("parsing and formatting", () => {
     expect(() => parseMoney("10.5", "JPY")).toThrow(MoneyError);
   });
 
+  /**
+   * Trailing zeros are formatting, not precision — and refusing them broke
+   * every zero-decimal-currency store.
+   *
+   * Shopify serialises `MoneyV2.amount` with a decimal point whatever the
+   * currency, so a JPY cart line arrives as "1000.0". That threw, the discount
+   * Function caught it and returned no operations, and every wholesale buyer
+   * in that store paid retail, silently, for ever. Nothing is rounded away
+   * here: "1000.0" JPY is exactly 1000 yen.
+   */
+  it("accepts trailing zeros past the currency's exponent", () => {
+    expect(parseMoney("1000.0", "JPY").amount).toBe(1000);
+    expect(parseMoney("1000.00", "JPY").amount).toBe(1000);
+    expect(parseMoney("10.500", "USD").amount).toBe(1050);
+    expect(parseMoney("10.5000000", "USD").amount).toBe(1050);
+    expect(parseMoney("0.0", "KRW").amount).toBe(0);
+    // A three-decimal currency keeps all three, and drops only the padding.
+    expect(parseMoney("10.5000", "BHD").amount).toBe(10500);
+  });
+
+  it("still refuses a significant digit past the exponent", () => {
+    // The zero is not trailing — it is followed by a 5.
+    expect(() => parseMoney("10.0050", "USD")).toThrow(MoneyError);
+    expect(() => parseMoney("1000.10", "JPY")).toThrow(MoneyError);
+    expect(() => parseMoney("1000.01", "JPY")).toThrow(MoneyError);
+  });
+
+  it("keeps a zero that is inside the exponent", () => {
+    // "10.050" is ten dollars five cents, not fifty.
+    expect(parseMoney("10.050", "USD").amount).toBe(1005);
+    expect(parseMoney("10.05", "USD").amount).toBe(1005);
+  });
+
   it("rejects anything that is not a decimal amount", () => {
     for (const bad of ["", "abc", "1.2.3", "1,000.00", "$10", "1e3", " "]) {
       expect(() => parseMoney(bad, "USD"), bad).toThrow(MoneyError);

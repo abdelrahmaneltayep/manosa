@@ -288,7 +288,20 @@ export interface QuoteDetailView {
   /** The catalogue search box: what was typed, and what came back. */
   search: {
     query: string;
-    results: { variantId: string; title: string; sku: string | null; price: string }[];
+    results: {
+      variantId: string;
+      /**
+       * Carried through the add-line form so the line is priced with the same
+       * context checkout has. Both were dropped between the search and the
+       * quote — `productId: null`, no collections — so a hand-added line lost
+       * every product- and collection-scoped rule that applies to it.
+       */
+      productId: string;
+      collectionIds: string[];
+      title: string;
+      sku: string | null;
+      price: string;
+    }[];
     /** True once a search ran and matched nothing. */
     searched: boolean;
   };

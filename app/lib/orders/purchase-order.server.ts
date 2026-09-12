@@ -196,6 +196,10 @@ export async function matchPurchaseOrder(
         sku: chosen.sku,
         quantity: requested.quantity,
         listPrice,
+        // Carried on the match, from the same metafield checkout reads: a PO
+        // priced without it puts a number on the draft order that the buyer
+        // will not be charged.
+        collectionIds: chosen.collectionIds,
       },
       options.buyer,
       rules,

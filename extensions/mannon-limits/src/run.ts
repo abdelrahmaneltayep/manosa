@@ -6,7 +6,12 @@ import {
   type MessageKey,
   type Violation,
 } from "@mannon/order-limits";
-import { formatMoneyWithCode, money, type Money } from "@mannon/pricing-engine";
+import {
+  formatMoneyWithCode,
+  money,
+  parseMoney,
+  type Money,
+} from "@mannon/pricing-engine";
 
 import type { FunctionError, FunctionRunResult, MoneyV2, RunInput } from "./api";
 
@@ -37,18 +42,21 @@ const stringsIn = (value: unknown): string[] =>
 /**
  * Shopify hands money as a decimal string; the limits are in integer minor
  * units. Parsing here rather than in the pure module keeps the wire format out
- * of it — and a total we cannot read becomes zero, which fails no maximum and
- * only ever trips a minimum the buyer would have tripped anyway.
+ * of it.
+ *
+ * Through the engine's own parser, which knows each currency's exponent. This
+ * used to be `Math.round(amount * 100)` for every currency, so a ¥1,000
+ * minimum read a ¥1,000 cart as ¥100,000 and let every yen order through.
  */
 function toMoney(value: MoneyV2 | null | undefined): Money {
   const currencyCode = value?.currencyCode ?? "USD";
-  const amount = Number(value?.amount ?? "0");
-  if (!Number.isFinite(amount)) return money(0, currencyCode);
-
-  // Two decimal places for almost every currency, and the engine's own
-  // exponent table would need the currency list; rounding here is safe because
-  // Shopify never sends more precision than the currency has.
-  return money(Math.round(amount * 100), currencyCode);
+  try {
+    return parseMoney(value?.amount ?? "0", currencyCode);
+  } catch {
+    // A total we cannot read becomes zero, which fails no maximum and only ever
+    // trips a minimum the buyer would have tripped anyway.
+    return money(0, currencyCode);
+  }
 }
 
 /** A money violation formats as money; a quantity violation as a plain count. */

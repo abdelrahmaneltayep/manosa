@@ -10,6 +10,7 @@ import { db } from "~/db.server";
 import { recordAudit } from "~/lib/audit/record.server";
 import { formatCurrency } from "~/lib/money";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
+import { productCollectionIds } from "~/lib/pricing/product-collections.server";
 import { activeEngineRules } from "~/lib/pricing/rules.server";
 import { priceLine, type BuyerForPricing } from "~/lib/quotes/pricing.server";
 import { createQuote, draftQuote } from "~/lib/quotes/quotes.server";
@@ -94,6 +95,9 @@ export interface PricedToolLine {
    * something that prices it again applies the discount twice.
    */
   listPrice: Money;
+  /** Carried for the same reason as `listPrice`: anything that prices this
+   * line again needs the whole context, not part of it. */
+  collectionIds: string[];
   /** Which rule set it — deciding shows its working, for buyers too. */
   ruleSummary: string | null;
 }
@@ -260,6 +264,9 @@ async function priceLines(
         sku: node.sku ?? line.sku,
         quantity,
         listPrice,
+        // The same metafield checkout reads, so what the agent quotes and what
+        // the buyer is charged come from one answer.
+        collectionIds: productCollectionIds(node.product),
       },
       context.buyer,
       rules,
@@ -279,6 +286,7 @@ async function priceLines(
       lineTotal: formatCurrency(lineTotal, context.locale),
       unitPriceAmount: priced.unitPrice.amount,
       listPrice,
+      collectionIds: productCollectionIds(node.product),
       ruleSummary: priced.ruleSummary,
     });
   }
@@ -634,6 +642,10 @@ async function requestQuote(call: ToolCall, context: ToolContext): Promise<ToolR
           sku: line.sku,
           quantity: line.quantity,
           listPrice: line.listPrice,
+          // Carried through for the same reason as the product id: dropping it
+          // would lose every collection-scoped rule that just matched, and the
+          // drafted quote would lock a price the agent did not quote.
+          collectionIds: line.collectionIds,
         })),
       },
       { actor: { type: "BUYER_AGENT", label: "Claude" }, now: context.now },

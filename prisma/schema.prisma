@@ -216,6 +216,20 @@ model Shop {
   customersBackfillCursor String?
   customerCount           Int       @default(0)
 
+  /// Progress of the one-off product backfill, which publishes each product's
+  /// collection membership to the metafield the checkout Function reads.
+  ///
+  /// Until it finishes, a product nobody has edited since install reaches
+  /// checkout with no collections at all — so a rule that *excludes* a
+  /// collection excludes nothing and the buyer is discounted on exactly the
+  /// products the merchant protected. Null means it has never finished.
+  productsBackfilledAt    DateTime?
+  productsBackfillCursor  String?
+  /// How many products have had their collections published. Shown to the
+  /// merchant beside any collection-scoped rule, because a half-finished
+  /// backfill is a price that is wrong for a reason they can see.
+  productsPublished       Int       @default(0)
+
   // --- Settings (phase 6.4) ------------------------------------------------
   /// Show the retail price struck through beside the wholesale one. Off for
   /// merchants whose trade buyers should never see retail at all.
@@ -233,6 +247,11 @@ model Shop {
   /// The combination setting as last pushed to the live discount, so a rule
   /// save does not re-state a choice that has not moved.
   combinationsHash      String?
+  /// When the discount was granted the PRODUCT discount class. Null on a shop
+  /// whose discount was created before the app sent `discountClasses` — that
+  /// discount runs on every cart and is permitted to produce nothing, so
+  /// `ensureDiscount` repairs it once and stamps this.
+  discountClassesAt     DateTime?
 
   /// The address the app sends from, and the domain it belongs to.
   ///
@@ -1400,6 +1419,12 @@ model QuoteLine {
   appliedRuleIds String[]
   /// Already-composed summary, e.g. "Gold tier · 100+ units".
   ruleSummary    String?
+
+  /// The product's collection membership as it stood when the quote was
+  /// priced. Stored rather than fetched again, for the same reason the price
+  /// is: the drift figure compares *today's* rules against the same line, and
+  /// a line re-priced with no collections reports a drift that does not exist.
+  collectionIds  String[] @default([])
 
   position Int @default(0)
 

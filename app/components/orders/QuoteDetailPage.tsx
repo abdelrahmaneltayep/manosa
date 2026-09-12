@@ -254,6 +254,16 @@ function Catalogue({ view }: { view: QuoteDetailView }) {
                     <form method="post">
                       <input type="hidden" name="intent" value="addLine" />
                       <input type="hidden" name="variantId" value={result.variantId} />
+                      <input type="hidden" name="productId" value={result.productId} />
+                      {/* Newline-separated: a form field is a string, and the
+                          action splits it rather than parsing JSON posted from
+                          a page. Without these two the added line is priced
+                          with no product and no collections. */}
+                      <input
+                        type="hidden"
+                        name="collectionIds"
+                        value={result.collectionIds.join("\n")}
+                      />
                       <input type="hidden" name="title" value={result.title} />
                       <input type="hidden" name="sku" value={result.sku ?? ""} />
                       <input type="hidden" name="listPrice" value={result.price} />

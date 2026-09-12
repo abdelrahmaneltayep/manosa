@@ -247,7 +247,10 @@
       "unreadableHeading_one": "{{count}} rule can't be read",
       "unreadableHeading_other": "{{count}} rules can't be read",
       "unreadableBody": "They are not applying at checkout. This is a bug in Mannon, not something you did — contact us and we'll fix it.",
-      "csvLink": "Import or export a CSV"
+      "csvLink": "Import or export a CSV",
+      "collectionsPendingHeading_one": "{{count}} rule uses collections, and your catalogue is still publishing",
+      "collectionsPendingHeading_other": "{{count}} rules use collections, and your catalogue is still publishing",
+      "collectionsPendingBody": "Checkout learns which collections a product is in from Mannon, and we have published {{published}} products so far. Until that finishes, a rule that excludes a collection may not exclude it at checkout. This runs on its own and needs nothing from you."
     },
     "status": {
       "draft": "Draft",

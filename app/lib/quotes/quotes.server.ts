@@ -266,6 +266,9 @@ export async function draftQuote(
       listPrice: line.listPrice.amount,
       appliedRuleIds: overridden ? [] : line.appliedRuleIds,
       ruleSummary: overridden ? null : line.ruleSummary,
+      // Kept even for an overridden line: the drift figure still re-prices it,
+      // and it has to re-price the same product it priced the first time.
+      collectionIds: line.collectionIds,
       position,
     };
   });

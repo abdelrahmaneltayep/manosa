@@ -73,6 +73,23 @@ function Banners({ view }: { view: RuleListView }) {
     );
   }
 
+  if (view.collectionsPending) {
+    banners.push(
+      <s-banner key="collections" tone="warning">
+        <s-heading>
+          {t("pricing.list.collectionsPendingHeading", {
+            count: view.collectionsPending.ruleCount,
+          })}
+        </s-heading>
+        <s-paragraph>
+          {t("pricing.list.collectionsPendingBody", {
+            published: view.collectionsPending.published,
+          })}
+        </s-paragraph>
+      </s-banner>,
+    );
+  }
+
   if (banners.length === 0) return null;
   return <s-section>{banners}</s-section>;
 }

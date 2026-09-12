@@ -425,3 +425,80 @@ describe("failing safely", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * Money on the wire, and the cart it used to take down with it.
+ *
+ * `parseMoney` throws on excess precision, by design, and the Function fed it
+ * Shopify's own `MoneyV2.amount` strings without normalising them. Two ways
+ * that ended badly, both of them silent.
+ */
+describe("reading Shopify's money strings", () => {
+  it("prices a zero-decimal currency, which used to price nothing at all", () => {
+    // Shopify serialises MoneyV2 with a decimal point whatever the currency, so
+    // a ¥1,000 line arrives as "1000.0". JPY allows no decimals, so that threw,
+    // the catch returned no operations, and every wholesale buyer in a yen
+    // store paid retail — for ever, with a console.error nobody reads.
+    const result = cartLinesDiscountsGenerateRun(
+      input({
+        currency: "JPY",
+        subtotal: "10000.0",
+        lines: [
+          line({
+            cost: { amountPerQuantity: { amount: "1000.0", currencyCode: "JPY" } },
+          }),
+        ],
+      }),
+    );
+
+    // ¥1,000 less 35% is ¥650, so ¥350 comes off — in whole yen, no decimals.
+    expect(candidates(result)).toHaveLength(1);
+    expect(candidates(result)[0]!.value.fixedAmount).toEqual({
+      amount: "350",
+      appliesToEachItem: true,
+    });
+  });
+
+  it("costs one line, not the cart, when a line's amount cannot be read", () => {
+    // The file's own header promises exactly this. `discountFor` was called
+    // inside the loop but guarded only by the try around the whole run, so one
+    // odd amount removed the discount from every other line in the cart.
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = cartLinesDiscountsGenerateRun(
+      input({
+        subtotal: "20.00",
+        lines: [
+          line({
+            id: "gid://shopify/CartLine/bad",
+            // Sub-cent: a genuine rounding decision, which the parser refuses.
+            cost: { amountPerQuantity: { amount: "10.005", currencyCode: "USD" } },
+          }),
+          line({ id: "gid://shopify/CartLine/good" }),
+        ],
+      }),
+    );
+
+    expect(candidates(result)).toHaveLength(1);
+    expect(candidates(result)[0]!.targets).toEqual([
+      { cartLine: { id: "gid://shopify/CartLine/good" } },
+    ]);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("keeps every other rule when the cart subtotal cannot be read", () => {
+    // A subtotal we cannot represent skips cart-value tiers and nothing else.
+    // It used to throw out of `generate` and cost the whole cart.
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = cartLinesDiscountsGenerateRun(
+      input({ subtotal: "20.0005", currency: "USD" }),
+    );
+
+    expect(candidates(result)).toHaveLength(1);
+    expect(candidates(result)[0]!.value.fixedAmount.amount).toBe("3.50");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});

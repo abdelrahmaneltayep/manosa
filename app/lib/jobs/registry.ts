@@ -1,6 +1,7 @@
 import { backfillCustomers } from "~/lib/jobs/handlers/backfill-customers.server";
 import { dailyBriefing } from "~/lib/jobs/handlers/daily-briefing.server";
 import { backfillOrders } from "~/lib/jobs/handlers/backfill-orders.server";
+import { backfillProducts } from "~/lib/jobs/handlers/backfill-products.server";
 import { monthlyReviewJob } from "~/lib/jobs/handlers/monthly-review.server";
 import { expireQuotes } from "~/lib/jobs/handlers/expire-quotes.server";
 import { decideApplications } from "~/lib/jobs/handlers/decide-applications.server";
@@ -21,6 +22,10 @@ export const JOB_HANDLERS = {
   "shop.purge_pii": purgeShopPii,
   "customers.backfill": backfillCustomers,
   "orders.backfill": backfillOrders,
+  /// Publishes each product's collection membership to the metafield the
+  /// checkout Function reads. Without it a collection rule is wrong at
+  /// checkout for the whole of an existing catalogue.
+  "products.backfill": backfillProducts,
   "analytics.monthly_review": monthlyReviewJob,
   "quotes.expire": expireQuotes,
   "forms.decide_applications": decideApplications,
