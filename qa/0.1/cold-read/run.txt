@@ -1,0 +1,427 @@
+
+ RUN  v3.2.7 /home/user/manosa
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "mannon_cr2", schema "public" at "localhost:5432"
+
+43 migrations found in prisma/migrations
+
+
+No pending migrations to apply.
+ ❯ qa/0.1/cold-read/probe.test.ts (25 tests | 13 failed) 4971ms
+   ✓ P0 candidate: cross-tenant read by primary key, across many models > findUnique by id reads as not found for every model 275ms
+   ✓ P0 candidate: cross-tenant read by primary key, across many models > findUnique by a GLOBALLY unique non-id column reads as not found 150ms
+   ✓ P0 candidate: cross-tenant read by primary key, across many models > update/delete by another shop's id raise not-found, not a write 177ms
+   ✓ P0 candidate: relation traversal > cannot read another shop's order lines through the order relation 142ms
+   ✓ P0 candidate: relation traversal > cannot read another shop's agent messages through the conversation relation 123ms
+   ✓ P0 candidate: relation traversal > cannot read another shop's submissions through the form relation 135ms
+   × P0 candidate: relation traversal > an INCLUDE through a relation cannot pull another shop's rows 232ms
+     → expected [ 'alpha.myshopify.com', …(1) ] to deeply equal [ 'alpha.myshopify.com' ]
+   × P0 candidate: nested writes > stamps the active tenant onto a nested create 167ms
+     → expected [ 'beta.myshopify.com' ] to deeply equal [ 'alpha.myshopify.com' ]
+   × P0 candidate: moving a row between tenants with `data` > refuses an update that reassigns `shop` 295ms
+     → promise resolved "{ …(29) }" instead of rejecting
+   × P0 candidate: moving a row between tenants with `data` > refuses an updateMany that reassigns `shop` 214ms
+     → promise resolved "{ count: 1 }" instead of rejecting
+   × P0 candidate: moving a row between tenants with `data` > refuses an upsert whose UPDATE branch reassigns `shop` 203ms
+     → promise resolved "{ …(29) }" instead of rejecting
+   × P0 candidate: raw SQL > refuses raw SQL with no tenant context 190ms
+     → promise resolved "[ { '?column?': 1 } ]" instead of rejecting
+   × P0 candidate: raw SQL > raw SQL inside shop A cannot read shop B's rows 262ms
+     → expected [ 'alpha.myshopify.com', …(1) ] to deeply equal [ 'beta.myshopify.com' ]
+   × P0 candidate: raw SQL > raw SQL inside shop A cannot delete shop B's rows 372ms
+     → expected +0 to be 1 // Object.is equality
+   ✓ async boundaries > does not leak a scope into a detached microtask 219ms
+   ✓ async boundaries > keeps two shops apart under interleaved Promise.all 204ms
+   ✓ async boundaries > a promise started inside a scope and awaited outside is still scoped 165ms
+   × withoutShopScope > does not let tenant() write a bogus '__unscoped__' shop 156ms
+     → expected '__unscoped__' not to be '__unscoped__' // Object.is equality
+   ✓ withoutShopScope > bypass does not survive into an inner shopScope.run 181ms
+   ✓ transactions > array-form $transaction is scoped 183ms
+   ✓ transactions > an interactive $transaction CAN be re-scoped mid-flight 183ms
+   × more raw-SQL surface > $queryRawUnsafe is also outside the guard 167ms
+     → expected [ { shop: 'alpha.myshopify.com' } ] to deeply equal []
+   × foreign keys are not tenant-checked > refuses a child row whose parent belongs to another shop 170ms
+     → promise resolved "{ …(17) }" instead of rejecting
+   × foreign keys are not tenant-checked > refuses a buyer pointed at another shop's customer group 210ms
+     → promise resolved "{ …(29) }" instead of rejecting
+   × foreign keys are not tenant-checked > does not hand a shop another shop's group through include 191ms
+     → expected 'alpha.myshopify.com' to be 'beta.myshopify.com' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > P0 candidate: relation traversal > an INCLUDE through a relation cannot pull another shop's rows
+AssertionError: expected [ 'alpha.myshopify.com', …(1) ] to deeply equal [ 'alpha.myshopify.com' ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "alpha.myshopify.com",[22m
+[31m+   "beta.myshopify.com",[39m
+[2m  ][22m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:229:46
+    227|       db.order.findUnique({ where: { id: alpha.order.id }, include: { …
+    228|     );
+    229|     expect(leaked?.lines.map((l) => l.shop)).toEqual([ALPHA]);
+       |                                              ^
+    230|   });
+    231| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > P0 candidate: nested writes > stamps the active tenant onto a nested create
+AssertionError: expected [ 'beta.myshopify.com' ] to deeply equal [ 'alpha.myshopify.com' ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   "alpha.myshopify.com",[39m
+[31m+   "beta.myshopify.com",[39m
+[2m  ][22m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:258:46
+    256|       }),
+    257|     );
+    258|     expect(created.lines.map((l) => l.shop)).toEqual([ALPHA]);
+       |                                              ^
+    259|   });
+    260| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > P0 candidate: moving a row between tenants with `data` > refuses an update that reassigns `shop`
+AssertionError: promise resolved "{ …(29) }" instead of rejecting
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "autoRemind": false,[39m
+[31m+   "company": "alpha.myshopify.com Trading",[39m
+[31m+   "countryCode": null,[39m
+[31m+   "createdAt": 2026-09-12T10:36:01.213Z,[39m
+[31m+   "creditLimit": null,[39m
+[31m+   "currencyCode": "USD",[39m
+[31m+   "customerId": "gid://shopify/Customer/alpha.myshopify.com",[39m
+[31m+   "deletedInShopifyAt": null,[39m
+[31m+   "email": "buyer@alpha.myshopify.com",[39m
+[31m+   "firstName": null,[39m
+[31m+   "groupId": "cmty922pm004w7dywpkdwye94",[39m
+[31m+   "id": "cmty922pp004y7dywx1hl3cxt",[39m
+[31m+   "internalNote": null,[39m
+[31m+   "lastName": null,[39m
+[31m+   "lastOrderAt": null,[39m
+[31m+   "lifetimeSpend": 0,[39m
+[31m+   "netTermsDays": null,[39m
+[31m+   "orderCount": 0,[39m
+[31m+   "phone": null,[39m
+[31m+   "province": null,[39m
+[31m+   "shop": "beta.myshopify.com",[39m
+[31m+   "state": "enabled",[39m
+[31m+   "status": "APPROVED",[39m
+[31m+   "syncedAt": 2026-09-12T10:36:01.213Z,[39m
+[31m+   "tags": [],[39m
+[31m+   "taxExempt": false,[39m
+[31m+   "updatedAt": 2026-09-12T10:36:01.239Z,[39m
+[31m+   "vatNumber": null,[39m
+[31m+   "vatVerifiedAt": null,[39m
+[2m  }[22m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:271:5
+    269|         db.customer.update({ where: { id: alpha.customer.id }, data: {…
+    270|       ),
+    271|     ).rejects.toBeInstanceOf(CrossTenantError);
+       |     ^
+    272| 
+    273|     const stillAlpha = await inAlpha(() =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > P0 candidate: moving a row between tenants with `data` > refuses an updateMany that reassigns `shop`
+AssertionError: promise resolved "{ count: 1 }" instead of rejecting
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "count": 1,[39m
+[2m  }[22m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:284:5
+    282|     await expect(
+    283|       inAlpha(() => db.customer.updateMany({ where: {}, data: { shop: …
+    284|     ).rejects.toBeInstanceOf(CrossTenantError);
+       |     ^
+    285|   });
+    286| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > P0 candidate: moving a row between tenants with `data` > refuses an upsert whose UPDATE branch reassigns `shop`
+AssertionError: promise resolved "{ …(29) }" instead of rejecting
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "autoRemind": false,[39m
+[31m+   "company": "alpha.myshopify.com Trading",[39m
+[31m+   "countryCode": null,[39m
+[31m+   "createdAt": 2026-09-12T10:36:01.634Z,[39m
+[31m+   "creditLimit": null,[39m
+[31m+   "currencyCode": "USD",[39m
+[31m+   "customerId": "gid://shopify/Customer/alpha.myshopify.com",[39m
+[31m+   "deletedInShopifyAt": null,[39m
+[31m+   "email": "buyer@alpha.myshopify.com",[39m
+[31m+   "firstName": null,[39m
+[31m+   "groupId": "cmty9231c00687dywcs6rp65m",[39m
+[31m+   "id": "cmty9231d006a7dywqsj7l3h0",[39m
+[31m+   "internalNote": null,[39m
+[31m+   "lastName": null,[39m
+[31m+   "lastOrderAt": null,[39m
+[31m+   "lifetimeSpend": 0,[39m
+[31m+   "netTermsDays": null,[39m
+[31m+   "orderCount": 0,[39m
+[31m+   "phone": null,[39m
+[31m+   "province": null,[39m
+[31m+   "shop": "beta.myshopify.com",[39m
+[31m+   "state": "enabled",[39m
+[31m+   "status": "APPROVED",[39m
+[31m+   "syncedAt": 2026-09-12T10:36:01.634Z,[39m
+[31m+   "tags": [],[39m
+[31m+   "taxExempt": false,[39m
+[31m+   "updatedAt": 2026-09-12T10:36:01.652Z,[39m
+[31m+   "vatNumber": null,[39m
+[31m+   "vatVerifiedAt": null,[39m
+[2m  }[22m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:300:5
+    298|         }),
+    299|       ),
+    300|     ).rejects.toBeInstanceOf(CrossTenantError);
+       |     ^
+    301|   });
+    302| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > P0 candidate: raw SQL > refuses raw SQL with no tenant context
+AssertionError: promise resolved "[ { '?column?': 1 } ]" instead of rejecting
+
+[32m- Expected:[39m 
+Error {
+  "message": "rejected promise",
+}
+
+[31m+ Received:[39m 
+[
+  {
+    "?column?": 1,
+  },
+]
+
+ ❯ qa/0.1/cold-read/probe.test.ts:306:40
+    304| describe("P0 candidate: raw SQL", () => {
+    305|   it("refuses raw SQL with no tenant context", async () => {
+    306|     await expect(db.$queryRaw`SELECT 1`).rejects.toBeInstanceOf(Missin…
+       |                                        ^
+    307|   });
+    308| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > P0 candidate: raw SQL > raw SQL inside shop A cannot read shop B's rows
+AssertionError: expected [ 'alpha.myshopify.com', …(1) ] to deeply equal [ 'beta.myshopify.com' ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[31m+   "alpha.myshopify.com",[39m
+[2m    "beta.myshopify.com",[22m
+[2m  ][22m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:315:37
+    313|       () => db.$queryRaw`SELECT "shop", "email" FROM "Customer"`,
+    314|     );
+    315|     expect(rows.map((r) => r.shop)).toEqual([BETA]);
+       |                                     ^
+    316|   });
+    317| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > P0 candidate: raw SQL > raw SQL inside shop A cannot delete shop B's rows
+AssertionError: expected +0 to be 1 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:323:24
+    321|     await inBeta(() => db.$executeRaw`DELETE FROM "Customer"`);
+    322|     const alphaStill = await inAlpha(() => db.customer.count());
+    323|     expect(alphaStill).toBe(1);
+       |                        ^
+    324|   });
+    325| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > withoutShopScope > does not let tenant() write a bogus '__unscoped__' shop
+AssertionError: expected '__unscoped__' not to be '__unscoped__' // Object.is equality
+ ❯ qa/0.1/cold-read/probe.test.ts:373:30
+    371|       db.shop.create({ data: { ...tenant(), name: "ghost" } }),
+    372|     );
+    373|     expect(created.shop).not.toBe("__unscoped__");
+       |                              ^
+    374|   });
+    375| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > more raw-SQL surface > $queryRawUnsafe is also outside the guard
+AssertionError: expected [ { shop: 'alpha.myshopify.com' } ] to deeply equal []
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [][39m
+[31m+ [[39m
+[31m+   {[39m
+[31m+     "shop": "alpha.myshopify.com",[39m
+[31m+   },[39m
+[31m+ ][39m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:417:18
+    415|       'SELECT "shop" FROM "Customer"',
+    416|     );
+    417|     expect(rows).toEqual([]); // no scope at all — should have thrown
+       |                  ^
+    418|   });
+    419| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > foreign keys are not tenant-checked > refuses a child row whose parent belongs to another shop
+AssertionError: promise resolved "{ …(17) }" instead of rejecting
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "createdAt": 2026-09-12T10:36:04.113Z,[39m
+[31m+   "currentQuantity": 0,[39m
+[31m+   "currentTotal": 0,[39m
+[31m+   "discountedTotal": 0,[39m
+[31m+   "discounts": [],[39m
+[31m+   "id": "cmty924y900b27dywdjvj74zx",[39m
+[31m+   "lineItemId": "gid://shopify/LineItem/fk",[39m
+[31m+   "orderId": "cmty924xm00ah7dywot4gnyz6",[39m
+[31m+   "originalTotal": 0,[39m
+[31m+   "productId": null,[39m
+[31m+   "quantity": 1,[39m
+[31m+   "shop": "beta.myshopify.com",[39m
+[31m+   "sku": null,[39m
+[31m+   "title": "planted by beta",[39m
+[31m+   "unitPrice": 0,[39m
+[31m+   "variantId": null,[39m
+[31m+   "variantTitle": null,[39m
+[2m  }[22m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:439:5
+    437|         }),
+    438|       ),
+    439|     ).rejects.toBeTruthy();
+       |     ^
+    440|   });
+    441| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > foreign keys are not tenant-checked > refuses a buyer pointed at another shop's customer group
+AssertionError: promise resolved "{ …(29) }" instead of rejecting
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "autoRemind": false,[39m
+[31m+   "company": "beta.myshopify.com Trading",[39m
+[31m+   "countryCode": null,[39m
+[31m+   "createdAt": 2026-09-12T10:36:04.309Z,[39m
+[31m+   "creditLimit": null,[39m
+[31m+   "currencyCode": "USD",[39m
+[31m+   "customerId": "gid://shopify/Customer/beta.myshopify.com",[39m
+[31m+   "deletedInShopifyAt": null,[39m
+[31m+   "email": "buyer@beta.myshopify.com",[39m
+[31m+   "firstName": null,[39m
+[31m+   "groupId": "cmty9253200b47dyw5k5excz4",[39m
+[31m+   "id": "cmty9253p00bi7dywjmlx69vd",[39m
+[31m+   "internalNote": null,[39m
+[31m+   "lastName": null,[39m
+[31m+   "lastOrderAt": null,[39m
+[31m+   "lifetimeSpend": 0,[39m
+[31m+   "netTermsDays": null,[39m
+[31m+   "orderCount": 0,[39m
+[31m+   "phone": null,[39m
+[31m+   "province": null,[39m
+[31m+   "shop": "beta.myshopify.com",[39m
+[31m+   "state": "enabled",[39m
+[31m+   "status": "APPROVED",[39m
+[31m+   "syncedAt": 2026-09-12T10:36:04.309Z,[39m
+[31m+   "tags": [],[39m
+[31m+   "taxExempt": false,[39m
+[31m+   "updatedAt": 2026-09-12T10:36:04.321Z,[39m
+[31m+   "vatNumber": null,[39m
+[31m+   "vatVerifiedAt": null,[39m
+[2m  }[22m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:453:5
+    451|         }),
+    452|       ),
+    453|     ).rejects.toBeTruthy();
+       |     ^
+    454|   });
+    455| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/13]⎯
+
+ FAIL  qa/0.1/cold-read/probe.test.ts > foreign keys are not tenant-checked > does not hand a shop another shop's group through include
+AssertionError: expected 'alpha.myshopify.com' to be 'beta.myshopify.com' // Object.is equality
+
+Expected: [32m"[7mbet[27ma.myshopify.com"[39m
+Received: [31m"[7malph[27ma.myshopify.com"[39m
+
+ ❯ qa/0.1/cold-read/probe.test.ts:469:41
+    467|       db.customer.findUnique({ where: { id: beta.customer.id }, includ…
+    468|     );
+    469|     expect(leaked?.group?.shop ?? BETA).toBe(BETA);
+       |                                         ^
+    470|   });
+    471| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/13]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  13 failed | 12 passed (25)
+   Start at  10:35:56
+   Duration  7.97s (transform 143ms, setup 0ms, collect 212ms, tests 4.97s, environment 0ms, prepare 67ms)
+

@@ -92,6 +92,17 @@ export const shopScope = {
  * cannot forget it, and you cannot lie about it.
  */
 export function tenant(): { shop: string } {
+  const store = storage.getStore();
+  // Inside a bypass there is no tenant to stamp. The first version fell back to
+  // `shop: current?.shop ?? "__unscoped__"`, so a create inside
+  // `withoutShopScope` wrote a row with a literal `"__unscoped__"` shop —
+  // invisible to every scope, to every list, and to the uninstall purge, which
+  // is the one place a row that belongs to nobody is worst.
+  if (store?.bypass && !store.shop) {
+    throw new MissingShopContextError(
+      "tenant() inside withoutShopScope(): name the shop on the row explicitly",
+    );
+  }
   return { shop: shopScope.require("tenant()") };
 }
 
@@ -109,7 +120,9 @@ export function withoutShopScope<T>(reason: string, fn: () => T): T {
   }
   const current = storage.getStore();
   return storage.run(
-    { shop: current?.shop ?? "__unscoped__", bypass: true, bypassReason: reason },
+    // No invented shop. A bypass that inherits nothing has no tenant, and
+    // `tenant()` says so rather than stamping a string nothing can read back.
+    { shop: current?.shop ?? "", bypass: true, bypassReason: reason },
     () => settleInScope(fn()),
   );
 }

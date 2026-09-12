@@ -31,11 +31,6 @@ export const OVERDUE_MINUTES = 30;
 
 export const loader = async () => {
   const environment = checkEnvironment();
-  const checks: Record<string, unknown> = {
-    configured: environment.ok,
-    missingRequired: environment.missingRequired.map((one) => one.name),
-    missingOptional: environment.missingOptional.map((one) => one.name),
-  };
 
   let database = false;
   let jobs: Record<string, unknown> = { checked: false };
@@ -74,7 +69,12 @@ export const loader = async () => {
       // is the single most consequential thing that can be silently true here.
       runnerStalled,
       jobs,
-      ...checks,
+      // Named rather than spread: a `Record<string, unknown>` spread erases
+      // these from the response type, so a caller reading `missingOptional`
+      // — including this app's own test — does not typecheck.
+      configured: environment.ok,
+      missingRequired: environment.missingRequired.map((one) => one.name),
+      missingOptional: environment.missingOptional.map((one) => one.name),
     },
     {
       status: ready ? 200 : 503,

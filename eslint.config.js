@@ -13,6 +13,10 @@ export default tseslint.config(
       "test-results/**",
       "app/generated/**",
       ".shopify/**",
+      // QA artefacts: captures, reports, and the probe files a cold read
+      // writes to demonstrate a finding. Deliberately outside `tests/` so the
+      // committed suite stays green; not application code, and not linted.
+      "qa/**",
     ],
   },
   js.configs.recommended,

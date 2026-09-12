@@ -576,6 +576,16 @@ model CustomerGroup {
 
   @@unique([shop, handle])
   @@index([shop, sortOrder])
+
+  /// Referenced by the composite foreign keys in
+  /// `20260912090000_tenant_composite_fks`: a child row may only point at a
+  /// parent in its own shop, and Postgres enforces it. The relations below
+  /// stay single-column on purpose — putting `shop` into a Prisma relation
+  /// changes its generated input types and breaks every create that mixes
+  /// scalar fields with a nested write. `tests/integration/tenant-fks.test.ts`
+  /// reads `pg_constraint` and fails if a constraint is ever regenerated
+  /// single-column.
+  @@unique([shop, id])
 }
 
 /// What Mannon knows about a Shopify customer.
@@ -750,6 +760,16 @@ model RegistrationForm {
 
   @@unique([shop, slug])
   @@index([shop, status, updatedAt])
+
+  /// Referenced by the composite foreign keys in
+  /// `20260912090000_tenant_composite_fks`: a child row may only point at a
+  /// parent in its own shop, and Postgres enforces it. The relations below
+  /// stay single-column on purpose — putting `shop` into a Prisma relation
+  /// changes its generated input types and breaks every create that mixes
+  /// scalar fields with a nested write. `tests/integration/tenant-fks.test.ts`
+  /// reads `pg_constraint` and fails if a constraint is ever regenerated
+  /// single-column.
+  @@unique([shop, id])
 }
 
 /// What Claude made of an application. A recommendation, never a decision:
@@ -865,6 +885,16 @@ model FormSubmission {
   @@index([shop, formId, createdAt])
   @@index([shop, email])
   @@index([shop, ip, createdAt])
+
+  /// Referenced by the composite foreign keys in
+  /// `20260912090000_tenant_composite_fks`: a child row may only point at a
+  /// parent in its own shop, and Postgres enforces it. The relations below
+  /// stay single-column on purpose — putting `shop` into a Prisma relation
+  /// changes its generated input types and breaks every create that mixes
+  /// scalar fields with a nested write. `tests/integration/tenant-fks.test.ts`
+  /// reads `pg_constraint` and fails if a constraint is ever regenerated
+  /// single-column.
+  @@unique([shop, id])
 }
 
 /// A file an applicant attached — a trade licence, a tax certificate.
@@ -1088,6 +1118,16 @@ model Order {
   @@index([shop, isWholesale, processedAt])
   @@index([shop, netTermsDueAt])
   @@index([shop, customerId])
+
+  /// Referenced by the composite foreign keys in
+  /// `20260912090000_tenant_composite_fks`: a child row may only point at a
+  /// parent in its own shop, and Postgres enforces it. The relations below
+  /// stay single-column on purpose — putting `shop` into a Prisma relation
+  /// changes its generated input types and breaks every create that mixes
+  /// scalar fields with a nested write. `tests/integration/tenant-fks.test.ts`
+  /// reads `pg_constraint` and fails if a constraint is ever regenerated
+  /// single-column.
+  @@unique([shop, id])
 }
 
 // ---------------------------------------------------------------------------
@@ -1323,6 +1363,16 @@ model Quote {
   @@index([shop, status, createdAt])
   @@index([shop, expiresAt])
   @@index([shop, customerId])
+
+  /// Referenced by the composite foreign keys in
+  /// `20260912090000_tenant_composite_fks`: a child row may only point at a
+  /// parent in its own shop, and Postgres enforces it. The relations below
+  /// stay single-column on purpose — putting `shop` into a Prisma relation
+  /// changes its generated input types and breaks every create that mixes
+  /// scalar fields with a nested write. `tests/integration/tenant-fks.test.ts`
+  /// reads `pg_constraint` and fails if a constraint is ever regenerated
+  /// single-column.
+  @@unique([shop, id])
 }
 
 /// One line of a quote, at the price it was quoted.
@@ -1602,6 +1652,16 @@ model AgentConversation {
   @@index([shop, lastMessageAt])
   @@index([shop, customerId])
   @@index([shop, guestKey])
+
+  /// Referenced by the composite foreign keys in
+  /// `20260912090000_tenant_composite_fks`: a child row may only point at a
+  /// parent in its own shop, and Postgres enforces it. The relations below
+  /// stay single-column on purpose — putting `shop` into a Prisma relation
+  /// changes its generated input types and breaks every create that mixes
+  /// scalar fields with a nested write. `tests/integration/tenant-fks.test.ts`
+  /// reads `pg_constraint` and fails if a constraint is ever regenerated
+  /// single-column.
+  @@unique([shop, id])
 }
 
 /// One turn. The buyer's words, or the agent's, or a merchant who took over.

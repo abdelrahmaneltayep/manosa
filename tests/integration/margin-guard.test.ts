@@ -281,7 +281,10 @@ describe("checkMargins", () => {
   it("says it could not check when Shopify returns an error", async () => {
     const admin: AdminGraphql = {
       graphql: async () => ({
-        json: async () => ({ errors: [{ message: "Throttled" }] }),
+        // Deliberately not a throttle: being rate limited is retried and then
+        // reported in the merchant's words, and this case is about a real
+        // failure being surfaced rather than swallowed.
+        json: async () => ({ errors: [{ message: "Field 'unitCost' doesn't exist" }] }),
       }),
     };
 
@@ -289,7 +292,7 @@ describe("checkMargins", () => {
 
     expect(result.status).toBe("unavailable");
     expect(result.report).toBeNull();
-    expect(result.detail).toContain("Throttled");
+    expect(result.detail).toContain("unitCost");
   });
 
   it("does not throw when the Admin API is unreachable", async () => {
