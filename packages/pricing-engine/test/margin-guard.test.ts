@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   checkpointQuantities,
+  checkpointSubtotals,
   guardMargins,
   money,
   representativeCustomer,
@@ -43,6 +44,28 @@ const candidate = (overrides: Partial<MarginCandidate> = {}): MarginCandidate =>
   price: USD(10_000),
   cost: USD(6_000),
   ...overrides,
+});
+
+/** Two tiers, the deeper of which sells a $100 variant for $10. */
+const cartRule = (currencyCode = "USD"): PricingRule => ({
+  ...base,
+  kind: "cart_value_tier",
+  value: {
+    tiers: [
+      {
+        minSubtotal: money(50_000, currencyCode),
+        maxSubtotal: money(99_999, currencyCode),
+        kind: "percentage",
+        percentage: 20,
+      },
+      {
+        minSubtotal: money(100_000, currencyCode),
+        maxSubtotal: null,
+        kind: "percentage",
+        percentage: 90,
+      },
+    ],
+  },
 });
 
 describe("checkpointQuantities", () => {
@@ -267,5 +290,76 @@ describe("guardMargins", () => {
     const rule: PricingRule = { ...base, status: "draft" };
     guardMargins(rule, [candidate()], { currencyCode: "USD", now: NOW });
     expect(rule.status).toBe("draft");
+  });
+});
+
+describe("checkpointSubtotals", () => {
+  it("has no cart to offer for a rule that does not read one", () => {
+    expect(checkpointSubtotals(base, "USD")).toEqual([null]);
+  });
+
+  it("offers each tier's own threshold for a cart-value rule", () => {
+    expect(checkpointSubtotals(cartRule(), "USD")).toEqual([USD(50_000), USD(100_000)]);
+  });
+
+  it("offers no cart when every tier is priced in another currency", () => {
+    expect(checkpointSubtotals(cartRule("EUR"), "USD")).toEqual([null]);
+  });
+});
+
+describe("guardMargins on a cart-value rule", () => {
+  /**
+   * The guard used to price every candidate with `cartSubtotal: null`, so a
+   * cart-value rule came back `cart_unknown` for all of them, `priced` stayed
+   * false, and the rule was counted **notApplicable** — which a merchant reads
+   * as "nothing to worry about" on a rule that sells at a loss.
+   */
+  it("reports a tier that sells below cost instead of calling it not applicable", () => {
+    const report = guardMargins(cartRule(), [candidate()], {
+      currencyCode: "USD",
+      now: NOW,
+    });
+
+    expect(report.notApplicable).toBe(0);
+    expect(report.checked).toBe(1);
+    expect(report.belowCost).toHaveLength(1);
+    // The $1,000 tier takes 90% off: $10.00 against a $60.00 cost.
+    expect(report.belowCost[0]?.unitPrice).toEqual(USD(1_000));
+    expect(report.belowCost[0]?.shortfall).toEqual(USD(5_000));
+  });
+
+  it("never checks a cart smaller than the line inside it", () => {
+    // The tier runs from $50 to $99.99, but one unit already costs $100 — no
+    // buyer can have this line in a cart that small, so there is nothing here
+    // to warn about.
+    const rule: PricingRule = {
+      ...base,
+      kind: "cart_value_tier",
+      value: {
+        tiers: [
+          {
+            minSubtotal: USD(5_000),
+            maxSubtotal: USD(9_999),
+            kind: "percentage",
+            percentage: 90,
+          },
+        ],
+      },
+    };
+
+    const report = guardMargins(rule, [candidate()], { currencyCode: "USD", now: NOW });
+
+    expect(report.belowCost).toEqual([]);
+    expect(report.notApplicable).toBe(1);
+  });
+
+  it("still says nothing it cannot know about a rule priced in another currency", () => {
+    const report = guardMargins(cartRule("EUR"), [candidate()], {
+      currencyCode: "USD",
+      now: NOW,
+    });
+
+    expect(report.checked).toBe(0);
+    expect(report.notApplicable).toBe(1);
   });
 });

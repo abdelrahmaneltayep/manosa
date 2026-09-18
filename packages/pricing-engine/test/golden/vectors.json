@@ -436,7 +436,7 @@
     },
     "specific-customer-only": {
       "id": "specific-customer-only",
-      "name": "Café Aroma's negotiated rate",
+      "name": "Caf\u00e9 Aroma's negotiated rate",
       "status": "active",
       "priority": 5,
       "combinable": false,
@@ -556,6 +556,42 @@
         "tags": ["wholesale"]
       },
       "createdAt": "2026-01-01T00:00:00Z"
+    },
+    "stacked-third-off-a": {
+      "id": "stacked-third-off-a",
+      "name": "33.33% off, stackable (A)",
+      "status": "active",
+      "priority": 100,
+      "combinable": true,
+      "kind": "percentage",
+      "value": {
+        "percentage": 33.33
+      },
+      "targets": {
+        "mode": "all"
+      },
+      "audience": {
+        "mode": "all"
+      },
+      "createdAt": "2026-01-01T00:00:00Z"
+    },
+    "stacked-third-off-b": {
+      "id": "stacked-third-off-b",
+      "name": "33.33% off, stackable (B)",
+      "status": "active",
+      "priority": 110,
+      "combinable": true,
+      "kind": "percentage",
+      "value": {
+        "percentage": 33.33
+      },
+      "targets": {
+        "mode": "all"
+      },
+      "audience": {
+        "mode": "all"
+      },
+      "createdAt": "2026-01-01T00:00:00Z"
     }
   },
   "products": {
@@ -627,7 +663,7 @@
     },
     {
       "name": "guest-sees-the-shelf-price",
-      "spec": "§10 price display — guests see retail, never a wholesale price",
+      "spec": "\u00a710 price display \u2014 guests see retail, never a wholesale price",
       "why": "A tag-gated rule must not leak to a logged-out visitor.",
       "rules": ["guests-login-to-see"],
       "context": {
@@ -645,7 +681,7 @@
     },
     {
       "name": "retail-customer-without-the-tag-sees-the-shelf-price",
-      "spec": "§3 audience — customer tags",
+      "spec": "\u00a73 audience \u2014 customer tags",
       "why": "Being logged in is not the same as being approved.",
       "rules": ["storewide-35"],
       "context": {
@@ -663,7 +699,7 @@
     },
     {
       "name": "demo-persona-1-35-percent-storewide",
-      "spec": "§11 demo store — Customer 1, discounted pricing",
+      "spec": "\u00a711 demo store \u2014 Customer 1, discounted pricing",
       "why": "The simplest wholesale case, and the one on the demo store.",
       "rules": ["storewide-35"],
       "context": {
@@ -678,7 +714,7 @@
     },
     {
       "name": "demo-persona-2-individual-variant-price",
-      "spec": "§11 demo store — Customer 2, individual variant pricing",
+      "spec": "\u00a711 demo store \u2014 Customer 2, individual variant pricing",
       "why": "A contract price on one variant, not a percentage.",
       "rules": ["variant-contract-price"],
       "context": {
@@ -693,7 +729,7 @@
     },
     {
       "name": "variant-price-does-not-touch-other-variants",
-      "spec": "§2 targeting — individual variants",
+      "spec": "\u00a72 targeting \u2014 individual variants",
       "why": "Targeting a variant must not price the whole catalogue.",
       "rules": ["variant-contract-price"],
       "context": {
@@ -711,7 +747,7 @@
     },
     {
       "name": "demo-persona-3-tiers-below-first-break",
-      "spec": "§10 product page — Buy 5 → 5%, Buy 20 → 12%",
+      "spec": "\u00a710 product page \u2014 Buy 5 \u2192 5%, Buy 20 \u2192 12%",
       "why": "Under the first break there is no discount, and the next break is offered.",
       "rules": ["tiers-5-20"],
       "context": {
@@ -733,7 +769,7 @@
     },
     {
       "name": "demo-persona-3-tiers-at-first-break",
-      "spec": "§10 product page — Buy 5 → 5%",
+      "spec": "\u00a710 product page \u2014 Buy 5 \u2192 5%",
       "why": "The break applies at exactly the minimum quantity, not one above it.",
       "rules": ["tiers-5-20"],
       "context": {
@@ -752,7 +788,7 @@
     },
     {
       "name": "demo-persona-3-tiers-just-under-second-break",
-      "spec": "§6 tier-aware upsell — \"add 1 more unit to unlock the 12% tier\"",
+      "spec": "\u00a76 tier-aware upsell \u2014 \"add 1 more unit to unlock the 12% tier\"",
       "why": "This is the number the Buyer Agent quotes; it must come from here.",
       "rules": ["tiers-5-20"],
       "context": {
@@ -771,7 +807,7 @@
     },
     {
       "name": "demo-persona-3-tiers-at-second-break",
-      "spec": "§10 product page — Buy 20 → 12%",
+      "spec": "\u00a710 product page \u2014 Buy 20 \u2192 12%",
       "why": "The top tier applies and there is no further tier to upsell.",
       "rules": ["tiers-5-20"],
       "context": {
@@ -787,7 +823,7 @@
     },
     {
       "name": "rule-from-a-sentence-at-100-units",
-      "spec": "§2 rule-from-a-sentence; §6 \"what's my price for SKU-450 at 100 units?\"",
+      "spec": "\u00a72 rule-from-a-sentence; \u00a76 \"what's my price for SKU-450 at 100 units?\"",
       "why": "The exact question the Buyer Agent answers most often.",
       "rules": ["tiers-10-50-not-sale"],
       "context": {
@@ -802,7 +838,7 @@
     },
     {
       "name": "rule-from-a-sentence-excludes-sale-items",
-      "spec": "§2 rule-from-a-sentence — \"exclude sale items\"",
+      "spec": "\u00a72 rule-from-a-sentence \u2014 \"exclude sale items\"",
       "why": "An exclusion the merchant asked for in words has to hold in code.",
       "rules": ["tiers-10-50-not-sale"],
       "context": {
@@ -820,7 +856,7 @@
     },
     {
       "name": "scheduled-rule-before-it-starts",
-      "spec": "§1 Ask Mannon — \"20% off the new collection until Friday\"",
+      "spec": "\u00a71 Ask Mannon \u2014 \"20% off the new collection until Friday\"",
       "why": "A scheduled rule must not apply early.",
       "rules": ["vip-new-collection-20"],
       "context": {
@@ -839,7 +875,7 @@
     },
     {
       "name": "scheduled-rule-inside-the-window",
-      "spec": "§1 Ask Mannon — \"20% off the new collection until Friday\"",
+      "spec": "\u00a71 Ask Mannon \u2014 \"20% off the new collection until Friday\"",
       "why": "The happy path for a scheduled, group-targeted, collection-scoped rule.",
       "rules": ["vip-new-collection-20"],
       "context": {
@@ -855,7 +891,7 @@
     },
     {
       "name": "scheduled-rule-after-it-ends",
-      "spec": "§2 scheduling — end dates",
+      "spec": "\u00a72 scheduling \u2014 end dates",
       "why": "Friday means Friday. An expired rule must stop on its own.",
       "rules": ["vip-new-collection-20"],
       "context": {
@@ -874,7 +910,7 @@
     },
     {
       "name": "cascade-custom-price-beats-volume-tier-and-percentage",
-      "spec": "Engineering rule — custom price > volume tier > % discount",
+      "spec": "Engineering rule \u2014 custom price > volume tier > % discount",
       "why": "The precedence the whole engine is specified around.",
       "rules": ["variant-contract-price", "tiers-5-20", "storewide-35"],
       "context": {
@@ -893,7 +929,7 @@
     },
     {
       "name": "cascade-volume-tier-beats-percentage",
-      "spec": "Engineering rule — volume tier > % discount",
+      "spec": "Engineering rule \u2014 volume tier > % discount",
       "why": "Even when the percentage is the better deal, precedence decides.",
       "rules": ["tiers-5-20", "storewide-35"],
       "context": {
@@ -911,7 +947,7 @@
     },
     {
       "name": "priority-lower-number-wins-within-a-class",
-      "spec": "§2 priority & stacking",
+      "spec": "\u00a72 priority & stacking",
       "why": "Priority is how a merchant breaks a tie, so the direction must be fixed.",
       "rules": ["priority-high-number-40", "priority-low-number-15"],
       "context": {
@@ -947,7 +983,7 @@
     },
     {
       "name": "combinable-rules-stack-in-priority-order",
-      "spec": "§2 priority & stacking; §8 discount combinations",
+      "spec": "\u00a72 priority & stacking; \u00a78 discount combinations",
       "why": "Stacking is multiplicative on the running price, in a fixed order.",
       "rules": ["stackable-10-percent", "amount-off-2-usd"],
       "context": {
@@ -962,7 +998,7 @@
     },
     {
       "name": "a-non-combinable-winner-blocks-stacking",
-      "spec": "§8 discount combinations",
+      "spec": "\u00a78 discount combinations",
       "why": "\"Do not combine\" has to mean it, even when other rules qualify.",
       "rules": ["storewide-35", "stackable-10-percent"],
       "context": {
@@ -980,7 +1016,7 @@
     },
     {
       "name": "stacking-clamps-at-zero-and-says-so",
-      "spec": "§2 combination warning — \"combining may reduce price to zero\"",
+      "spec": "\u00a72 combination warning \u2014 \"combining may reduce price to zero\"",
       "why": "The engine must never emit a negative price, and must flag when it hit the floor.",
       "rules": ["stackable-10-percent", "amount-off-20-usd"],
       "context": {
@@ -996,7 +1032,7 @@
     },
     {
       "name": "market-include-applies-in-the-named-market",
-      "spec": "§2 markets — apply to specific Shopify Markets",
+      "spec": "\u00a72 markets \u2014 apply to specific Shopify Markets",
       "why": "Market scoping is how GCC pricing differs from the rest.",
       "rules": ["market-gcc-only"],
       "context": {
@@ -1016,7 +1052,7 @@
     },
     {
       "name": "market-include-does-not-apply-elsewhere",
-      "spec": "§2 markets",
+      "spec": "\u00a72 markets",
       "why": "An included market list is an allow-list, not a hint.",
       "rules": ["market-gcc-only"],
       "context": {
@@ -1039,7 +1075,7 @@
     },
     {
       "name": "market-exclude-blocks-the-named-market",
-      "spec": "§2 markets — exclude Shopify Markets",
+      "spec": "\u00a72 markets \u2014 exclude Shopify Markets",
       "why": "The other half of market scoping.",
       "rules": ["market-not-eu"],
       "context": {
@@ -1062,7 +1098,7 @@
     },
     {
       "name": "an-absolute-discount-is-skipped-in-a-currency-it-has-no-price-for",
-      "spec": "§2 markets — multi-currency price lists",
+      "spec": "\u00a72 markets \u2014 multi-currency price lists",
       "why": "Converting $2 into euros at a rate we invented would be making up a price. Skip, and say why.",
       "rules": ["amount-off-2-usd"],
       "context": {
@@ -1085,7 +1121,7 @@
     },
     {
       "name": "an-absolute-discount-applies-when-the-currency-is-priced",
-      "spec": "§2 markets — multi-currency price lists",
+      "spec": "\u00a72 markets \u2014 multi-currency price lists",
       "why": "With a euro price on the rule there is nothing to invent.",
       "rules": ["amount-off-2-usd-with-eur"],
       "context": {
@@ -1105,7 +1141,7 @@
     },
     {
       "name": "a-percentage-rule-works-in-any-currency",
-      "spec": "§2 markets — multi-currency",
+      "spec": "\u00a72 markets \u2014 multi-currency",
       "why": "Percentages need no conversion, so they must not be skipped.",
       "rules": ["storewide-35"],
       "context": {
@@ -1125,7 +1161,7 @@
     },
     {
       "name": "draft-rules-never-price-anything",
-      "spec": "§2 draft/active status",
+      "spec": "\u00a72 draft/active status",
       "why": "A draft is a work in progress, not a live price.",
       "rules": ["draft-rule"],
       "context": {
@@ -1143,7 +1179,7 @@
     },
     {
       "name": "archived-rules-never-price-anything",
-      "spec": "§2 archived rules tab (soft delete)",
+      "spec": "\u00a72 archived rules tab (soft delete)",
       "why": "Soft delete must stop the rule applying, not just hide it.",
       "rules": ["archived-rule"],
       "context": {
@@ -1161,7 +1197,7 @@
     },
     {
       "name": "a-named-customer-gets-their-negotiated-rate",
-      "spec": "§2 audience — specific customers",
+      "spec": "\u00a72 audience \u2014 specific customers",
       "why": "The narrowest audience there is.",
       "rules": ["specific-customer-only", "storewide-35"],
       "context": {
@@ -1179,7 +1215,7 @@
     },
     {
       "name": "another-customer-does-not-get-that-rate",
-      "spec": "§2 audience — specific customers",
+      "spec": "\u00a72 audience \u2014 specific customers",
       "why": "A negotiated rate leaking to another buyer is the worst bug this engine could have.",
       "rules": ["specific-customer-only"],
       "context": {
@@ -1197,7 +1233,7 @@
     },
     {
       "name": "b2b-company-pricing",
-      "spec": "§2 audience — B2B companies",
+      "spec": "\u00a72 audience \u2014 B2B companies",
       "why": "Shopify B2B companies are an audience like any other.",
       "rules": ["company-location-rule"],
       "context": {
@@ -1212,7 +1248,7 @@
     },
     {
       "name": "cart-value-tier-applies-over-the-threshold",
-      "spec": "§2 rule types — cart-value tiers",
+      "spec": "\u00a72 rule types \u2014 cart-value tiers",
       "why": "Cart-level rules need the cart, and must not fire without it.",
       "rules": ["cart-over-1000-gets-8"],
       "context": {
@@ -1228,7 +1264,7 @@
     },
     {
       "name": "cart-value-tier-does-not-apply-under-the-threshold",
-      "spec": "§2 rule types — cart-value tiers",
+      "spec": "\u00a72 rule types \u2014 cart-value tiers",
       "why": "Under the threshold there is no discount.",
       "rules": ["cart-over-1000-gets-8"],
       "context": {
@@ -1247,7 +1283,7 @@
     },
     {
       "name": "cart-value-tier-is-skipped-when-the-cart-is-unknown",
-      "spec": "§2 rule types — cart-value tiers",
+      "spec": "\u00a72 rule types \u2014 cart-value tiers",
       "why": "On a product page there is no cart. Guessing one would show a price the checkout will not honour.",
       "rules": ["cart-over-1000-gets-8"],
       "context": {
@@ -1265,7 +1301,7 @@
     },
     {
       "name": "a-volume-tier-can-set-a-flat-case-price",
-      "spec": "§5 order limits — case packs; §2 tiered pricing",
+      "spec": "\u00a75 order limits \u2014 case packs; \u00a72 tiered pricing",
       "why": "Tiers are not always percentages.",
       "rules": ["tier-fixed-price"],
       "context": {
@@ -1280,7 +1316,7 @@
     },
     {
       "name": "percentages-round-to-the-nearest-cent",
-      "spec": "§8 multi-currency rounding",
+      "spec": "\u00a78 multi-currency rounding",
       "why": "10.00 less 33.33% is 6.667. Half-up gives 6.67, and it must be the same every run.",
       "rules": ["rounding-third-off"],
       "context": {
@@ -1295,8 +1331,8 @@
     },
     {
       "name": "rounding-happens-once-at-the-end-not-per-rule",
-      "spec": "§8 multi-currency rounding",
-      "why": "Rounding each step compounds the error; two 33.33% rules must agree with the maths.",
+      "spec": "\u00a78 multi-currency rounding",
+      "why": "120.00 less 33.33% is 80.004, which must land on 80.00 and not on 80.01. One rule cannot tell per-step rounding from once-at-the-end \u2014 that is the vector below this one.",
       "rules": ["rounding-third-off"],
       "context": {
         "customer": "wholesale",
@@ -1309,8 +1345,23 @@
       }
     },
     {
+      "name": "rounding-happens-once-across-two-stacked-rules",
+      "spec": "\u00a78 multi-currency rounding",
+      "why": "The single-rule vector cannot tell the two apart: with one rule, rounding per step and rounding at the end are the same arithmetic. Two 33.33% rules on $10.00 are 10.00 \u00d7 0.6667 \u00d7 0.6667 = 4.4449 \u2192 $4.44. Rounding each step gives 6.67 then 4.45 \u2014 a cent the buyer did not earn.",
+      "rules": ["stacked-third-off-a", "stacked-third-off-b"],
+      "context": {
+        "customer": "wholesale",
+        "product": "beans",
+        "quantity": 1
+      },
+      "expect": {
+        "finalPrice": "4.44",
+        "appliedRules": ["stacked-third-off-a", "stacked-third-off-b"]
+      }
+    },
+    {
       "name": "a-non-combinable-follower-cannot-join-a-stack",
-      "spec": "§8 discount combinations",
+      "spec": "\u00a78 discount combinations",
       "why": "Stacking is opt-in from both sides, not just the first rule's choice.",
       "rules": ["stackable-10-percent", "non-combinable-late-25"],
       "context": {

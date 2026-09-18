@@ -102,6 +102,36 @@ export function checkpointQuantities(rule: PricingRule): number[] {
   return [...quantities].sort((a, b) => a - b);
 }
 
+/**
+ * The cart subtotals worth checking, for a rule that depends on one.
+ *
+ * `null` means "no cart", which is what a product page has and what every
+ * candidate used to be checked with — including a `cart_value_tier` rule, for
+ * which `effectFor` then returns `cart_unknown`, `priced` stays false and the
+ * candidate is counted **notApplicable**. A cart-value rule that sells below
+ * cost was reported as "not applicable", which reads as safe: the most
+ * dangerous possible answer for a guard to give.
+ *
+ * So each tier's own threshold is a checkpoint, exactly as each volume tier's
+ * `minQuantity` is. A cart that could not coexist with the quantity being
+ * checked would be its own kind of wrong answer, so the subtotal is never less
+ * than what this line alone would come to.
+ */
+export function checkpointSubtotals(
+  rule: PricingRule,
+  currencyCode: string,
+): (Money | null)[] {
+  if (rule.kind !== "cart_value_tier") return [null];
+
+  const subtotals = rule.value.tiers
+    .map((tier) => tier.minSubtotal)
+    .filter((amount) => amount.currencyCode === currencyCode);
+
+  // A rule whose tiers are all priced in another currency has nothing to check
+  // here; `resolvePrice` reports `no_price_in_currency` and the guard says so.
+  return subtotals.length > 0 ? subtotals : [null];
+}
+
 /** Stands in for a real id where the rule does not name one. */
 const GUARD_ID = "mannon-margin-guard";
 
@@ -169,6 +199,7 @@ export function guardMargins(
   const customer = representativeCustomer(asIfLive);
   const market = representativeMarket(asIfLive, options.currencyCode);
   const quantities = checkpointQuantities(asIfLive);
+  const subtotals = checkpointSubtotals(asIfLive, options.currencyCode);
 
   const report: MarginGuardReport = {
     checked: 0,
@@ -189,49 +220,68 @@ export function guardMargins(
     let worst: BelowCostFinding | null = null;
 
     for (const quantity of quantities) {
-      const context = {
-        customer,
-        product: {
-          productId: candidate.productId,
+      for (const checkpoint of subtotals) {
+        // Never a cart smaller than the line inside it. Checking a $90 rule
+        // against fifty units at $30.00 and calling the cart $90 is a question
+        // no buyer can ask.
+        const lineTotal = candidate.price.amount * quantity;
+        const cartSubtotal =
+          checkpoint === null
+            ? null
+            : {
+                amount: Math.max(checkpoint.amount, lineTotal),
+                currencyCode: checkpoint.currencyCode,
+              };
+
+        const context = {
+          customer,
+          product: {
+            productId: candidate.productId,
+            variantId: candidate.variantId,
+            collectionIds: candidate.collectionIds,
+            price: candidate.price,
+            cost: candidate.cost,
+          },
+          quantity,
+          market,
+          cartSubtotal,
+          now: options.now,
+        };
+
+        if (eligibilityReason(asIfLive, context)) continue;
+
+        const resolution = resolvePrice({
+          rules: [asIfLive],
+          context,
+          options: options.resolve,
+        });
+        if (resolution.appliedRuleIds.length === 0) continue;
+
+        priced = true;
+        if (!candidate.cost) continue;
+
+        const margin = marginFor(resolution, candidate.cost);
+        if (!margin.belowCost) continue;
+
+        const finding: BelowCostFinding = {
           variantId: candidate.variantId,
-          collectionIds: candidate.collectionIds,
-          price: candidate.price,
-          cost: candidate.cost,
-        },
-        quantity,
-        market,
-        cartSubtotal: null,
-        now: options.now,
-      };
+          sku: candidate.sku,
+          title: candidate.title,
+          quantity,
+          unitPrice: margin.unitPrice,
+          unitCost: margin.unitCost,
+          shortfall: {
+            amount: -margin.margin.amount,
+            currencyCode: options.currencyCode,
+          },
+        };
 
-      if (eligibilityReason(asIfLive, context)) continue;
-
-      const resolution = resolvePrice({
-        rules: [asIfLive],
-        context,
-        options: options.resolve,
-      });
-      if (resolution.appliedRuleIds.length === 0) continue;
-
-      priced = true;
-      if (!candidate.cost) continue;
-
-      const margin = marginFor(resolution, candidate.cost);
-      if (!margin.belowCost) continue;
-
-      const finding: BelowCostFinding = {
-        variantId: candidate.variantId,
-        sku: candidate.sku,
-        title: candidate.title,
-        quantity,
-        unitPrice: margin.unitPrice,
-        unitCost: margin.unitCost,
-        shortfall: { amount: -margin.margin.amount, currencyCode: options.currencyCode },
-      };
-
-      // One finding per variant, at the quantity where it is worst — five rows
-      // for one SKU would bury the four other SKUs that are also losing money.
-      if (!worst || finding.shortfall.amount > worst.shortfall.amount) worst = finding;
+        // One finding per variant, at the checkpoint where it is worst — five
+        // rows for one SKU would bury the four other SKUs also losing money.
+        if (!worst || finding.shortfall.amount > worst.shortfall.amount) {
+          worst = finding;
+        }
+      }
     }
 
     if (!priced) {

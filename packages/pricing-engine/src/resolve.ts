@@ -373,8 +373,24 @@ function computeNextTier(input: ResolveInput): NextTier | null {
   const next = nextVolumeTier(tierRule.value.tiers, context.quantity);
   if (!next) return null;
 
+  // Adding units adds to the cart they are in. Carrying the current subtotal
+  // across a change of quantity asks a question no buyer can act on — "what
+  // would fifty units cost in a cart holding ten of them?" — and a cart-value
+  // rule would answer it with a tier the buyer will not actually reach. The
+  // rest of the cart stays where it is; this line grows by the units added, at
+  // the price they are listed at, which is what `cartSubtotal` is measured in.
+  const added = (next.minQuantity - context.quantity) * context.product.price.amount;
+  const cartSubtotal =
+    context.cartSubtotal &&
+    context.cartSubtotal.currencyCode === context.product.price.currencyCode
+      ? money(context.cartSubtotal.amount + added, context.cartSubtotal.currencyCode)
+      : (context.cartSubtotal ?? null);
+
   const atNextQuantity = resolveInternal(
-    { ...input, context: { ...context, quantity: next.minQuantity } },
+    {
+      ...input,
+      context: { ...context, quantity: next.minQuantity, cartSubtotal },
+    },
     false,
   );
 

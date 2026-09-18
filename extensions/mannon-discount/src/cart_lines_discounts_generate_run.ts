@@ -227,11 +227,17 @@ function discountFor(
   // discount API cannot express and a buyer would never accept from a discount.
   if (perUnitDiscount <= 0) return null;
 
-  const winningRule = shared.rules.find((rule) => rule.id === result.appliedRuleIds[0]);
+  // Every rule that moved this price, not only the first. A stacked price used
+  // to arrive at checkout under one rule's name, with nothing to say a second
+  // had applied — invariant 5 ("deciding shows its working") on the side of the
+  // person paying.
+  const names = result.appliedRuleIds
+    .map((id) => shared.rules.find((rule) => rule.id === id)?.name)
+    .filter((name): name is string => typeof name === "string" && name.length > 0);
 
   return {
-    // Shown to the buyer at checkout, so it is the merchant's own rule name.
-    message: winningRule?.name ?? "Wholesale price",
+    // Shown to the buyer at checkout, so it is the merchant's own rule names.
+    message: discountMessage(names),
     targets: [{ cartLine: { id: line.id } }],
     value: {
       fixedAmount: {
@@ -241,4 +247,40 @@ function discountFor(
       },
     },
   };
+}
+
+/**
+ * Shopify's own cap on a discount message. Past it the platform truncates,
+ * which would cut a merchant's rule name in half mid-word.
+ */
+const MESSAGE_LIMIT = 255;
+
+/**
+ * The rules that made this price, as one line the buyer can read.
+ *
+ * Names are joined rather than summarised: "Trade 20% + Autumn clearance" tells
+ * a buyer why their price moved twice. When the names will not fit, the count
+ * of what is left over is kept instead of a name sliced mid-word — a merchant
+ * can look the rest up, a buyer cannot unsee "Autumn clea".
+ */
+export function discountMessage(names: readonly string[]): string {
+  const first = names[0];
+  if (first === undefined) return "Wholesale price";
+
+  // The longest run of names that fits *together with* the count of whatever
+  // is left over. Tested before each name is added rather than after, so the
+  // "+ 2 more" that tells the buyer there is more can never be the part that
+  // gets squeezed out. One name too long for the cap on its own is cut to it —
+  // Shopify would cut it anyway, and at a length we do not control.
+  let message = first.slice(0, MESSAGE_LIMIT);
+
+  for (let taken = 1; taken <= names.length; taken += 1) {
+    const joined = names.slice(0, taken).join(" + ");
+    const left = names.length - taken;
+    const candidate = left > 0 ? `${joined} + ${left} more` : joined;
+    if (candidate.length > MESSAGE_LIMIT) break;
+    message = candidate;
+  }
+
+  return message;
 }

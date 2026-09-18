@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  deserializeRule,
   formatMoney,
   parseMoney,
   resolvePrice,
+  serializeRule,
   type CustomerContext,
   type Money,
   type PricingContext,
@@ -170,6 +172,31 @@ function buildContext(testCase: RawCase): PricingContext {
   };
 }
 
+/**
+ * The rule as the checkout Function will actually read it.
+ *
+ * A vector that hands `resolvePrice` a `PricingRule` built in this file tests
+ * the resolver and nothing else. The Function never gets a rule that way: it
+ * gets the published JSON and calls `deserializeRule`. Every vector here would
+ * have passed against a codec that quietly dropped `excludeCollectionIds` —
+ * the field whose absence charged excluded products the wholesale price. So
+ * each rule is written to the wire format and read back before it is priced,
+ * and a codec that loses something fails the vector that depends on it.
+ *
+ * `JSON.parse(JSON.stringify(...))` is not ceremony: it is the trip through
+ * the metafield, and it turns `Date`s into strings exactly as Shopify does.
+ */
+function throughTheWire(rule: PricingRule): PricingRule {
+  const onTheWire: unknown = JSON.parse(JSON.stringify(serializeRule(rule)));
+  const read = deserializeRule(onTheWire);
+
+  if ("error" in read) {
+    throw new Error(`${rule.id} did not survive the codec: ${read.error.message}`);
+  }
+
+  return read.rule;
+}
+
 describe("golden vectors", () => {
   it("has cases, and every case cites where in the spec it comes from", () => {
     expect(raw.cases.length).toBeGreaterThan(30);
@@ -182,7 +209,9 @@ describe("golden vectors", () => {
   it.each(raw.cases.map((c) => [c.name, c] as const))("%s", (_name, testCase) => {
     const context = buildContext(testCase);
     const currency = context.market.currencyCode;
-    const rules = testCase.rules.map((id) => buildRule(raw.rules[id]!, currency));
+    const rules = testCase.rules.map((id) =>
+      throughTheWire(buildRule(raw.rules[id]!, currency)),
+    );
 
     const result = resolvePrice({ rules, context });
 

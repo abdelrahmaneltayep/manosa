@@ -6,7 +6,10 @@ import {
 } from "@mannon/pricing-engine";
 import { describe, expect, it, vi } from "vitest";
 
-import { cartLinesDiscountsGenerateRun } from "../src/cart_lines_discounts_generate_run";
+import {
+  cartLinesDiscountsGenerateRun,
+  discountMessage,
+} from "../src/cart_lines_discounts_generate_run";
 import type { CartLine, FunctionInput } from "../src/api";
 
 /**
@@ -124,6 +127,27 @@ describe("applying wholesale prices at checkout", () => {
   it("names the winning rule, so checkout shows the merchant's own wording", () => {
     const result = cartLinesDiscountsGenerateRun(input());
     expect(candidates(result)[0]!.message).toBe("Wholesale 35% off");
+  });
+
+  it("names every rule that moved the price, not just the first", () => {
+    // Two rules the merchant let stack. Checkout used to print the first one's
+    // name and nothing else, so a buyer whose price moved twice saw one reason.
+    const result = cartLinesDiscountsGenerateRun(
+      input({
+        rules: [
+          rule({ combinable: true }),
+          rule({
+            id: "autumn",
+            name: "Autumn clearance",
+            combinable: true,
+            priority: 150,
+            value: { percentage: 10 },
+          }),
+        ],
+      }),
+    );
+
+    expect(candidates(result)[0]!.message).toBe("Wholesale 35% off + Autumn clearance");
   });
 
   it("charges an untagged customer the shelf price", () => {
@@ -500,5 +524,35 @@ describe("reading Shopify's money strings", () => {
     expect(candidates(result)[0]!.value.fixedAmount.amount).toBe("3.50");
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe("discountMessage", () => {
+  it("falls back to wording of its own when no rule can be named", () => {
+    expect(discountMessage([])).toBe("Wholesale price");
+  });
+
+  it("joins the rules that applied, in the order they applied", () => {
+    expect(discountMessage(["Trade 20%", "Autumn clearance"])).toBe(
+      "Trade 20% + Autumn clearance",
+    );
+  });
+
+  it("counts what will not fit rather than slicing a name in half", () => {
+    const long = "A".repeat(120);
+    const message = discountMessage([long, long, "Third", "Fourth"]);
+
+    expect(message.length).toBeLessThanOrEqual(255);
+    expect(message).toBe(`${long} + ${long} + 2 more`);
+  });
+
+  it("keeps the count when only the first name fits", () => {
+    const message = discountMessage(["C".repeat(240), "Second", "Third"]);
+    expect(message).toBe(`${"C".repeat(240)} + 2 more`);
+  });
+
+  it("keeps a single over-long name readable rather than growing past the cap", () => {
+    const message = discountMessage(["B".repeat(300), "Second"]);
+    expect(message).toHaveLength(255);
   });
 });
