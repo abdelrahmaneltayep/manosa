@@ -48,6 +48,53 @@ export function localDay(at: Date, timeZone: string | null): string {
   }).format(at);
 }
 
+const QUARTER_HOUR = 15 * 60 * 1000;
+const BRACKET = 2 * 24 * 60 * 60 * 1000;
+
+/**
+ * The first instant of a store-local `YYYY-MM-DD`, as a UTC `Date`.
+ *
+ * Binary search between two instants certainly either side of it, on a
+ * fifteen-minute grid because Kathmandu and Chatham are not on the hour. The
+ * same shape as `monthStart` in `review.server.ts`, which now delegates here.
+ *
+ * Pricing needs it as much as analytics do: the rule builder's fields are
+ * `s-date-field`, so a merchant who sets "ends 1 July" means the end of that
+ * day in their own shop's time. `new Date("2026-07-01")` is UTC midnight, so
+ * the rule was dead for the whole of the day they named — and in a US-Pacific
+ * store a rule starting "1 July" went live at 18:00 on 30 June, store time.
+ */
+export function dayStart(day: string, timeZone: string | null): Date {
+  const [year, month, date] = day.split("-").map(Number);
+  const base = Date.UTC(year!, (month ?? 1) - 1, date ?? 1);
+
+  // Monotonic: local time only moves forward, and `YYYY-MM-DD` sorts as dates.
+  const reached = (at: number) => localDay(new Date(at), timeZone) >= day;
+
+  let before = Math.floor((base - BRACKET) / QUARTER_HOUR);
+  let after = Math.ceil((base + BRACKET) / QUARTER_HOUR);
+
+  while (after - before > 1) {
+    const mid = Math.floor((before + after) / 2);
+    if (reached(mid * QUARTER_HOUR)) after = mid;
+    else before = mid;
+  }
+  return new Date(after * QUARTER_HOUR);
+}
+
+/**
+ * The last instant of a store-local day, as a UTC `Date`.
+ *
+ * Inclusive of the whole day the merchant named. "Ends 1 July" means the rule
+ * is live all through 1 July and dead on the 2nd — which is what the words say
+ * and what nobody would have to be told.
+ */
+export function dayEnd(day: string, timeZone: string | null): Date {
+  const [year, month, date] = day.split("-").map(Number);
+  const nextDay = new Date(Date.UTC(year!, (month ?? 1) - 1, (date ?? 1) + 1));
+  return new Date(dayStart(localDay(nextDay, UTC), timeZone).getTime() - 1);
+}
+
 /**
  * Every store-local day from `start` to `end`, inclusive.
  *

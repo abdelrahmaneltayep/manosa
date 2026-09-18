@@ -162,6 +162,16 @@ export type SkipReason =
   | "no_price_in_currency"
   | "not_combinable_with_winner"
   | "not_combinable"
+  /**
+   * A later rule would have set a price **above** the one already reached.
+   *
+   * The cascade exists so that "a negotiated contract price is a promise",
+   * and `set` used to be unconditional: a combinable contract price of $80.00
+   * followed by a combinable cart-value tier of $90.00 resolved to $90.00, and
+   * the trace reported both as applied — so "Why this price?" showed the
+   * contract applying and then being undone.
+   */
+  | "would_raise_price"
   | "invalid_rule";
 
 export interface TraceEntry {

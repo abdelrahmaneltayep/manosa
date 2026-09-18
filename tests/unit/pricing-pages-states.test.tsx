@@ -76,6 +76,7 @@ const listView = (overrides: Partial<RuleListView> = {}): RuleListView => ({
   collectionsPending: null,
   csvEntitled: true,
   pausedByPlan: 0,
+  checkoutBehind: null,
   search: "",
   archived: false,
   sort: "priority",
@@ -309,6 +310,55 @@ describe("rule list states", () => {
     expect(html).toContain("Nothing has been deleted");
   });
 
+  /**
+   * The publish was refused (an over-48KB ruleset) and the merchant was told
+   * once, through a query parameter. One navigation later the page showed
+   * their rules as Active with nothing to say checkout had a different set.
+   */
+  it("error — checkout is running an older set than this page shows", () => {
+    const html = render(
+      <RuleListPage
+        view={listView({
+          rows: [row()],
+          total: 9,
+          totalUnfiltered: 9,
+          checkoutBehind: { liveRuleCount: 9, publishedRuleCount: 7 },
+        })}
+      />,
+    );
+    capture("21-list-checkout-behind", html);
+
+    expect(html).toContain("Checkout is running an older set of rules");
+    // Both numbers, so the merchant can see the size of the gap.
+    expect(html).toContain("9 active rules here");
+    expect(html).toContain("checkout has 7");
+    expect(html).toContain("Saving any rule tries again");
+  });
+
+  /**
+   * A rule whose stored shape cannot be decoded is absent from checkout and
+   * was displayed as Active; `unreadableCount` was a hardcoded zero, so the
+   * banner written to say so could never render.
+   */
+  it("error — a rule that cannot be read, and so is not at checkout", () => {
+    const html = render(
+      <RuleListPage
+        view={listView({
+          rows: [row()],
+          total: 1,
+          totalUnfiltered: 1,
+          unreadableCount: 1,
+        })}
+      />,
+    );
+    capture("22-list-unreadable", html);
+
+    // The apostrophe is entity-escaped by `renderToStaticMarkup`, so the
+    // assertion stops before it.
+    expect(html).toContain("1 rule can");
+    expect(html).toContain("not applying at checkout");
+  });
+
   it("paginates past one page", () => {
     // A realistic second page: fifty rows of a hundred and twenty.
     const rows = Array.from({ length: 50 }, (_, index) =>
@@ -431,6 +481,7 @@ describe("rule builder states", () => {
             changed: true,
             quantity: 10,
             unavailable: false,
+            aboveShelfPrice: false,
           },
         })}
       />,
@@ -450,12 +501,49 @@ describe("rule builder states", () => {
     expect(html).not.toContain("Preview unavailable");
   });
 
+  /**
+   * A rule that prices above the shelf price.
+   *
+   * The preview said "now $120.00", the quote locked $120.00, the Buyer Agent
+   * quoted $120.00 — and checkout charged $100.00, because Shopify's discount
+   * API can only take money off a line. Nothing said so anywhere.
+   */
+  it("warns when a rule prices above the shelf price, which checkout cannot do", () => {
+    const html = render(
+      <RuleBuilderPage
+        view={builderView({
+          preview: {
+            was: "$100.00",
+            now: "$120.00",
+            changed: true,
+            quantity: 10,
+            unavailable: false,
+            aboveShelfPrice: true,
+          },
+        })}
+      />,
+    );
+    capture("20-builder-above-shelf", html);
+
+    // Both halves: the quote really will carry it, and checkout really will not.
+    expect(html).toContain("higher than the shelf price");
+    expect(html).toContain("charged the shelf price");
+    expect(html).toContain("Quotes and draft orders do carry the higher price");
+  });
+
   /** A broken preview must never stop a merchant saving their work. */
   it("preview unavailable, and saving still offered", () => {
     const html = render(
       <RuleBuilderPage
         view={builderView({
-          preview: { was: "", now: "", changed: false, quantity: 10, unavailable: true },
+          preview: {
+            was: "",
+            now: "",
+            changed: false,
+            quantity: 10,
+            unavailable: true,
+            aboveShelfPrice: false,
+          },
         })}
       />,
     );
@@ -506,7 +594,14 @@ describe("priority and combinations", () => {
     ],
     anyCombinable: true,
     explain: null,
-    explainInput: { variantId: "", tags: "wholesale", quantity: "10", price: "100.00" },
+    explainInput: {
+      variantId: "",
+      buyerEmail: "",
+      tags: "wholesale",
+      quantity: "10",
+      price: "100.00",
+    },
+    explainContext: null,
     orderSaved: false,
     ...overrides,
   });

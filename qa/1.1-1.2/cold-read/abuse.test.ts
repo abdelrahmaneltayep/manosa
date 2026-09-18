@@ -63,9 +63,21 @@ describe("a ruleset written by a newer version of the app", () => {
   it("is refused loudly rather than silently charging every buyer retail", () => {
     const future = { ...serializeRuleset([rule()]), v: 2 };
     const read = deserializeRuleset(future);
+
+    // The assertion below read `toHaveLength(1)`, which contradicts this
+    // probe's own finding ("a `v: 2` payload produces zero discount candidates
+    // and one unreported error") — zero is the whole problem.
     expect(read.errors).toHaveLength(1);
-    // Nothing anywhere turns that error into something a merchant can see.
-    expect(candidates(cartLinesDiscountsGenerateRun(input(future)))).toHaveLength(1);
+    expect(candidates(cartLinesDiscountsGenerateRun(input(future)))).toHaveLength(0);
+
+    // FIXED, as far as anything inside a WASM sandbox can be. Refusing a format
+    // this build cannot read is still right; what was wrong was comparing
+    // against a *single* constant, so the day anybody bumped it every deployed
+    // Function returned nothing. `SUPPORTED_RULESET_VERSIONS` is what the
+    // Function can read, always a superset of what the app writes, so a staged
+    // deploy survives — and the message now names the remedy rather than just
+    // the symptom.
+    expect(read.errors[0]!.message).toContain("Deploy the discount Function");
   });
 });
 

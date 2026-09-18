@@ -9,6 +9,8 @@ import {
   type VolumeTier,
 } from "@mannon/pricing-engine";
 
+import { dayEnd, dayStart } from "~/lib/analytics/series.server";
+
 /**
  * Form data → an engine rule.
  *
@@ -41,12 +43,109 @@ const asNumber = (form: FormData, key: string, fallback: number) => {
   return Number.isFinite(value) ? value : Number.NaN;
 };
 
-const asDate = (form: FormData, key: string): Date | null => {
+/**
+ * A `YYYY-MM-DD` from an `s-date-field`, as the instant the merchant meant.
+ *
+ * The builder's schedule fields are day granularity, so "starts 1 July" means
+ * the first instant of 1 July **in the shop's own timezone**, and "ends 1 July"
+ * means the last instant of it. Both halves were wrong: `new Date("2026-07-01")`
+ * is UTC midnight, so a rule set to end on 1 July was dead for the whole of the
+ * day it named, and in a US-Pacific store a rule starting "1 July" went live at
+ * 18:00 on 30 June, store time. The shop's `ianaTimezone` was populated and
+ * respected by every analytics surface, and by nothing here.
+ */
+const asDay = (
+  form: FormData,
+  key: string,
+  timeZone: string | null,
+  edge: "start" | "end",
+  unreadable: RuleIssue[],
+): Date | null => {
   const raw = asString(form, key);
   if (!raw) return null;
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? null : date;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    // Anything that is not a plain day is taken at face value, so a value set
+    // by an import or an API still parses.
+    const exact = new Date(raw);
+    if (!Number.isNaN(exact.getTime())) return exact;
+
+    // And a date nothing can read is said out loud. Returning null quietly
+    // meant a merchant who typed "31/12/2026" saved a rule with **no end date
+    // at all** and was told nothing — a rule they believed was scheduled,
+    // running for ever.
+    unreadable.push({ code: "date_unreadable", field: `schedule.${key}` });
+    return null;
+  }
+
+  return edge === "start" ? dayStart(raw, timeZone) : dayEnd(raw, timeZone);
 };
+
+/**
+ * The rule's amount in currencies other than the shop's own.
+ *
+ * `CurrencyAmount.overrides` has been in the model since 1.1 and every
+ * production writer set `{}`, so in a store selling in more than one currency
+ * `amountInCurrency` returned null for every `fixed_price` and `amount_off`
+ * rule outside the home currency and the rule was skipped with
+ * `no_price_in_currency`. Percentage rules still applied — so a buyer checking
+ * out in EUR lost exactly their **negotiated contract prices** and kept the
+ * percentage discounts, and there was no field anywhere to fix it.
+ *
+ * Entered by hand rather than enumerated from Shopify Markets: the engine
+ * refuses to invent an exchange rate (`resolve.ts`), and so should the form —
+ * a converted figure a merchant did not type is a price nothing else in the
+ * system agrees with.
+ */
+function parseOverrides(
+  form: FormData,
+  homeCurrency: string,
+  unreadable: RuleIssue[],
+): Record<string, ReturnType<typeof parseMoney>> {
+  const currencies = form.getAll("overrideCurrency").map((one) => one.toString());
+  const amounts = form.getAll("overrideAmount").map((one) => one.toString());
+  const overrides: Record<string, ReturnType<typeof parseMoney>> = {};
+
+  for (const [index, raw] of currencies.entries()) {
+    const currency = raw.trim().toUpperCase();
+    const amount = (amounts[index] ?? "").trim();
+
+    // A blank row is a row the merchant has not filled in, not an error.
+    if (!currency && !amount) continue;
+
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      unreadable.push({
+        code: "currency_unknown",
+        field: `value.overrides.${index}`,
+        params: { currency: raw },
+      });
+      continue;
+    }
+
+    // The home currency is `base`. Two answers for one currency is a rule
+    // whose price depends on which one is read first.
+    if (currency === homeCurrency.toUpperCase()) {
+      unreadable.push({
+        code: "currency_duplicate",
+        field: `value.overrides.${index}`,
+        params: { currency },
+      });
+      continue;
+    }
+
+    try {
+      overrides[currency] = parseMoney(amount || "0", currency);
+    } catch {
+      unreadable.push({
+        code: "amount_negative",
+        field: `value.overrides.${index}`,
+        params: { amount },
+      });
+    }
+  }
+
+  return overrides;
+}
 
 function parseTargets(form: FormData): Targeting {
   const mode = (asString(form, "targetMode") || "all") as Targeting["mode"];
@@ -74,9 +173,24 @@ function parseAudience(form: FormData): Audience {
   };
 }
 
-function parseMarkets(form: FormData): MarketScope {
-  const mode = (asString(form, "marketMode") || "all") as MarketScope["mode"];
-  return { mode, marketIds: asList(form, "marketIds") };
+/**
+ * Market scoping, which this product does not have yet.
+ *
+ * `MarketScope` is in the engine and three golden vectors exercise it, but the
+ * checkout Function cannot evaluate one: it knows the buyer's **country**, not
+ * which Shopify Market that maps to — `Localization.market` is deprecated and
+ * the mapping is per-shop. So a market-scoped rule is dropped at checkout
+ * while the admin shows it applying, which is the disagreement this whole app
+ * exists to prevent.
+ *
+ * The builder has no market fields, so nothing reaches here in practice. This
+ * refuses a scope posted by hand for the same reason: better no feature than a
+ * field that quietly does nothing. When the country-to-market map is published
+ * to the Function, this is where the gate comes off — and
+ * `tests/unit/market-scoping.test.ts` is the reminder.
+ */
+function parseMarkets(_form: FormData): MarketScope {
+  return { mode: "all", marketIds: [] };
 }
 
 /** Tiers arrive as parallel arrays: tierMin[], tierMax[], tierKind[], tierValue[]. */
@@ -142,7 +256,13 @@ function parseTiers(
 
 export function parseRuleForm(
   form: FormData,
-  options: { id?: string; currencyCode: string; createdAt?: Date },
+  options: {
+    id?: string;
+    currencyCode: string;
+    createdAt?: Date;
+    /** The shop's own zone. Null falls back to UTC, as every other surface does. */
+    timeZone?: string | null;
+  },
 ): ParsedRuleForm {
   const unreadable: RuleIssue[] = [];
   const currencyCode = options.currencyCode;
@@ -157,7 +277,10 @@ export function parseRuleForm(
     targets: parseTargets(form),
     audience: parseAudience(form),
     markets: parseMarkets(form),
-    schedule: { startsAt: asDate(form, "startsAt"), endsAt: asDate(form, "endsAt") },
+    schedule: {
+      startsAt: asDay(form, "startsAt", options.timeZone ?? null, "start", unreadable),
+      endsAt: asDay(form, "endsAt", options.timeZone ?? null, "end", unreadable),
+    },
     createdAt: options.createdAt ?? new Date(),
   };
 
@@ -185,7 +308,14 @@ export function parseRuleForm(
         });
         amount = parseMoney("0", currencyCode);
       }
-      rule = { ...base, kind, value: { base: amount, overrides: {} } };
+      rule = {
+        ...base,
+        kind,
+        value: {
+          base: amount,
+          overrides: parseOverrides(form, currencyCode, unreadable),
+        },
+      };
       break;
     }
 

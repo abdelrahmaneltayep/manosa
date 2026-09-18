@@ -51,8 +51,12 @@ describe("a rule the merchant ended on 1 July", () => {
 
 describe("a rule the merchant starts on 1 July, in a store on US Pacific time", () => {
   it("is not live at 18:00 on 30 June, store time", () => {
+    // FIXED: the builder's day-granularity fields are read in the shop's own
+    // zone now, which the route passes in. Without one it falls back to UTC,
+    // exactly as every other surface in this app does.
     const { rule } = parseRuleForm(form({ ...base, startsAt: "2026-07-01" }), {
       currencyCode: "USD",
+      timeZone: "America/Los_Angeles",
     });
     // 2026-07-01T01:00Z is 2026-06-30 18:00 in America/Los_Angeles.
     expect(eligibilityReason(rule, ctx(new Date("2026-07-01T01:00:00Z")))).toBe(

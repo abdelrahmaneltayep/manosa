@@ -1,7 +1,11 @@
 import {
   formatMoney,
   money,
-  roundMinorUnits,
+  multiplyFraction,
+  roundFraction,
+  subtractFromFraction,
+  wholeUnits,
+  type Fraction,
   type Money,
   type RoundingMode,
 } from "./money";
@@ -37,11 +41,17 @@ const CLASS_RANK: Record<PricingRule["kind"], number> = {
   percentage: 3,
 };
 
-/** What a rule does to a price, once we know it can. */
+/**
+ * What a rule does to a price, once we know it can.
+ *
+ * `multiply` carries an exact ratio rather than a float factor. "6% off" is
+ * `9400/10000`, not `0.94` — which is not representable in binary, and rounded
+ * a cent off every tie in the buyer's favour. See `Fraction` in `money.ts`.
+ */
 type Effect =
   | { type: "set"; minorUnits: number }
   | { type: "subtract"; minorUnits: number }
-  | { type: "multiply"; factor: number };
+  | { type: "multiply"; numerator: number; denominator: number };
 
 type EffectResult = { effect: Effect } | { skip: SkipReason; detail?: string };
 
@@ -77,11 +87,30 @@ function amountInCurrency(value: CurrencyAmount, currencyCode: string): Money | 
   return null;
 }
 
+/**
+ * Percentages are held to hundredths of a percent.
+ *
+ * That is what the rule builder accepts and what every golden vector uses
+ * (`33.33` is the finest). Rounding to that scale **here**, once, in the open,
+ * is the opposite of the bug this replaces: the old code took whatever float
+ * the percentage happened to be and buried the imprecision inside a multiply.
+ */
+const PERCENT_SCALE = 10_000;
+
 function percentageEffect(percentage: number): EffectResult {
   if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
     return { skip: "invalid_rule", detail: `percentage ${percentage} is outside 0–100` };
   }
-  return { effect: { type: "multiply", factor: (100 - percentage) / 100 } };
+
+  // 6% → 9400/10000. Integers all the way to the single rounding at the end.
+  const hundredths = Math.round(percentage * 100);
+  return {
+    effect: {
+      type: "multiply",
+      numerator: PERCENT_SCALE - hundredths,
+      denominator: PERCENT_SCALE,
+    },
+  };
 }
 
 function tierEffect(
@@ -136,30 +165,47 @@ function effectFor(rule: PricingRule, context: PricingContext): EffectResult {
 }
 
 interface ResolveState {
-  /** Running price in fractional minor units. Rounded once, at the end. */
-  fractional: number;
+  /** Running price as an exact fraction of minor units. Rounded once, at the end. */
+  price: Fraction;
   clampedAtZero: boolean;
 }
 
-function applyEffect(state: ResolveState, effect: Effect): void {
+function applyEffect(state: ResolveState, effect: Effect, mode: RoundingMode): void {
   switch (effect.type) {
     case "set":
-      state.fractional = effect.minorUnits;
+      state.price = wholeUnits(effect.minorUnits);
       break;
     case "subtract":
-      state.fractional -= effect.minorUnits;
+      state.price = subtractFromFraction(state.price, effect.minorUnits);
       break;
     case "multiply":
-      state.fractional *= effect.factor;
+      state.price = multiplyFraction(
+        state.price,
+        effect.numerator,
+        effect.denominator,
+        mode,
+      );
       break;
   }
 
   // A price is never negative. Further discounts on a floored price do nothing,
   // which is what a merchant means by "this can't go below zero".
-  if (state.fractional < 0) {
-    state.fractional = 0;
+  if (state.price.numerator < 0) {
+    state.price = wholeUnits(0);
     state.clampedAtZero = true;
   }
+}
+
+/**
+ * Would this effect leave the buyer paying more than they already would?
+ *
+ * Only `set` can: a percentage in 0–100 and a non-negative `subtract` both only
+ * ever move a price down. Compared at whole minor units, because that is what
+ * the buyer is charged — a fraction of a cent higher is not a price rise.
+ */
+function raisesPrice(price: Fraction, effect: Effect, mode: RoundingMode): boolean {
+  if (effect.type !== "set") return false;
+  return effect.minorUnits > roundFraction(price, mode);
 }
 
 function assertQuantity(quantity: number): void {
@@ -213,7 +259,7 @@ function resolveInternal(input: ResolveInput, withNextTier: boolean): PriceResol
 
   // 2. Walk them in cascade order, applying what can apply.
   const state: ResolveState = {
-    fractional: context.product.price.amount,
+    price: wholeUnits(context.product.price.amount),
     clampedAtZero: false,
   };
   const appliedRuleIds: string[] = [];
@@ -244,6 +290,23 @@ function resolveInternal(input: ResolveInput, withNextTier: boolean): PriceResol
 
     const result = effectFor(rule, context);
 
+    // A rule that would set a price above the one already reached stands
+    // aside. Only once something has applied: the first rule is free to set
+    // whatever the merchant asked for, including a price above the base.
+    if (
+      !("skip" in result) &&
+      appliedRuleIds.length > 0 &&
+      raisesPrice(state.price, result.effect, rounding)
+    ) {
+      trace.push({
+        ruleId: rule.id,
+        ruleName: rule.name,
+        applied: false,
+        reason: "would_raise_price",
+      });
+      continue;
+    }
+
     if ("skip" in result) {
       // A rule that cannot produce an effect is not the winner — the next one
       // still gets its chance.
@@ -257,9 +320,9 @@ function resolveInternal(input: ResolveInput, withNextTier: boolean): PriceResol
       continue;
     }
 
-    const before = money(roundMinorUnits(state.fractional, rounding), currency);
-    applyEffect(state, result.effect);
-    const after = money(roundMinorUnits(state.fractional, rounding), currency);
+    const before = money(roundFraction(state.price, rounding), currency);
+    applyEffect(state, result.effect, rounding);
+    const after = money(roundFraction(state.price, rounding), currency);
 
     appliedRuleIds.push(rule.id);
     trace.push({
@@ -273,8 +336,10 @@ function resolveInternal(input: ResolveInput, withNextTier: boolean): PriceResol
     if (winnerCombinable === null) winnerCombinable = rule.combinable;
   }
 
-  // 3. Round once, at the end. Rounding every step compounds the error.
-  const unitPrice = money(roundMinorUnits(state.fractional, rounding), currency);
+  // 3. Round once, at the end. Rounding every step compounds the error — and
+  //    the trace's `priceBefore`/`priceAfter` above are rounded *views* of the
+  //    running fraction, never fed back into it.
+  const unitPrice = money(roundFraction(state.price, rounding), currency);
 
   return {
     basePrice: context.product.price,

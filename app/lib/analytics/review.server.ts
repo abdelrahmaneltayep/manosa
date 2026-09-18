@@ -2,7 +2,7 @@ import { money, type Money } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
 import { amountOwed, orderRevenue, orderRevenueOfSum } from "~/lib/orders/totals";
-import { localDay } from "~/lib/analytics/series.server";
+import { dayStart, localDay } from "~/lib/analytics/series.server";
 import { formatCurrency } from "~/lib/money";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 
@@ -45,9 +45,7 @@ export interface MonthDiff {
 }
 
 /** Every real UTC offset is a whole number of these. */
-const QUARTER_HOUR = 15 * 60 * 1000;
 /** Wider than the widest offset either way (UTC−12 … UTC+14). */
-const BRACKET = 2 * 24 * 60 * 60 * 1000;
 
 /**
  * The first instant of a `YYYY-MM` in a given zone, as a UTC `Date`.
@@ -66,22 +64,10 @@ const BRACKET = 2 * 24 * 60 * 60 * 1000;
  * every month.
  */
 export function monthStart(month: string, timeZone: string | null): Date {
-  const [year, index] = month.split("-").map(Number);
-  const base = Date.UTC(year!, index! - 1, 1);
-  const first = `${month}-01`;
-
-  // Monotonic: local time only moves forward, and `YYYY-MM-DD` sorts as dates.
-  const reached = (at: number) => localDay(new Date(at), timeZone) >= first;
-
-  let before = Math.floor((base - BRACKET) / QUARTER_HOUR);
-  let after = Math.ceil((base + BRACKET) / QUARTER_HOUR);
-
-  while (after - before > 1) {
-    const mid = Math.floor((before + after) / 2);
-    if (reached(mid * QUARTER_HOUR)) after = mid;
-    else before = mid;
-  }
-  return new Date(after * QUARTER_HOUR);
+  // The general case now lives beside `localDay`, because the rule builder's
+  // date fields need exactly the same arithmetic. The comment above is kept:
+  // it is the record of why this is a binary search on a quarter-hour grid.
+  return dayStart(`${month}-01`, timeZone);
 }
 
 /** The `YYYY-MM` an instant falls in, in the shop's own zone. */

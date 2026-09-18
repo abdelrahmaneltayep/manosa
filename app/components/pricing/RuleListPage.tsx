@@ -73,6 +73,20 @@ function Banners({ view }: { view: RuleListView }) {
     );
   }
 
+  if (view.checkoutBehind) {
+    banners.push(
+      <s-banner key="behind" tone="critical">
+        <s-heading>{t("pricing.list.behindHeading")}</s-heading>
+        <s-paragraph>
+          {t("pricing.list.behindBody", {
+            count: view.checkoutBehind.liveRuleCount,
+            published: view.checkoutBehind.publishedRuleCount,
+          })}
+        </s-paragraph>
+      </s-banner>,
+    );
+  }
+
   if (view.pausedByPlan > 0) {
     banners.push(
       <s-banner key="paused-by-plan" tone="warning">

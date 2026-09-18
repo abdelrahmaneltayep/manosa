@@ -20,11 +20,23 @@ import { previewFor, toFormView } from "~/lib/pricing/view-model.server";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 import { withAdmin } from "~/shopify.server";
 
-async function shopCurrency(): Promise<string> {
+/**
+ * The shop's own currency and zone.
+ *
+ * Read together because the builder needs both: a money field is labelled in
+ * the currency, and a schedule's day-granularity dates mean days in the shop's
+ * zone. The zone was populated and used by every analytics surface, and by
+ * nothing here — so "ends 1 July" produced a rule that died at UTC midnight,
+ * dead for the whole of the day the merchant named.
+ */
+async function shopFacts(): Promise<{ currencyCode: string; timeZone: string | null }> {
   const shop = await db.shop.findUnique({
     where: { shop: shopScope.require("currency") },
   });
-  return shop?.currencyCode ?? "USD";
+  return {
+    currencyCode: shop?.currencyCode ?? "USD",
+    timeZone: shop?.ianaTimezone ?? null,
+  };
 }
 
 export const loader = ({ request, params }: LoaderFunctionArgs) =>
@@ -34,8 +46,8 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
     // tenant-scoped — so this 404 is also the cross-tenant answer.
     if (!row) throw new Response("Not found", { status: 404 });
 
-    const currencyCode = await shopCurrency();
-    const form = toFormView(row, currencyCode);
+    const { currencyCode, timeZone } = await shopFacts();
+    const form = toFormView(row, currencyCode, timeZone);
 
     const view: RuleBuilderView = {
       form,
@@ -54,7 +66,7 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
     const form = await request.formData();
     const intent = (form.get("intent") ?? "save").toString();
     const id = params.id!;
-    const currencyCode = await shopCurrency();
+    const { currencyCode, timeZone } = await shopFacts();
     const actor = { type: "STAFF" as const, id: session.id };
 
     if (intent === "delete") {
@@ -75,6 +87,7 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
     const parsed = parseRuleForm(form, {
       id,
       currencyCode,
+      timeZone,
       createdAt: existing.createdAt,
     });
 
@@ -82,7 +95,7 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
       return json(
         {
           view: {
-            form: { ...toFormView(existing, currencyCode), ...echo(form) },
+            form: { ...toFormView(existing, currencyCode, timeZone), ...echo(form) },
             issues: parsed.issues,
             duplicateName: null,
             preview: previewFor(parsed.rule, currencyCode, new Date()),
@@ -105,7 +118,7 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
         return json(
           {
             view: {
-              form: { ...toFormView(existing, currencyCode), ...echo(form) },
+              form: { ...toFormView(existing, currencyCode, timeZone), ...echo(form) },
               issues: [],
               duplicateName: null,
               preview: null,
@@ -127,7 +140,7 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
         return json(
           {
             view: {
-              form: { ...toFormView(existing, currencyCode), ...echo(form) },
+              form: { ...toFormView(existing, currencyCode, timeZone), ...echo(form) },
               issues: error.issues,
               duplicateName: null,
               preview: null,

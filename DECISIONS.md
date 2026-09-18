@@ -1008,3 +1008,96 @@ by capabilities it adds.
 Rejected: swapping the two strings and adding a test that they agree with the
 ladder. It works, and it leaves a hand-kept list beside a real one — the thing
 this repo has now found seven times.
+
+## 2026-09-18 — The cascade carries an exact fraction, not a float
+
+`money.ts` has always opened with "No price arithmetic anywhere in this package
+touches a floating-point value", and the cascade did: a percentage became
+`(100 - percentage) / 100` and the running price was multiplied by it. Every
+value that should land exactly on a half-cent tie landed just below one, so
+`half_up` rounded it down — 13,636 measured wrong answers, every one a cent in
+the buyer's favour.
+
+The running price is now an integer numerator over an integer denominator,
+reduced to lowest terms after each multiply, and a percentage is an exact ratio
+(`9400/10000`, which is representable; `0.94` is not). Percentages are taken to
+hundredths of a percent, which is what the builder accepts and what the finest
+golden vector uses — rounded there, once, in the open, rather than buried
+inside a multiply.
+
+Rejected: `BigInt` (QuickJS supports it but the Function's toolchain cannot be
+verified from here, and the arithmetic does not need it); scaling everything to
+micro-minor-units (still overflows on two stacked percentages); rounding at each
+step (the thing the engine exists not to do).
+
+Precision is given up in one place, deliberately and documented: a multiply
+that would overflow safe integers even after reduction collapses the fraction
+first. It takes four stacked percentage rules on one line to reach, and a test
+pins that three survive exactly.
+
+## 2026-09-18 — A rule may not raise a price a previous rule has already set
+
+`set` was unconditional, so a combinable contract price of $80.00 followed by a
+combinable cart-value tier of $90.00 charged $90.00 — and the trace reported
+both rules as applied, so "Why this price?" showed the contract applying and
+then being undone. The cascade exists to make "a negotiated contract price is a
+promise" true.
+
+A `set` that would raise the price above the one already reached now stands
+aside with `would_raise_price`. Only once something has applied: the first rule
+is still free to set whatever the merchant asked for, including a price above
+the shelf price.
+
+Rejected: clamping — applying the rule and keeping the lower number, which is
+what the reviewer's probe first expected. It gets the price right and the
+explanation wrong, and a rule reported as applied when it changed nothing is
+the kind of trace a merchant learns to distrust.
+
+## 2026-09-18 — A price above the shelf price warns; it does not fail validation
+
+Shopify's discount API only takes money off a line, so a `fixed_price` above the
+shelf price never reaches checkout — but a quote and a draft order carry
+`originalUnitPriceWithCurrency` and really do charge it. The rule is not wrong;
+it simply does not reach one surface.
+
+So the preview keeps showing what the engine resolved, and the builder carries
+a warning beside it naming which surface will not honour it. Rejected: showing
+checkout's number in the preview (it would lie to anyone using the rule for
+quoting, which is half the product) and refusing the rule outright (it would
+remove a thing quotes can legitimately do).
+
+## 2026-09-18 — Market scoping stays unbuilt, and the gate is in the parser
+
+`MarketScope` is in the engine, three golden vectors exercise it, and the spec
+promises "apply/exclude Shopify Markets". It is still not a feature, and that is
+a decision rather than an oversight.
+
+The blocker is downstream of the UI: the checkout Function knows the buyer's
+country, not which Shopify Market it maps to — `Localization.market` is
+deprecated and the mapping is per-shop. A market-scoped rule is therefore
+dropped at checkout while the admin shows it applying, which is precisely the
+disagreement this app exists to prevent. Shipping the form first would ship a
+field that quietly does nothing.
+
+`parseMarkets` now refuses a scope posted by hand, and a test fails the moment
+any writer starts emitting one. The unblocker, written down so it is not
+rediscovered: publish the country-to-market map to the Function, then take the
+gate off in `parseMarkets`.
+
+## 2026-09-18 — Per-currency amounts are typed, never converted
+
+A buyer checking out in EUR lost every `fixed_price` and `amount_off` rule —
+`amountInCurrency` returned null and the rule was skipped — while percentage
+rules carried on applying. So they lost exactly their negotiated contract prices
+and kept the discounts, and there was no field anywhere to fix it.
+
+The builder now takes currency/amount rows. Nothing is converted: the engine
+refuses to invent an exchange rate, and a figure the merchant did not type is a
+price nothing else in the system agrees with. That keeps the failure mode
+honest — an unpriced currency still skips with `no_price_in_currency`, which is
+right; what changed is that there is now a way to price it.
+
+Rejected: enumerating the shop's currencies from Shopify Markets (not reachable
+from this environment, and it would turn an optional field into a required
+matrix); converting from the base amount at a fetched rate (a price on a
+storefront that no other part of the system agrees with).

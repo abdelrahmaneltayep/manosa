@@ -1,5 +1,6 @@
 import {
   formatMoney,
+  money,
   parseMoney,
   resolvePrice,
   type PricingRule,
@@ -13,6 +14,7 @@ import type {
   RuleFormView,
   RuleRowView,
 } from "~/components/pricing/types";
+import { localDay } from "~/lib/analytics/series.server";
 import { formatCurrency } from "~/lib/money";
 import { kindFromDb, statusFromDb, toEngineRule } from "~/lib/pricing/rule-mapper.server";
 
@@ -118,14 +120,26 @@ export function duplicateNamesIn(rows: PricingRuleRow[]): Set<string> {
   );
 }
 
-const forDateInput = (value: Date | null) =>
-  value ? value.toISOString().slice(0, 10) : "";
+/**
+ * The day a schedule instant falls on, in the shop's own zone.
+ *
+ * `toISOString().slice(0, 10)` is the UTC day, so a rule ending at the last
+ * instant of 1 July in Sydney round-tripped into the field as **30 June** — and
+ * saving it again moved the date the merchant had set.
+ */
+const forDateInput = (value: Date | null, timeZone: string | null) =>
+  value ? localDay(value, timeZone) : "";
 
-export function toFormView(row: PricingRuleRow, currencyCode: string): RuleFormView {
+export function toFormView(
+  row: PricingRuleRow,
+  currencyCode: string,
+  timeZone: string | null = null,
+): RuleFormView {
   return formViewFromRule(toEngineRule(row), {
     id: row.id,
     version: row.version,
     currencyCode,
+    timeZone,
   });
 }
 
@@ -138,7 +152,13 @@ export function toFormView(row: PricingRuleRow, currencyCode: string): RuleFormV
  */
 export function formViewFromRule(
   rule: PricingRule,
-  options: { id?: string | null; version?: number; currencyCode: string },
+  options: {
+    id?: string | null;
+    version?: number;
+    currencyCode: string;
+    /** The shop's own zone, so a schedule round-trips to the day it was set to. */
+    timeZone?: string | null;
+  },
 ): RuleFormView {
   const { currencyCode } = options;
   const lines = (list: string[] | undefined) => (list ?? []).join("\n");
@@ -163,6 +183,20 @@ export function formViewFromRule(
       rule.kind === "amount_off" || rule.kind === "fixed_price"
         ? money(rule.value.base)
         : "",
+    // Sorted, so the rows do not reorder between two loads of the same rule,
+    // and always with one blank row to type into.
+    overrides:
+      rule.kind === "amount_off" || rule.kind === "fixed_price"
+        ? [
+            ...Object.entries(rule.value.overrides)
+              .sort(([a], [b]) => (a < b ? -1 : 1))
+              .map(([currencyCode, value]) => ({
+                currencyCode,
+                amount: money(value),
+              })),
+            { currencyCode: "", amount: "" },
+          ]
+        : [{ currencyCode: "", amount: "" }],
     cartMinimum:
       rule.kind === "cart_value_tier" ? money(rule.value.tiers[0]?.minSubtotal) : "",
     tiers:
@@ -188,8 +222,8 @@ export function formViewFromRule(
     audienceCompanyIds: lines(rule.audience.companyIds),
     marketMode: rule.markets.mode,
     marketIds: rule.markets.marketIds.join("\n"),
-    startsAt: forDateInput(rule.schedule.startsAt ?? null),
-    endsAt: forDateInput(rule.schedule.endsAt ?? null),
+    startsAt: forDateInput(rule.schedule.startsAt ?? null, options.timeZone ?? null),
+    endsAt: forDateInput(rule.schedule.endsAt ?? null, options.timeZone ?? null),
     currencyCode,
   };
 }
@@ -205,6 +239,7 @@ export function emptyFormView(currencyCode: string): RuleFormView {
     combinable: false,
     percentage: "",
     amount: "",
+    overrides: [{ currencyCode: "", amount: "" }],
     cartMinimum: "",
     tiers: [{ minQuantity: "", maxQuantity: "", kind: "percentage", value: "" }],
     targetMode: "all",
@@ -277,6 +312,10 @@ export function previewFor(
       changed: result.unitPrice.amount !== price.amount,
       quantity: SAMPLE_PREVIEW.quantity,
       unavailable: false,
+      // Shopify's discount API only takes money off a line, so a rule that
+      // prices above the shelf price never reaches checkout. Said here rather
+      // than discovered on an order.
+      aboveShelfPrice: result.unitPrice.amount > price.amount,
     };
   } catch {
     return {
@@ -285,33 +324,70 @@ export function previewFor(
       changed: false,
       quantity: SAMPLE_PREVIEW.quantity,
       unavailable: true,
+      aboveShelfPrice: false,
     };
   }
+}
+
+/**
+ * Everything the engine needs to answer honestly.
+ *
+ * The old shape was `{ variantId, tags, quantity, price }`, and the missing
+ * fields were not cosmetic — the context was built with `groupIds: []`,
+ * `companyId: null`, `collectionIds: []`, `productId = variantId` and a
+ * `cartSubtotal` of the **unit** price. So the merchant's own audit tool
+ * answered wrongly for four of six audience modes, two of four targeting
+ * modes, and every cart-value rule at any quantity above one, while the route
+ * above it said "this answer is the checkout answer".
+ *
+ * The caller resolves these from the same places checkout does: the buyer from
+ * the mirrored `Customer` row, the product and its collections from the
+ * `$app:mannon.collections` metafield the Function reads.
+ */
+export interface ExplainInput {
+  variantId: string;
+  productId: string;
+  collectionIds: string[];
+  tags: string[];
+  groupIds: string[];
+  companyId: string | null;
+  quantity: number;
+  price: string;
 }
 
 /** "Why this price?" — the engine's own trace, rendered. */
 export function explainFor(
   rules: PricingRule[],
-  input: { variantId: string; tags: string[]; quantity: number; price: string },
+  input: ExplainInput,
   currencyCode: string,
   now: Date,
 ): ExplainView {
   const price = parseMoney(input.price || "0", currencyCode);
+  const quantity = Math.max(1, input.quantity);
 
   const result = resolvePrice({
     rules,
     context: {
-      customer: { id: "explain", tags: input.tags, groupIds: [], companyId: null },
+      customer: {
+        id: "explain",
+        tags: input.tags,
+        groupIds: input.groupIds,
+        companyId: input.companyId,
+      },
       product: {
-        productId: input.variantId,
+        productId: input.productId || input.variantId,
         variantId: input.variantId,
-        collectionIds: [],
+        collectionIds: input.collectionIds,
         price,
         cost: null,
       },
-      quantity: Math.max(1, input.quantity),
+      quantity,
       market: { marketId: "", countryCode: "", currencyCode },
-      cartSubtotal: price,
+      // The line, not the unit. Fifty units at $30.00 is a $1,500 line at
+      // checkout, and reporting it as a "$30.00 cart" made every cart-value
+      // rule above a $30 threshold answer `no_matching_tier` here while
+      // checkout applied it.
+      cartSubtotal: money(price.amount * quantity, currencyCode),
       now,
     },
   });

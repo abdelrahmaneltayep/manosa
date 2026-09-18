@@ -55,7 +55,7 @@ function generate(input: FunctionInput): CartLinesDiscountsGenerateRunResult {
   const usable = rules.filter(isSupportedAtCheckout);
   if (usable.length === 0) return NOTHING;
 
-  const now = new Date();
+  const now = readNow(input);
   const customer = readCustomer(input);
   const subtotal = readSubtotal(input);
   const candidates: CartLinesDiscountsGenerateRunResult["operations"][0]["productDiscountsAdd"]["candidates"] =
@@ -107,6 +107,34 @@ function isSupportedAtCheckout(rule: PricingRule): boolean {
     return false;
   }
   return true;
+}
+
+/**
+ * What "now" is, for a schedule.
+ *
+ * The store's own clock first. This was `new Date()`, and the Function sandbox's
+ * wall clock is not a dependable source of the store's time — `shop.localTime`
+ * exists in the input schema precisely because it is not. A fixed or
+ * epoch-zero clock would leave every rule with a `startsAt` permanently
+ * `not_started` and every rule with an `endsAt` never ending, while the admin
+ * showed them scheduled correctly.
+ *
+ * `localTime.date` is a `YYYY-MM-DD` in the shop's zone, and the schedules it
+ * is compared against are day boundaries in that same zone (see
+ * `rule-form.server.ts`), so midday is the instant furthest from either edge —
+ * the one that cannot land on the wrong side of a boundary because of the
+ * offset this field does not carry.
+ *
+ * Falls back to the sandbox clock, which is what there was before and is
+ * better than nothing.
+ */
+function readNow(input: FunctionInput): Date {
+  const date = input.shop?.localTime?.date;
+  if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const midday = new Date(`${date}T12:00:00Z`);
+    if (!Number.isNaN(midday.getTime())) return midday;
+  }
+  return new Date();
 }
 
 function readCustomer(input: FunctionInput): CustomerContext | null {

@@ -105,6 +105,11 @@ function ExplainSection({ view }: { view: PricingSettingsView }) {
               value={view.explainInput.variantId}
             />
             <s-text-field
+              name="buyerEmail"
+              label={t("pricing.settings.explainBuyer")}
+              value={view.explainInput.buyerEmail}
+            />
+            <s-text-field
               name="tags"
               label={t("pricing.settings.explainTags")}
               value={view.explainInput.tags}
@@ -130,6 +135,49 @@ function ExplainSection({ view }: { view: PricingSettingsView }) {
   );
 }
 
+/**
+ * What the answer was computed against — and where it could not be.
+ *
+ * A trace is only as good as its context, and this tool used to invent one:
+ * no groups, no company, no collections, and the unit price standing in for
+ * the cart. The trace still printed a confident `audience_mismatch` beside
+ * every group rule. Naming the context is the difference between an answer and
+ * a claim, which is the whole of Invariant 5.
+ */
+function ExplainContext({ view }: { view: PricingSettingsView }) {
+  const { t } = useTranslation();
+  const context = view.explainContext;
+  if (!context) return null;
+
+  return (
+    <s-stack direction="block" gap="small-500">
+      <s-text type="strong">{t("pricing.settings.explainContextHeading")}</s-text>
+
+      <s-text color="subdued">
+        {context.buyerFound
+          ? t("pricing.settings.explainBuyerFound", { email: context.buyerLabel })
+          : context.buyerLabel
+            ? t("pricing.settings.explainBuyerUnknown", { email: context.buyerLabel })
+            : t("pricing.settings.explainBuyerNone")}
+      </s-text>
+
+      <s-text color="subdued">
+        {context.productFound
+          ? t("pricing.settings.explainProductFound", {
+              count: context.collectionCount,
+            })
+          : t("pricing.settings.explainProductUnknown")}
+      </s-text>
+
+      {context.companyRules > 0 ? (
+        <s-text color="subdued">
+          {t("pricing.settings.explainCompanyRules", { count: context.companyRules })}
+        </s-text>
+      ) : null}
+    </s-stack>
+  );
+}
+
 function ExplainResult({ view }: { view: PricingSettingsView }) {
   const { t } = useTranslation();
   const explain = view.explain!;
@@ -139,6 +187,8 @@ function ExplainResult({ view }: { view: PricingSettingsView }) {
       <s-heading>
         {t("pricing.settings.explainResult", { price: explain.unitPrice })}
       </s-heading>
+
+      <ExplainContext view={view} />
 
       {explain.clampedAtZero ? (
         <s-banner tone="warning">

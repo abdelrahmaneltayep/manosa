@@ -16,17 +16,29 @@ import { emptyFormView, previewFor } from "~/lib/pricing/view-model.server";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 import { withAdmin } from "~/shopify.server";
 
-async function shopCurrency(): Promise<string> {
+/**
+ * The shop's own currency and zone.
+ *
+ * Read together because the builder needs both: a money field is labelled in
+ * the currency, and a schedule's day-granularity dates mean days in the shop's
+ * zone. The zone was populated and used by every analytics surface, and by
+ * nothing here — so "ends 1 July" produced a rule that died at UTC midnight,
+ * dead for the whole of the day the merchant named.
+ */
+async function shopFacts(): Promise<{ currencyCode: string; timeZone: string | null }> {
   const shop = await db.shop.findUnique({
     where: { shop: shopScope.require("currency") },
   });
-  return shop?.currencyCode ?? "USD";
+  return {
+    currencyCode: shop?.currencyCode ?? "USD",
+    timeZone: shop?.ianaTimezone ?? null,
+  };
 }
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
   withAdmin(request, async () => {
     const view: RuleBuilderView = {
-      form: emptyFormView(await shopCurrency()),
+      form: emptyFormView((await shopFacts()).currencyCode),
       issues: [],
       duplicateName: null,
       preview: null,
@@ -39,10 +51,10 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 export const action = ({ request }: ActionFunctionArgs) =>
   withAdmin(request, async ({ admin, session }) => {
     const form = await request.formData();
-    const currencyCode = await shopCurrency();
+    const { currencyCode, timeZone } = await shopFacts();
     const now = new Date();
 
-    const parsed = parseRuleForm(form, { currencyCode });
+    const parsed = parseRuleForm(form, { currencyCode, timeZone });
     const duplicate = await findDuplicateName(parsed.rule.name);
 
     if (form.get("intent") === "prefill") {

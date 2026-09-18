@@ -210,3 +210,125 @@ export function roundMinorUnits(value: number, mode: RoundingMode = "half_up"): 
       return value < 0 ? -Math.round(-value) : Math.round(value);
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Exact fractional minor units                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A running price, held exactly, as a fraction of minor units.
+ *
+ * The line at the top of this file — *"No price arithmetic anywhere in this
+ * package touches a floating-point value"* — was not true of the cascade. A
+ * percentage rule became `factor = (100 - percentage) / 100` and the running
+ * price was multiplied by it in binary floating point. Every case whose exact
+ * value lands on a half-cent tie landed just *below* it, and `half_up` — chosen
+ * because it is "what a merchant checking the arithmetic by hand expects" —
+ * rounded it down.
+ *
+ * $10.75 with 6% off is the plainest one. Exactly: `1075 × 94 / 100 = 1010.5`,
+ * half-up **1011**, $10.11. In float it came out 1010, $10.10. A cent per unit,
+ * in the buyer's favour, on every line, for ever: 12,096 wrong answers across
+ * whole-number percentages 1–99 against prices $0.01–$2,000.00, every one low.
+ *
+ * So a percentage is an integer over an integer now — 6% is 9400/10000 — and
+ * the fraction is carried exactly to the single rounding at the end.
+ */
+export interface Fraction {
+  /** Numerator, in minor units × `denominator`. */
+  readonly numerator: number;
+  /** Always ≥ 1. */
+  readonly denominator: number;
+}
+
+export const wholeUnits = (minorUnits: number): Fraction => ({
+  numerator: minorUnits,
+  denominator: 1,
+});
+
+function greatestCommonDivisor(a: number, b: number): number {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y > 0) {
+    const next = x % y;
+    x = y;
+    y = next;
+  }
+  return x || 1;
+}
+
+/** Lowest terms. Keeps the numbers small enough to stay exact. */
+export function reduceFraction({ numerator, denominator }: Fraction): Fraction {
+  if (denominator === 1) return { numerator, denominator };
+  const divisor = greatestCommonDivisor(numerator, denominator);
+  return { numerator: numerator / divisor, denominator: denominator / divisor };
+}
+
+/**
+ * Beyond this a product of two safe integers stops being exact.
+ *
+ * `Number.MAX_SAFE_INTEGER` is 2^53 − 1. A multiply is only attempted when both
+ * the numerator and the denominator stay inside it; past that the fraction is
+ * collapsed to whole minor units first, which is the one place in this module
+ * precision is deliberately given up. It takes at least four stacked percentage
+ * rules on a single line to reach, and `resolve.test.ts` pins that.
+ */
+const SAFE = Number.MAX_SAFE_INTEGER;
+
+export function subtractFromFraction(value: Fraction, minorUnits: number): Fraction {
+  return {
+    numerator: value.numerator - minorUnits * value.denominator,
+    denominator: value.denominator,
+  };
+}
+
+/**
+ * Multiply by an exact ratio — `9400/10000` for "6% off".
+ *
+ * `mode` is used only if the fraction has to be collapsed first; in every
+ * reachable case it is not.
+ */
+export function multiplyFraction(
+  value: Fraction,
+  numerator: number,
+  denominator: number,
+  mode: RoundingMode = "half_up",
+): Fraction {
+  const start =
+    Math.abs(value.numerator) > SAFE / Math.max(1, Math.abs(numerator)) ||
+    value.denominator > SAFE / Math.max(1, denominator)
+      ? wholeUnits(roundFraction(value, mode))
+      : value;
+
+  return reduceFraction({
+    numerator: start.numerator * numerator,
+    denominator: start.denominator * denominator,
+  });
+}
+
+/** Round an exact fraction to whole minor units. The only rounding there is. */
+export function roundFraction(value: Fraction, mode: RoundingMode = "half_up"): number {
+  const { numerator, denominator } = value;
+  if (denominator === 1) return numerator;
+
+  const floor = Math.floor(numerator / denominator);
+  // Twice the remainder against the denominator, so a tie is an integer
+  // comparison rather than a comparison against 0.5 in floating point.
+  const twiceRemainder = 2 * (numerator - floor * denominator);
+
+  switch (mode) {
+    case "down":
+      return floor;
+    case "up":
+      return numerator === floor * denominator ? floor : floor + 1;
+    case "half_even":
+      if (twiceRemainder > denominator) return floor + 1;
+      if (twiceRemainder < denominator) return floor;
+      return floor % 2 === 0 ? floor : floor + 1;
+    case "half_up":
+    default:
+      // A tie goes up, which is what `half_up` means and what the float path
+      // could not deliver: `1010.5` was never exactly representable.
+      return twiceRemainder >= denominator ? floor + 1 : floor;
+  }
+}

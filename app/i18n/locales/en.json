@@ -251,7 +251,10 @@
       "pausedByPlanHeading_one": "{{count}} rule is not applying at checkout",
       "pausedByPlanHeading_other": "{{count}} rules are not applying at checkout",
       "pausedByPlanBody": "Your plan includes fewer rules than you have. The ones with the highest priority are live; the rest stay saved and start applying again the moment you move back up. Nothing has been deleted.",
-      "pausedByPlanAction": "See plans"
+      "pausedByPlanAction": "See plans",
+      "behindHeading": "Checkout is running an older set of rules",
+      "behindBody_one": "You have {{count}} active rule here; checkout has {{published}}. Your last publish did not go through, so buyers are being priced by the previous set. Saving any rule tries again.",
+      "behindBody_other": "You have {{count}} active rules here; checkout has {{published}}. Your last publish did not go through, so buyers are being priced by the previous set. Saving any rule tries again."
     },
     "status": {
       "draft": "Draft",
@@ -345,20 +348,29 @@
       "previewNotYet": "Fill the rule in and a sample price will appear here.",
       "previewUnavailable": "Preview unavailable — this does not stop you saving.",
       "previewDesktop": "Desktop",
-      "previewMobile": "Mobile"
+      "previewMobile": "Mobile",
+      "previewAboveShelfHeading": "This price is higher than the shelf price",
+      "previewAboveShelfBody": "Checkout can only take money off a line, so a buyer who orders this on your storefront is charged the shelf price. Quotes and draft orders do carry the higher price. Nothing is wrong with the rule — it just won't reach checkout.",
+      "overridesHeading": "Prices in other currencies",
+      "overridesBody": "Optional. A buyer checking out in a currency you have not priced here does not get this rule at all — it needs a figure you set, because Mannon never invents an exchange rate. Your own currency is {{currency}}, set above.",
+      "overrideCurrency": "Currency",
+      "overrideAmount": "Amount"
     },
     "issue": {
       "name_required": "Name is required. Please input.",
       "percentage_out_of_range": "Enter a percentage between 0 and 100.",
       "amount_negative": "Enter an amount of zero or more.",
       "end_before_start": "The end date must be after the start date.",
+      "date_unreadable": "That date could not be read. Use the date picker, or type it as YYYY-MM-DD.",
       "no_targets": "Choose at least one product, collection or variant.",
       "no_audience": "Choose at least one buyer, tag or group.",
       "no_tiers": "Add at least one quantity break.",
       "tier_overlap": "{{first}} overlaps {{second}}.",
       "tier_min_above_max": "The starting quantity must be below the ending quantity.",
       "tier_quantity_invalid": "Enter a whole quantity of 1 or more.",
-      "tier_currency_mismatch": "Both amounts must be in the same currency."
+      "tier_currency_mismatch": "Both amounts must be in the same currency.",
+      "currency_unknown": "Use a three-letter currency code, like EUR.",
+      "currency_duplicate": "That currency is already priced. Each currency takes one amount."
     },
     "conflict": {
       "heading": "Someone else changed this rule",
@@ -396,7 +408,17 @@
       "explainApplied": "Applied",
       "explainSkipped": "Not applied",
       "explainNoRules": "No rules match this buyer and product, so they pay the shelf price.",
-      "explainClamped": "Combined discounts reached zero. The buyer pays nothing for this item."
+      "explainClamped": "Combined discounts reached zero. The buyer pays nothing for this item.",
+      "explainBuyer": "Buyer email (optional)",
+      "explainContextHeading": "Answered for",
+      "explainBuyerFound": "Buyer {{email}} — their tags, group and company, as checkout sees them.",
+      "explainBuyerUnknown": "No buyer matched {{email}}, so only the tags typed above were used. Group rules cannot be answered.",
+      "explainBuyerNone": "No buyer given, so only the tags typed above were used. Group rules cannot be answered.",
+      "explainProductFound_one": "This variant, in {{count}} collection Mannon has published to checkout.",
+      "explainProductFound_other": "This variant, in {{count}} collections Mannon has published to checkout.",
+      "explainProductUnknown": "That variant could not be read from Shopify, so collection and product rules cannot be answered.",
+      "explainCompanyRules_one": "{{count}} rule targets a Shopify company. Its answer cannot be worked out here — a buyer's company reaches us only on the cart at checkout.",
+      "explainCompanyRules_other": "{{count}} rules target a Shopify company. Their answers cannot be worked out here — a buyer's company reaches us only on the cart at checkout."
     },
     "reason": {
       "not_active": "Not active",
@@ -411,6 +433,7 @@
       "no_price_in_currency": "No price set in this currency",
       "not_combinable_with_winner": "The winning rule does not combine",
       "not_combinable": "This rule does not combine",
+      "would_raise_price": "Would charge more than the price already reached",
       "invalid_rule": "The rule is not valid"
     },
     "publish": {

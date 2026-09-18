@@ -57,7 +57,13 @@ const candidates = (result: ReturnType<typeof cartLinesDiscountsGenerateRun>) =>
 
 describe("zero-decimal currencies", () => {
   it("parseMoney rejects the trailing-zero form Shopify serialises MoneyV2 in", () => {
-    expect(() => parseMoney("1000.0", "JPY")).toThrow();
+    // FIXED. Trailing zeros past a currency's exponent are formatting, not
+    // precision: "1000.0" JPY is exactly 1000 yen and nothing is rounded away.
+    // Refusing it made every zero-decimal-currency store check out at retail,
+    // silently, for ever. A *significant* digit past the exponent still throws,
+    // which is the rule that was worth having.
+    expect(parseMoney("1000.0", "JPY").amount).toBe(1000);
+    expect(() => parseMoney("1000.5", "JPY")).toThrow();
   });
 
   it("a JPY cart keeps its wholesale discount", () => {

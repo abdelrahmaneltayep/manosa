@@ -49,6 +49,17 @@ export interface RuleListView {
   published: { ruleCount: number; at: string | null } | null;
   /** Set when the last publish failed. */
   publishError: "failed" | "too_large" | null;
+  /**
+   * Set when checkout is running something other than the current rules.
+   *
+   * Refusing to publish an over-48KB ruleset is right, and leaving the last
+   * good one live is right. Telling the merchant once, through
+   * `?publishError=too_large`, was not: one navigation later the page showed
+   * their rules as **Active** with nothing to say that checkout had a
+   * different set. The shop row already carried what was published and when;
+   * nothing compared it to what is active now.
+   */
+  checkoutBehind: { liveRuleCount: number; publishedRuleCount: number } | null;
   /** Free plan has run out of rules. */
   atRuleLimit: boolean;
   /**
@@ -111,6 +122,14 @@ export interface RuleFormView {
   combinable: boolean;
   percentage: string;
   amount: string;
+  /**
+   * The same amount in other currencies, as the merchant typed them.
+   *
+   * Always carries one blank row so there is something to type into. Nothing
+   * is converted: the engine refuses to invent an exchange rate, and a figure
+   * the merchant did not type is a price nothing else agrees with.
+   */
+  overrides: { currencyCode: string; amount: string }[];
   cartMinimum: string;
   tiers: TierView[];
   targetMode: string;
@@ -138,6 +157,19 @@ export interface PreviewView {
   quantity: number;
   /** Set when the preview itself failed — never blocks saving. */
   unavailable: boolean;
+  /**
+   * Set when this rule prices **above** the shelf price.
+   *
+   * Shopify's discount API can only take money off a line, so the checkout
+   * Function computes a negative discount and returns nothing — checkout
+   * charges the shelf price. Quotes and draft orders *can* carry a higher
+   * price, and do, which is why this is a warning rather than a validation
+   * error: the rule is not wrong, it simply does not reach checkout.
+   *
+   * It was silent before. The preview said "now $120.00", the quote locked
+   * $120.00, the Buyer Agent quoted $120.00, and checkout charged $100.00.
+   */
+  aboveShelfPrice: boolean;
 }
 
 export interface RuleBuilderView {
@@ -173,10 +205,37 @@ export interface PricingSettingsView {
   explain: ExplainView | null;
   explainInput: {
     variantId: string;
+    /** The buyer this is about. Their groups decide four of six audience modes. */
+    buyerEmail: string;
     tags: string;
     quantity: string;
     price: string;
   };
+  /**
+   * What the answer was actually computed against.
+   *
+   * Shown because the answer is only as good as the context, and this tool
+   * used to invent one: no groups, no company, no collections, and the unit
+   * price standing in for the cart. A merchant reading a trace has to be able
+   * to see which buyer and which product it is about — and where the engine
+   * genuinely could not know.
+   */
+  explainContext: {
+    buyerFound: boolean;
+    /** The email as resolved, or as typed when no buyer matched. */
+    buyerLabel: string;
+    productFound: boolean;
+    collectionCount: number;
+    /**
+     * Active rules targeting a Shopify B2B company.
+     *
+     * Their answer cannot be computed here at all: the purchasing-company id
+     * arrives on the cart at checkout and is mirrored nowhere. Saying so beats
+     * printing `audience_mismatch`, which would be a claim rather than an
+     * answer.
+     */
+    companyRules: number;
+  } | null;
   orderSaved: boolean;
 }
 

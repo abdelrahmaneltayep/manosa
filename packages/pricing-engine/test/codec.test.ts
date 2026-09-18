@@ -7,6 +7,7 @@ import {
   resolvePrice,
   RULESET_FORMAT_VERSION,
   serializeRuleset,
+  SUPPORTED_RULESET_VERSIONS,
   type PricingContext,
   type PricingRule,
 } from "../src/index";
@@ -157,7 +158,7 @@ describe("reading a damaged ruleset", () => {
   it("refuses a format version it does not understand", () => {
     const result = deserializeRuleset({ v: 99, rules: [] });
     expect(result.rules).toEqual([]);
-    expect(result.errors[0]?.message).toMatch(/not v1/);
+    expect(result.errors[0]?.message).toMatch(/cannot be read by this build/);
   });
 
   it("drops one malformed rule and keeps the rest", () => {
@@ -288,5 +289,52 @@ describe("reading a damaged ruleset", () => {
 
     const result = roundTrip([oneCent]);
     expect(result.rules[0]).toEqual(oneCent);
+  });
+});
+
+/**
+ * The format version, and why it is pinned.
+ *
+ * The app and the Function ship independently — a server release and
+ * `shopify app deploy` — so whichever lands second, one side reads what the
+ * other wrote. `deserializeRuleset` compared against a single constant, so the
+ * day anybody bumped it the deployed Function returned **zero rules** and every
+ * wholesale buyer on every store paid retail, with nothing but a
+ * `console.error` inside a WASM sandbox to show for it.
+ */
+describe("the ruleset format version", () => {
+  it("is 1, and changing it is a deliberate two-deploy act", () => {
+    // If this fails you are bumping the format. Read the comment on
+    // `RULESET_FORMAT_VERSION`: teach `SUPPORTED_RULESET_VERSIONS` the new
+    // shape and deploy the Function *before* the app starts writing it.
+    expect(RULESET_FORMAT_VERSION).toBe(1);
+  });
+
+  it("can read every version it has ever written", () => {
+    expect(SUPPORTED_RULESET_VERSIONS).toContain(RULESET_FORMAT_VERSION);
+  });
+
+  it("reads a payload written by an older build it still supports", () => {
+    const payload = serializeRuleset(rules);
+    for (const version of SUPPORTED_RULESET_VERSIONS) {
+      const read = deserializeRuleset({ ...payload, v: version });
+      expect(read.errors, `v${version}`).toEqual([]);
+      expect(read.rules, `v${version}`).toHaveLength(rules.length);
+    }
+  });
+
+  it("refuses a version nobody taught this build about, and says what to do", () => {
+    const read = deserializeRuleset({ ...serializeRuleset(rules), v: 99 });
+
+    expect(read.rules).toEqual([]);
+    expect(read.errors[0]!.message).toContain("cannot be read by this build");
+    // Names the remedy, not just the symptom: the Function goes first.
+    expect(read.errors[0]!.message).toContain("Deploy the discount Function");
+  });
+
+  it("refuses a payload with no version at all", () => {
+    const read = deserializeRuleset({ rules: [] });
+    expect(read.rules).toEqual([]);
+    expect(read.errors).toHaveLength(1);
   });
 });

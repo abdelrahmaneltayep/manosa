@@ -14,6 +14,13 @@ export type RuleIssueCode =
   | "percentage_out_of_range"
   | "amount_negative"
   | "end_before_start"
+  /** A schedule date the builder could not read. Silently dropping it meant a
+   *  rule the merchant believed was scheduled ran for ever. */
+  | "date_unreadable"
+  /** A per-currency amount whose currency code is not three letters. */
+  | "currency_unknown"
+  /** The same currency priced twice — including against the shop's own. */
+  | "currency_duplicate"
   | "no_targets"
   | "no_audience"
   | "no_tiers"

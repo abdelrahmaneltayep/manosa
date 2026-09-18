@@ -227,3 +227,72 @@ export async function searchVariantsResult(
     return { ok: false, matches: [] };
   }
 }
+
+/* -------------------------------------------------------------------------- */
+
+const VARIANT_BY_ID = `#graphql
+  query MannonVariantById($id: ID!) {
+    node(id: $id) {
+      ... on ProductVariant {
+        id
+        title
+        sku
+        price
+        product {
+          id
+          title
+          ${PRODUCT_COLLECTIONS_FIELD}
+        }
+      }
+    }
+  }`;
+
+/**
+ * One variant, by its id, with the collections checkout sees it in.
+ *
+ * For "Why this price?", which is handed a variant id and has to answer with
+ * the context the discount Function has — including the product id (a
+ * product-targeted rule is matched on it) and the published collection
+ * membership. Null when the id is not a variant or cannot be read; the caller
+ * says so rather than answering as if the product were in no collections.
+ */
+export async function variantById(
+  admin: AdminGraphql,
+  id: string,
+): Promise<VariantMatch | null> {
+  if (!id.trim()) return null;
+
+  try {
+    const response = await admin.graphql(VARIANT_BY_ID, { variables: { id: id.trim() } });
+    const body = (await response.json()) as {
+      data?: { node?: VariantNode | null };
+      errors?: { message: string }[];
+    };
+
+    if (body.errors?.length) {
+      console.warn(
+        `[mannon] variant lookup failed: ${body.errors.map((e) => e.message).join("; ")}`,
+      );
+      return null;
+    }
+
+    const node = body.data?.node;
+    if (!node?.id) return null;
+
+    return {
+      id: node.id,
+      title: [node.product?.title, node.title].filter(Boolean).join(" — ") || node.id,
+      sku: node.sku?.trim() || null,
+      price: node.price ?? "0",
+      productId: node.product?.id ?? node.id,
+      collectionIds: productCollectionIds(node.product),
+    };
+  } catch (error) {
+    console.warn(
+      `[mannon] variant lookup failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return null;
+  }
+}

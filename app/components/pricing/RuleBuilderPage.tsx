@@ -173,18 +173,21 @@ function ValueFields({
 
   if (form.kind === "amount_off" || form.kind === "fixed_price") {
     return (
-      <Field issue={issueFor("value.base")}>
-        <s-money-field
-          name="amount"
-          label={t(
-            form.kind === "amount_off"
-              ? "pricing.builder.amountLabel"
-              : "pricing.builder.fixedPriceLabel",
-          )}
-          value={form.amount}
-          currencyCode={asCurrency(form.currencyCode)}
-        />
-      </Field>
+      <s-stack direction="block" gap="base">
+        <Field issue={issueFor("value.base")}>
+          <s-money-field
+            name="amount"
+            label={t(
+              form.kind === "amount_off"
+                ? "pricing.builder.amountLabel"
+                : "pricing.builder.fixedPriceLabel",
+            )}
+            value={form.amount}
+            currencyCode={asCurrency(form.currencyCode)}
+          />
+        </Field>
+        <CurrencyOverrides form={form} issueFor={issueFor} />
+      </s-stack>
     );
   }
 
@@ -489,8 +492,68 @@ function PreviewPanel({ view }: { view: RuleBuilderView }) {
         ) : (
           <s-text color="subdued">{t("pricing.builder.previewNoChange")}</s-text>
         )}
+
+        {view.preview?.aboveShelfPrice ? (
+          <s-banner tone="warning">
+            <s-heading>{t("pricing.builder.previewAboveShelfHeading")}</s-heading>
+            <s-paragraph>{t("pricing.builder.previewAboveShelfBody")}</s-paragraph>
+          </s-banner>
+        ) : null}
       </s-stack>
     </s-section>
+  );
+}
+
+/**
+ * The same amount in other currencies.
+ *
+ * `CurrencyAmount.overrides` has been in the model since 1.1 with no way to
+ * fill it in, so in a store selling in more than one currency every
+ * `fixed_price` and `amount_off` rule was skipped outside the home currency
+ * with `no_price_in_currency` — while percentage rules carried on applying.
+ * A buyer checking out in EUR lost exactly their negotiated contract prices
+ * and kept the discounts.
+ *
+ * Typed, never converted. The engine refuses to invent an exchange rate and so
+ * does this: a figure the merchant did not type is a price nothing else in the
+ * system agrees with. Plain text fields rather than `s-money-field`, because
+ * the currency of each row is the thing being chosen.
+ */
+function CurrencyOverrides({
+  form,
+  issueFor,
+}: {
+  form: RuleFormView;
+  issueFor: (field: string) => RuleIssue | undefined;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <s-stack direction="block" gap="small">
+      <s-text type="strong">{t("pricing.builder.overridesHeading")}</s-text>
+      <s-paragraph color="subdued">
+        {t("pricing.builder.overridesBody", { currency: form.currencyCode })}
+      </s-paragraph>
+
+      {form.overrides.map((override, index) => (
+        <Field key={index} issue={issueFor(`value.overrides.${index}`)}>
+          <s-stack direction="inline" gap="small">
+            <s-text-field
+              name="overrideCurrency"
+              label={t("pricing.builder.overrideCurrency")}
+              value={override.currencyCode}
+              placeholder="EUR"
+            />
+            <s-text-field
+              name="overrideAmount"
+              label={t("pricing.builder.overrideAmount")}
+              value={override.amount}
+              placeholder="0.00"
+            />
+          </s-stack>
+        </Field>
+      ))}
+    </s-stack>
   );
 }
 

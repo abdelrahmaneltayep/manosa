@@ -11,7 +11,7 @@ import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate } from "~/i18n/translate";
 import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { ruleUsesCollections } from "~/lib/pricing/product-collections.server";
-import { RulesetTooLargeError } from "~/lib/pricing/ruleset.server";
+import { rulesetPayload, RulesetTooLargeError } from "~/lib/pricing/ruleset.server";
 import {
   activeEngineRules,
   archiveRule,
@@ -60,7 +60,15 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       search: url.searchParams.get("search") ?? "",
       archived: url.searchParams.get("archived") === "1",
       sort: url.searchParams.get("sort") ?? "priority",
-      unreadableCount: 0,
+      // From the engine's own report, not a constant. `toEngineRules` exists
+      // precisely to name rows it cannot decode, and `republish` threw the list
+      // into `console.error` — so a rule absent from checkout was displayed as
+      // **Active** and the banner written to say so could never render.
+      unreadableCount: live.unreadable.length,
+      // Honestly null: this list comes from our own database, which either
+      // answered or threw. There is no cache to be stale. The banner exists for
+      // a Shopify-backed list and is rendered by `RuleListPage` for that reason;
+      // wiring a constant into it here said "fresh" as if it were a finding.
       cachedMinutesAgo: null,
       published: shop
         ? {
@@ -69,6 +77,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
           }
         : null,
       publishError: url.searchParams.get("publishError") as RuleListView["publishError"],
+      checkoutBehind: checkoutBehind(shop, live.rules),
       atRuleLimit: limit !== null && page.totalUnfiltered >= limit,
       collectionsPending: collectionsPending(shop, live.rules),
       // Rules the plan is holding back. Shown here because this is the page
@@ -82,6 +91,23 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 
     return json({ view });
   });
+
+/**
+ * Is checkout running a different set of rules from the one on this page?
+ *
+ * Compared by hash, which is the same value `publishRuleset` writes — so this
+ * is "what is live" against "what would be published", not a guess. Null when
+ * they agree, and null before anything has ever been published, which the
+ * `published` block already says in its own words.
+ */
+function checkoutBehind(
+  shop: { rulesetHash: string | null; rulesetRuleCount: number } | null,
+  rules: PricingRule[],
+): RuleListView["checkoutBehind"] {
+  if (!shop?.rulesetHash) return null;
+  if (rulesetPayload(rules).hash === shop.rulesetHash) return null;
+  return { liveRuleCount: rules.length, publishedRuleCount: shop.rulesetRuleCount };
+}
 
 /**
  * Is a collection rule live before checkout has been told what is in it?

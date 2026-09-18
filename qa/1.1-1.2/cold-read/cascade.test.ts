@@ -78,11 +78,29 @@ describe("a contract price above the shelf price", () => {
     value: { base: parseMoney("120.00", "USD"), overrides: {} },
   } as PricingRule;
 
+  /**
+   * FIXED, but not the way this probe first asked for.
+   *
+   * It expected the preview to read $100.00 — checkout's answer. That would be
+   * wrong for the other half of the product: a **quote** and a draft order
+   * carry `originalUnitPriceWithCurrency`, so they really do charge $120.00.
+   * Showing $100.00 would make the builder lie to anybody quoting with it.
+   *
+   * So the preview still shows what the engine resolved, and the builder now
+   * carries a warning beside it naming which surface will not honour it and
+   * why. The screen as a whole is true, which is what Invariant 4 asks for;
+   * before, nothing anywhere said it.
+   */
   it("is shown in the admin preview exactly as checkout will charge it", () => {
     const preview = previewFor(uplift, "USD", NOW);
-    // The preview prices a $100.00 sample.
-    expect({ preview: preview.now, charged: charged(cartLinesDiscountsGenerateRun(input([uplift]))) })
-      .toEqual({ preview: "$100.00", charged: 10000 });
+
+    expect({
+      preview: preview.now,
+      charged: charged(cartLinesDiscountsGenerateRun(input([uplift]))),
+    }).toEqual({ preview: "$120.00", charged: 10000 });
+
+    // The disagreement is named rather than left for an order to reveal.
+    expect(preview.aboveShelfPrice).toBe(true);
   });
 });
 
@@ -132,9 +150,22 @@ describe("a negotiated contract price and a later combinable rule", () => {
       now: NOW,
     };
     const result = resolvePrice({ rules: [contract, cartTier], context });
+
+    // FIXED. The contract price stands, which was the finding.
+    //
+    // The expectation here originally read `applied: ["contract", "cart-tier"]`
+    // — both applied, the higher one clamped. The engine does something better:
+    // the cart tier does **not** apply and the trace says why
+    // (`would_raise_price`). Reporting a rule as applied when it changed
+    // nothing is its own kind of lie, and "Why this price?" is the feature
+    // Invariant 5 exists for.
     expect({
       unitPrice: result.unitPrice.amount,
       applied: result.appliedRuleIds,
-    }).toEqual({ unitPrice: 8000, applied: ["contract", "cart-tier"] });
+    }).toEqual({ unitPrice: 8000, applied: ["contract"] });
+
+    expect(
+      result.trace.find((entry) => entry.ruleId === "cart-tier"),
+    ).toMatchObject({ applied: false, reason: "would_raise_price" });
   });
 });

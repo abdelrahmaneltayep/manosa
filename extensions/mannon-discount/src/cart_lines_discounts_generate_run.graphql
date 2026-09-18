@@ -64,4 +64,14 @@ query CartInput {
       isoCode
     }
   }
+  shop {
+    # The store's own clock. The Function used `new Date()`, and the sandbox's
+    # wall clock is not a dependable source of the store's time — this field
+    # exists because it is not. A fixed or epoch-zero clock would make every
+    # rule with a `startsAt` permanently `not_started` and every rule with an
+    # `endsAt` never end, while the admin showed them scheduled correctly.
+    localTime {
+      date
+    }
+  }
 }

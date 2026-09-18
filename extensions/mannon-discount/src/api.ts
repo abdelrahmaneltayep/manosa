@@ -37,6 +37,14 @@ export interface FunctionInput {
     ruleset?: MetafieldValue | null;
   };
   localization: { country: { isoCode: string } };
+  /**
+   * The store's own clock, as Shopify reports it.
+   *
+   * `date` is a `YYYY-MM-DD` in the shop's timezone. Optional because an older
+   * deployed Function's input will not carry it, and because a Function that
+   * throws applies no discount to anybody.
+   */
+  shop?: { localTime?: { date?: string } | null } | null;
 }
 
 export interface CartLine {

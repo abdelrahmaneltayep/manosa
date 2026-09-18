@@ -44,7 +44,20 @@ describe("a cart-value rule, explained", () => {
   it("applies for 50 units at $30.00 — a $1,500 line, as it does at checkout", () => {
     const view = explainFor(
       [rule],
-      { variantId: "gid://shopify/ProductVariant/1", tags: [], quantity: 50, price: "30.00" },
+      {
+        // FIXED: `explainFor` takes the whole context now, and the caller
+        // resolves it from the same places checkout reads — the buyer from the
+        // mirrored Customer row, the product and its collections from the
+        // `$app:mannon.collections` metafield.
+        variantId: "gid://shopify/ProductVariant/1",
+        productId: "gid://shopify/Product/1",
+        collectionIds: [],
+        tags: [],
+        groupIds: [],
+        companyId: null,
+        quantity: 50,
+        price: "30.00",
+      },
       "USD",
       NOW,
     );
@@ -65,12 +78,22 @@ describe("a group-targeted rule, explained", () => {
   it("can be explained for a buyer in that group", () => {
     const view = explainFor(
       [rule],
-      { variantId: "v", tags: [], quantity: 1, price: "30.00" },
+      {
+        variantId: "v",
+        productId: "p",
+        collectionIds: [],
+        tags: [],
+        // The buyer really is in Gold, and the tool can now say so.
+        groupIds: ["group-gold"],
+        companyId: null,
+        quantity: 1,
+        price: "30.00",
+      },
       "USD",
       NOW,
     );
-    // There is no way to say "this buyer is in Gold", so the answer is always
-    // audience_mismatch — the opposite of what checkout does.
+    // There used to be no way to say "this buyer is in Gold", so the answer was
+    // always audience_mismatch — the opposite of what checkout does.
     expect(view.trace[0]!.reason).not.toBe("audience_mismatch");
   });
 });

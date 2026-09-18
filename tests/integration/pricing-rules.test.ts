@@ -1,10 +1,16 @@
-import { parseMoney, type PricingRule } from "@mannon/pricing-engine";
+import {
+  money,
+  parseMoney,
+  resolvePrice,
+  type PricingRule,
+} from "@mannon/pricing-engine";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "~/db.server";
 import { LimitReachedError } from "~/lib/billing/gate.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { toEngineRule } from "~/lib/pricing/rule-mapper.server";
+import { parseRuleForm } from "~/lib/pricing/rule-form.server";
 import {
   activeEngineRules,
   archiveRule,
@@ -457,5 +463,139 @@ describe("a rule Claude drafted", () => {
     expect(entry.aiAssisted).toBe(false);
     expect(entry.approvedById).toBeNull();
     expect(entry.aiModel).toBeNull();
+  });
+});
+
+/**
+ * The same amount in another currency.
+ *
+ * `CurrencyAmount.overrides` was in the model from 1.1 and every production
+ * writer set `{}`. In a store selling in more than one currency the engine
+ * skipped every `fixed_price` and `amount_off` rule outside the home currency
+ * with `no_price_in_currency`, while percentage rules carried on applying — so
+ * a buyer checking out in EUR lost exactly their negotiated contract prices and
+ * kept the discounts, and there was no field anywhere to fix it.
+ */
+describe("a rule priced in more than one currency", () => {
+  const amountForm = (extra: Record<string, string | string[]> = {}) => {
+    const form = new FormData();
+    form.set("name", "Contract price");
+    form.set("kind", "fixed_price");
+    form.set("status", "active");
+    form.set("amount", "8.00");
+    form.set("audienceMode", "tags");
+    form.set("audienceTags", "wholesale");
+    form.set("targetMode", "all");
+    for (const [key, value] of Object.entries(extra)) {
+      for (const one of Array.isArray(value) ? value : [value]) form.append(key, one);
+    }
+    return form;
+  };
+
+  it("carries the currencies the merchant typed", () => {
+    const { rule, issues } = parseRuleForm(
+      amountForm({
+        overrideCurrency: ["EUR", "JPY"],
+        overrideAmount: ["7.20", "1200"],
+      }),
+      { currencyCode: "USD" },
+    );
+
+    expect(issues).toEqual([]);
+    expect(rule.kind).toBe("fixed_price");
+    if (rule.kind !== "fixed_price") return;
+
+    expect(rule.value.base).toEqual({ amount: 800, currencyCode: "USD" });
+    // Each in its own currency's minor units — ¥1,200 is 1200, not 120000.
+    expect(rule.value.overrides.EUR).toEqual({ amount: 720, currencyCode: "EUR" });
+    expect(rule.value.overrides.JPY).toEqual({ amount: 1200, currencyCode: "JPY" });
+  });
+
+  it("ignores the blank row the form always carries", () => {
+    const { rule, issues } = parseRuleForm(
+      amountForm({ overrideCurrency: ["EUR", ""], overrideAmount: ["7.20", ""] }),
+      { currencyCode: "USD" },
+    );
+
+    expect(issues).toEqual([]);
+    if (rule.kind !== "fixed_price") return;
+    expect(Object.keys(rule.value.overrides)).toEqual(["EUR"]);
+  });
+
+  it("refuses a currency code that is not one, rather than dropping it", () => {
+    const { issues } = parseRuleForm(
+      amountForm({ overrideCurrency: ["Euros"], overrideAmount: ["7.20"] }),
+      { currencyCode: "USD" },
+    );
+
+    expect(issues.map((issue) => issue.code)).toContain("currency_unknown");
+  });
+
+  it("refuses a second price in the shop's own currency", () => {
+    // `base` is the home currency. Two answers for one currency is a rule
+    // whose price depends on which is read first.
+    const { issues } = parseRuleForm(
+      amountForm({ overrideCurrency: ["usd"], overrideAmount: ["7.00"] }),
+      { currencyCode: "USD" },
+    );
+
+    expect(issues.map((issue) => issue.code)).toContain("currency_duplicate");
+  });
+
+  it("prices a buyer in that currency, where it used to skip them", () => {
+    const { rule } = parseRuleForm(
+      amountForm({ overrideCurrency: ["EUR"], overrideAmount: ["7.20"] }),
+      { currencyCode: "USD" },
+    );
+
+    const priced = resolvePrice({
+      rules: [{ ...rule, status: "active" }],
+      context: {
+        customer: { id: "c", tags: ["wholesale"], groupIds: [], companyId: null },
+        product: {
+          productId: "p",
+          variantId: "v",
+          collectionIds: [],
+          price: money(1000, "EUR"),
+          cost: null,
+        },
+        quantity: 1,
+        market: { marketId: "", countryCode: "FR", currencyCode: "EUR" },
+        cartSubtotal: null,
+        now: new Date("2026-06-15T12:00:00Z"),
+      },
+    });
+
+    expect(priced.unitPrice).toEqual({ amount: 720, currencyCode: "EUR" });
+  });
+
+  it("still stands aside in a currency nobody priced, and says so", () => {
+    const { rule } = parseRuleForm(amountForm(), { currencyCode: "USD" });
+
+    const priced = resolvePrice({
+      rules: [{ ...rule, status: "active" }],
+      context: {
+        customer: { id: "c", tags: ["wholesale"], groupIds: [], companyId: null },
+        product: {
+          productId: "p",
+          variantId: "v",
+          collectionIds: [],
+          price: money(1000, "EUR"),
+          cost: null,
+        },
+        quantity: 1,
+        market: { marketId: "", countryCode: "FR", currencyCode: "EUR" },
+        cartSubtotal: null,
+        now: new Date("2026-06-15T12:00:00Z"),
+      },
+    });
+
+    // Refusing is right — inventing a rate would put a number on a storefront
+    // that nothing else in the system agrees with. The fix is that there is now
+    // a field to fill in, and the trace names it.
+    expect(priced.trace[0]).toMatchObject({
+      applied: false,
+      reason: "no_price_in_currency",
+    });
   });
 });

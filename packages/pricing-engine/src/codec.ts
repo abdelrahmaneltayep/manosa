@@ -23,7 +23,32 @@ import type {
  * with an integer amount.
  */
 
+/**
+ * The version this app **writes**.
+ *
+ * Bumping it is a two-deploy operation, and the reason is that the two sides
+ * move independently: the app ships on a server release, the Function on
+ * `shopify app deploy`. Whichever lands second, there is a window where one
+ * reads what the other wrote — and a Function that refuses the payload applies
+ * no discount at all, so **every wholesale buyer on every store pays retail**
+ * until a human notices. There is no error path out of a WASM sandbox.
+ *
+ * So the order is: teach `SUPPORTED_RULESET_VERSIONS` to read the new shape,
+ * deploy the Function, and only then start writing it.
+ */
 export const RULESET_FORMAT_VERSION = 1;
+
+/**
+ * Every version this app can **read**.
+ *
+ * A superset of what it writes, always. `deserializeRuleset` used to compare
+ * against the single constant above, so the moment anybody bumped it the
+ * deployed Function returned zero rules with nothing but a `console.error`
+ * inside a sandbox to show for it. Reading one version back is what makes a
+ * staged deploy survivable; `codec.test.ts` pins both of these so the bump is
+ * a deliberate act rather than a one-character edit.
+ */
+export const SUPPORTED_RULESET_VERSIONS: readonly number[] = [1];
 
 export interface SerializedRuleset {
   v: number;
@@ -123,15 +148,23 @@ export function deserializeRuleset(value: unknown): DeserializeResult {
 
   const envelope = parsed as Partial<SerializedRuleset>;
 
-  if (envelope.v !== RULESET_FORMAT_VERSION) {
-    // A newer format from a newer app version. Refusing is right: guessing at
-    // fields we do not understand could mean charging the wrong price.
+  if (
+    typeof envelope.v !== "number" ||
+    !SUPPORTED_RULESET_VERSIONS.includes(envelope.v)
+  ) {
+    // A format this build genuinely cannot read. Refusing is still right —
+    // guessing at fields we do not understand could mean charging the wrong
+    // price — but it is now only reachable for a version nobody taught this
+    // build about, rather than for every version but the newest.
     return {
       rules: [],
       errors: [
         {
           ruleId: null,
-          message: `ruleset format v${String(envelope.v)} is not v${RULESET_FORMAT_VERSION}`,
+          message:
+            `ruleset format v${String(envelope.v)} cannot be read by this build ` +
+            `(understands v${SUPPORTED_RULESET_VERSIONS.join(", v")}). ` +
+            `Deploy the discount Function before writing a new format.`,
         },
       ],
     };

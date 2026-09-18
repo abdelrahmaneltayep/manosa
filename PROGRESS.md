@@ -1,11 +1,9 @@
 # Progress
 
-Updated: 2026-09-18T12:00:00Z
+Updated: 2026-09-18T16:00:00Z
 Current milestone: 6 — Analytics
-Current task: the billing P0s from the 0.3 cold read [done]. The P1s from all
-three cold reads are next; P1-5 in `qa/1.1-1.2` is the sharpest (percentage
-rules multiply in float and round down, 12,096 demonstrated one-cent errors,
-every one against the merchant).
+Current task: the pricing P1s from the 1.1/1.2 cold read [done]. The billing
+P1s and every P2 are next.
 
 ## Done
 
@@ -55,6 +53,8 @@ every one against the merchant).
 - [x] **The four pricing P0s** from `qa/1.1-1.2/COLD-READ.md` — commit `a3c25fc` — QA: `qa/pricing-p0/REPORT.md` (`docs/adr/0029`). The two worst were one root cause in two directions: **nothing taught anything outside the checkout Function which collections a product is in.** (1) `$app:mannon.collections` was written only by two webhooks, both of which fire on _change_, so a store installing with an existing catalogue sent every product to checkout with no collections — and _"20% off everything except Sale"_ then discounts exactly the products the merchant protected. There is a `products.backfill` job now, and the Pricing page says so while it runs. (2) `pricing.server.ts` hardcoded `collectionIds: []` in the **one** function that prices quick order, quotes, the Buyer Agent and PO-to-order: the block showed $8.00 and checkout charged $10.00, and a quote locked the wrong number for ever. Every surface now reads the _same metafield the Function reads_, and the field is required so no caller can forget. (3) `parseMoney` threw on `"1000.0"`, which is how Shopify serialises a **¥1,000** line — so every wholesale buyer in a zero-decimal-currency store paid retail, silently, for ever; and one odd amount cost the whole cart its discounts rather than one line. (4) The automatic discount was created with **no `discountClasses`** while the Function's first line refuses everything without `PRODUCT` — a discount that ran on every cart and was permitted to produce nothing. Found in passing, same class: order limits read the cart with a hardcoded `× 100`, so a ¥1,000 minimum passed a ¥1,000 cart on every yen store.
 
 - [x] **The five billing P0s** from `qa/0.3/COLD-READ.md` — commit `cfc149d` — QA: `qa/billing-p0/REPORT.md` (`docs/adr/0030`). (1) **CSV import was gated nowhere at all** — `assertFeature("csv_import")` appeared nowhere in the codebase, so a Free shop could export every rule it had, have Claude map its columns on the app owner's key, and import; the link rendered on every plan. Now refused in the service layer, in the action before anything is parsed or sent to the model, and in the loader (which covers the two downloads). (2) **Nothing paused when a subscription lapsed.** The gate refused every _admin_ action correctly while three capabilities went on reaching buyers through metafields Shopify evaluates without asking us: over-quota pricing rules kept pricing, order limits kept blocking carts, and net terms kept being **extended** while `recordPayment` refused the merchant the ability to record the money coming in against invoices this app was still issuing — the credit half ran and the collection half stopped. Each publisher now asks what the effective plan allows, and `billing.reconcile` runs them the moment the answer changes, in both directions. Nothing is deleted. (3) **An out-of-order webhook dropped a paying merchant to Free** — an upgrade is exactly when Shopify sends two deliveries whose order is not guaranteed, and a cancellation landing second wrote Free over a merchant charged minutes earlier. (4) **An empty `billing.check` cancelled the plan and erased the grace period** on every Plans page load — and an empty list is not a cancellation: a renamed plan, a flipped test-mode flag or a frozen subscription all produce one. (5) **The $29 card sold the $59 plan's features**, with the table below it marking all six Not included; the hand-written taglines are deleted and each card composes its line from the ladder. Also: the usage meters had returned a hard-coded `0` since 0.3, so the downgrade preview reported no overage for any downgrade, ever.
+
+- [x] **The twelve pricing P1s** from `qa/1.1-1.2/COLD-READ.md` — commit `PENDING` — QA: `qa/pricing-p1/REPORT.md` (`docs/adr/0031`). Ten fixed, one built as a feature, one recorded as a deliberate gap. The money one: **the cascade multiplied in float**, so every percentage whose exact answer landed on a half-cent tie landed just below it and `half_up` rounded it down — 13,636 measured wrong answers, every one a cent in the buyer's favour, for ever. The running price is an exact integer fraction now and 39.8M brute-forced cases agree with exact half-up. Also: **"Why this price?" answered with a context checkout never sees** (no groups, no company, no collections, the unit price as the cart subtotal — four of six audience modes wrong while the route said "this answer is the checkout answer"); **schedules were a day early** and the shop's timezone, populated and used by every analytics surface, was used by none of the pricing ones; **a later combinable rule overwrote a negotiated contract price upward**, reporting both as applied; **a rule pricing above the shelf price** was honoured by the preview, the quote and the agent and silently dropped at checkout; **a buyer checking out in EUR lost exactly their contract prices** and kept the percentage discounts, with no field anywhere to price a second currency — there is one now; **a ruleset format bump would have charged every buyer on every store retail** the day anybody made it; the unreadable-rules banner was wired to a hardcoded `0`; "checkout did not update" was a one-shot query parameter; the buyer backfill published only the one configured tag, so a rule targeting `gold` priced its buyers at retail until somebody edited them; and the Function read its own sandbox clock instead of the store's. **Market scoping stays unbuilt on purpose** — the Function knows the buyer's country, not their Market, so a scoped rule would be dropped at checkout while the admin showed it applying; the parser refuses one and a test names the unblocker.
 
 ## Next up
 
@@ -177,6 +177,24 @@ Neither is blocking; both would change product decisions if answered.
 2. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
 
 ## Notes for my next self
+
+- **A comment that states a property is not the property.** `money.ts` has said
+  "no price arithmetic here touches a floating-point value" since 1.1, three
+  feet above a float multiply. Same shape as the discount Function's "anything
+  unexpected costs one line, not the cart" sitting above a `try` outside the
+  loop, and `snapshotFrom`'s "keep them working and make the mismatch loud"
+  above a `return FREE_SNAPSHOT`. When a comment states a guarantee, grep for
+  the code that would have to enforce it.
+- **A model without a writer is a feature that does not exist.** `MarketScope`
+  and `CurrencyAmount.overrides` were both in the engine from 1.1, both
+  exercised by golden vectors, and neither reachable: every production writer
+  emitted the empty default. The vectors passed the whole time. If a field has
+  no form, no importer and no AI path that can set it, it is a plan, not a
+  feature — and a golden vector over it tests the engine, not the product.
+- **Day-granularity dates are a timezone question.** `new Date("2026-07-01")` is
+  UTC midnight, so "ends 1 July" killed a rule for the whole of the day it
+  named, and "starts 1 July" went live at 18:00 on 30 June in California. The
+  shop's `ianaTimezone` was right there and used only by analytics.
 
 - **A gate stops a request; a metafield has no request to stop.** Every
   capability this app delivers through a published metafield — the ruleset, the

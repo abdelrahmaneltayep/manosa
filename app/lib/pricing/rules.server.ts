@@ -224,6 +224,10 @@ export interface SaveContext {
 export async function republish(admin: AdminGraphql) {
   const { rules, unreadable } = await activeEngineRules();
   for (const row of unreadable) {
+    // The operator's copy. The *merchant's* copy is the banner on the Pricing
+    // page, which reads `unreadableCount` from the same list — it used to be a
+    // hardcoded zero, so a rule that could not be decoded was absent from
+    // checkout and displayed as Active, with nothing anywhere saying so.
     console.error(`[mannon] rule ${row.id} could not be published: ${row.message}`);
   }
   return publishRuleset(admin, rules);
