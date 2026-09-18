@@ -176,8 +176,11 @@ describe("abuse cases", () => {
 
   it("cannot reach another tenant through a nested relation filter", async () => {
     await seedBothShops();
-    // No relations exist yet; assert the shape that keeps this honest as the
-    // schema grows — the tenant predicate is always at the top level of `where`.
+    // The shape of the predicate: the tenant is always an outer AND, never a
+    // branch of the caller's filter. Relations themselves are probed per model
+    // in `tenant-relations.test.ts` — this file's "no relations exist yet" note
+    // stayed true in the comment and false in the schema for eighteen tasks,
+    // which is how a nested write and a relation filter both went unseen.
     const rows = await inBeta(() => db.shop.findMany({ where: { NOT: { name: "" } } }));
     expect(rows.map((row) => row.shop)).toEqual([BETA]);
   });

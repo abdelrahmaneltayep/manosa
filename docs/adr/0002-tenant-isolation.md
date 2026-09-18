@@ -23,8 +23,13 @@ model carrying a scalar `shop` field:
 - **throws** `CrossTenantError` if the caller supplies a `shop` naming a
   different tenant, or a filter object (`{ in: [...] }`) that could match
   several — refusing is safer than trying to intersect it;
-- **throws** on any Prisma operation it does not recognise, so a future Prisma
-  release cannot introduce a read path that slips past the filter.
+- **throws** on any _model_ operation it does not recognise, so a future Prisma
+  release cannot introduce a read path on a scoped model that slips past the
+  filter. Client-level operations are a separate question and are handled
+  separately: `$queryRaw`, `$queryRawUnsafe`, `$executeRaw` and
+  `$executeRawUnsafe` carry no model, cannot have a filter injected into an
+  opaque SQL string, and are refused outside a tenant scope — each of the five
+  raw call sites puts `shop` in its own `WHERE`, and a test checks every one.
 
 The scoped-model set is derived from the runtime DMMF, not a hand-maintained
 list, so a new table is protected the moment it has a `shop` column.
@@ -34,6 +39,27 @@ The active tenant lives in an `AsyncLocalStorage` store entered by
 `shopScope.run()`. `run()` is used rather than `enterWith()` because, under HTTP
 keep-alive, `enterWith()` can bleed a store into later requests on the same
 socket.
+
+## What the extension does not reach, and what holds it instead
+
+Two paths are closed by the schema rather than by this layer, and saying so
+here is the point of the section: a reader who believes the extension covers
+them will not think to check the schema when they add a table.
+
+- **A to-one relation takes no `where` in Prisma**, so an `include` of a
+  parent cannot be filtered on the way out. What makes a cross-tenant parent
+  impossible is the composite `(shop, parentId)` foreign key on every owned
+  relation — the database will not store one.
+- **A nested `create` inside an `update` is not stamped.** The extension checks
+  `shop` at the top level of an update's `data` (`assertNoRetenant`) and stamps
+  nested rows on a `create`, but it does not walk an update's nested writes.
+  Prisma's generated types require `shop` on those rows, and the same composite
+  foreign key refuses one that names another tenant.
+
+`tests/integration/tenant-relations.test.ts` asserts both, per relation, for
+every scoped model that owns one — and fails when a new one is added without a
+probe. The guard is a column on a table, and the next table has not been
+written yet.
 
 ## Why creates still name the tenant
 

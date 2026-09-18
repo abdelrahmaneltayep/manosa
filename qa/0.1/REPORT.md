@@ -93,6 +93,18 @@ At the data layer this is proven directly — see `tests/integration/tenant-isol
 assertion needs a route that fetches a record by id, and no such route exists yet
 — the first one (Pricing rule detail, 1.3) will add it. Carried to 1.3.
 
+> **Amended 2026-09-18.** Every one of those six assertions is against the
+> `Shop` model — at 0.1 the only model there was, and the one model in the
+> schema to this day with no relations, no nested writes and no foreign keys.
+> The list above is therefore true and was never the whole question: a nested
+> create and a relation filter are two other ways out of a tenant, and neither
+> was covered by anything here. They went eighteen tasks unseen, and the cold
+> read (`qa/0.1/COLD-READ.md`, P0-3, P0-4, P2-8) found them.
+>
+> `tests/integration/tenant-relations.test.ts` now probes **every** scoped model
+> that owns a relation — seven ways out, nine relations, and a test that fails
+> the day somebody adds a tenth without probing it.
+
 ### 5. The three musts
 
 | Rule                                                              | Status at 0.1                                                                                                                                                                                                                                   |
