@@ -2,7 +2,7 @@ import { money, type Money } from "@mannon/pricing-engine";
 import { OrderSource, type Prisma } from "@prisma/client";
 
 import { db } from "~/db.server";
-import { parseShopifyMoney } from "~/lib/money";
+import { lineTotal, parseShopifyMoney } from "~/lib/money";
 import { normalizeTags } from "~/lib/customers/tagging";
 import type { OrderLineNode, OrderNode } from "~/lib/orders/admin-graphql.server";
 import { tenant } from "~/lib/tenant/shop-context.server";
@@ -329,8 +329,10 @@ interface WebhookOrder {
   } | null;
   note_attributes?: { name?: string | null; value?: string | null }[] | null;
   line_items?: WebhookLine[] | null;
-  /// Order-level discount applications. A line's allocations point at these by
-  /// position, which is the only place their names live.
+  /**
+   * Order-level discount applications. A line's allocations point at these by
+   * position, which is the only place their names live.
+   */
   discount_applications?: { title?: string | null; code?: string | null }[] | null;
   refunds?:
     { transactions?: { amount?: string | null; kind?: string | null }[] | null }[] | null;
@@ -346,11 +348,13 @@ interface WebhookLine {
   product_id?: number | string | null;
   variant_id?: number | string | null;
   quantity?: number | null;
-  /// After returns and order edits. Shopify sends this alongside `quantity`.
+  /** After returns and order edits. Shopify sends this alongside `quantity`. */
   current_quantity?: number | null;
   price?: string | null;
-  /// What came off this line in total. The only signal when a discount was
-  /// applied without an allocation entry — a draft order's, most often.
+  /**
+   * What came off this line in total. The only signal when a discount was
+   * applied without an allocation entry — a draft order's, most often.
+   */
   total_discount?: string | null;
   discount_allocations?:
     { amount?: string | null; discount_application_index?: number | null }[] | null;
@@ -379,7 +383,7 @@ export function linesFromWebhook(
         ? quantity
         : readQuantity(line.current_quantity);
     const unitPrice = readMoney(line.price, currencyCode);
-    const originalTotal = money(unitPrice.amount * quantity, currencyCode);
+    const originalTotal = lineTotal(unitPrice, quantity, "order webhook");
 
     const discounts: LineDiscount[] = (line.discount_allocations ?? []).map(
       (allocation) => {
@@ -677,6 +681,9 @@ async function replaceLines(
       sku: line.sku,
       productId: line.productId,
       variantId: line.variantId,
+      // From the amounts themselves, not copied from the order row: this is
+      // the currency they were actually parsed in.
+      currencyCode: line.unitPrice.currencyCode,
       quantity: line.quantity,
       currentQuantity: line.currentQuantity,
       unitPrice: line.unitPrice.amount,

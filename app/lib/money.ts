@@ -89,3 +89,28 @@ export function parseShopifyMoney(
     return money(0, currencyCode);
   }
 }
+
+/**
+ * A line total, from a unit price and a quantity Shopify sent.
+ *
+ * `money()` refuses a product that is not a safe integer, and that refusal used
+ * to leave `factsFromWebhook` — the one function in the order reader written so
+ * that every malformed field survives. `readMoney`, `readDate` and
+ * `readQuantity` all fail soft; a quantity of `1e15` at $10.00 threw the whole
+ * delivery away, and a webhook that throws is an order that never mirrors.
+ *
+ * So this fails soft too, the same way `parseShopifyMoney` does: nothing is
+ * invented, the operator is told what could not be read, and the caller gets a
+ * zero it can see rather than an exception it cannot.
+ */
+export function lineTotal(unitPrice: Money, quantity: number, context: string): Money {
+  const product = unitPrice.amount * quantity;
+
+  if (Number.isSafeInteger(product)) return money(product, unitPrice.currencyCode);
+
+  console.error(
+    `[mannon] ${formatMoneyWithCode(unitPrice)} × ${quantity} is not a whole ` +
+      `number of minor units (${context}); the line is mirrored at zero.`,
+  );
+  return money(0, unitPrice.currencyCode);
+}

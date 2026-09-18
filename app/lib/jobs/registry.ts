@@ -24,18 +24,24 @@ export const JOB_HANDLERS = {
   "shop.purge_pii": purgeShopPii,
   "customers.backfill": backfillCustomers,
   "orders.backfill": backfillOrders,
-  /// Publishes each product's collection membership to the metafield the
-  /// checkout Function reads. Without it a collection rule is wrong at
-  /// checkout for the whole of an existing catalogue.
+  /**
+   * Publishes each product's collection membership to the metafield the checkout
+   * Function reads. Without it a collection rule is wrong at checkout for the whole of
+   * an existing catalogue.
+   */
   "products.backfill": backfillProducts,
-  /// Republishes the ruleset, the order limits and every buyer's terms under
-  /// the plan that applies now. Three capabilities reach a buyer through a
-  /// metafield Shopify evaluates without asking us, so a gate on editing them
-  /// stopped none of them when a subscription lapsed.
+  /**
+   * Republishes the ruleset, the order limits and every buyer's terms under the plan
+   * that applies now. Three capabilities reach a buyer through a metafield Shopify
+   * evaluates without asking us, so a gate on editing them stopped none of them when a
+   * subscription lapsed.
+   */
   "billing.reconcile": reconcilePlan,
-  /// Checklist §9: three days before a trial starts charging, in the place a
-  /// merchant will actually see it. The banner on the Plans page was the only
-  /// warning, and it is the page they have no reason to open.
+  /**
+   * Checklist §9: three days before a trial starts charging, in the place a merchant
+   * will actually see it. The banner on the Plans page was the only warning, and it is
+   * the page they have no reason to open.
+   */
   "billing.trial_reminder": sendTrialReminder,
   "analytics.monthly_review": monthlyReviewJob,
   "quotes.expire": expireQuotes,
@@ -43,11 +49,15 @@ export const JOB_HANDLERS = {
   "forms.screen_applications": screenApplications,
   "agent.daily_briefing": dailyBriefing,
   "agent.purge_conversations": purgeConversations,
-  /// Checklist §8: the audit log keeps twelve months. This is what makes the
-  /// schema comment true rather than aspirational.
+  /**
+   * Checklist §8: the audit log keeps twelve months. This is what makes the schema
+   * comment true rather than aspirational.
+   */
   "audit.purge": purgeAudit,
-  /// The other five tables that only ever grew, each with a window stated
-  /// somewhere and nothing behind it until the release pass.
+  /**
+   * The other five tables that only ever grew, each with a window stated somewhere and
+   * nothing behind it until the release pass.
+   */
   "retention.purge": purgeRetention,
 } as const;
 

@@ -279,6 +279,70 @@ describe("orders/create", () => {
   });
 });
 
+describe("a line's currency", () => {
+  /**
+   * Every amount on an `OrderLine` is minor units, and the currency they are in
+   * used to live only on the parent order. That made correctness a property of
+   * every reader remembering to join — and a reader that forgot summed yen into
+   * dollars and reported a total no merchant ever took. The column is the guard
+   * now; these are the two doors it has to come through.
+   */
+  it("is written from the webhook, not left to a join", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await handleOrdersUpsert(
+        {
+          shop: ALPHA,
+          topic: "orders/create",
+          webhookId: "w1",
+          payload: webhookOrder({
+            currency: "JPY",
+            current_total_price: "5000",
+            line_items: [{ id: 1, quantity: 2, price: "5000.00", title: "Beans" }],
+          }),
+        },
+        async () => fakeAdmin(),
+      );
+
+      const line = await db.orderLine.findFirstOrThrow();
+      expect(line.currencyCode).toBe("JPY");
+      // And the zero-decimal amount survived the boundary, rather than
+      // arriving as the confident zero it used to be.
+      expect(line.unitPrice).toBe(5_000);
+    });
+  });
+
+  it("never disagrees with the order it belongs to", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      await handleOrdersUpsert(
+        {
+          shop: ALPHA,
+          topic: "orders/create",
+          webhookId: "w1",
+          payload: webhookOrder({
+            line_items: [
+              { id: 1, quantity: 2, price: "10.00", title: "Beans" },
+              { id: 2, quantity: 1, price: "4.00", title: "Grinder" },
+            ],
+          }),
+        },
+        async () => fakeAdmin(),
+      );
+
+      const order = await db.order.findFirstOrThrow();
+      const lines = await db.orderLine.findMany();
+
+      expect(lines).toHaveLength(2);
+      for (const line of lines) {
+        expect(line.currencyCode, line.title).toBe(order.currencyCode);
+      }
+    });
+  });
+});
+
 describe("orders/updated", () => {
   it("reflects a refund on the existing row", async () => {
     await installShop(ALPHA);

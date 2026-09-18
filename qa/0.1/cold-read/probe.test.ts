@@ -56,6 +56,7 @@ async function seed(shop: string) {
         ...tenant(),
         orderId: order.id,
         lineItemId: `gid://shopify/LineItem/${shop}`,
+        currencyCode: "USD",
         title: `${shop} secret product`,
         quantity: 1,
         discounts: [],
@@ -216,6 +217,7 @@ describe("P0 candidate: relation traversal", () => {
           ...tenant(),
           orderId: alpha.order.id, // <- another shop's parent
           lineItemId: "gid://shopify/LineItem/cross",
+          currencyCode: "USD",
           title: "planted",
           quantity: 1,
           discounts: [],
@@ -245,6 +247,7 @@ describe("P0 candidate: nested writes", () => {
               {
                 shop: BETA, // a lie the extension should refuse
                 lineItemId: "gid://shopify/LineItem/nested",
+                currencyCode: "USD",
                 title: "nested",
                 quantity: 1,
                 discounts: [],
@@ -430,6 +433,7 @@ describe("foreign keys are not tenant-checked", () => {
             ...tenant(),
             orderId: alpha.order.id,
             lineItemId: "gid://shopify/LineItem/fk",
+            currencyCode: "USD",
             title: "planted by beta",
             quantity: 1,
             discounts: [],

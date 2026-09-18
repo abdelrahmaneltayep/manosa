@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { OrderLineNode } from "~/lib/orders/admin-graphql.server";
 import {
@@ -193,6 +193,36 @@ describe("lines from a webhook payload", () => {
     expect(line?.unitPrice.amount).toBe(333);
     expect(line?.originalTotal.amount).toBe(2_331);
     expect(line?.discountedTotal.amount).toBe(1_516);
+  });
+
+  it("survives a quantity too large to multiply, instead of losing the order", () => {
+    // `readQuantity` accepts any finite non-negative number, so a payload can
+    // carry one whose product with the unit price is past `Number.MAX_SAFE_INTEGER`.
+    // `money()` refuses that, and the refusal used to leave `factsFromWebhook` —
+    // the one function here written so every malformed field fails soft. A
+    // webhook that throws is an order that never mirrors, and Shopify redelivers
+    // it to fail the same way.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const [line] = linesFromWebhook(
+      payload({
+        line_items: [
+          {
+            admin_graphql_api_id: "gid://shopify/LineItem/1",
+            quantity: 1e15,
+            price: "10.00",
+          },
+        ],
+      }),
+      "USD",
+    );
+
+    // Zero, and said out loud — the same bargain `parseShopifyMoney` strikes.
+    expect(line?.originalTotal.amount).toBe(0);
+    expect(line?.originalTotal.currencyCode).toBe("USD");
+    expect(line?.unitPrice.amount).toBe(1_000);
+    expect(error).toHaveBeenCalledOnce();
+    expect(error.mock.calls[0]?.[0]).toContain("not a whole number of minor units");
   });
 
   it("keeps what is left after a return", () => {

@@ -316,6 +316,7 @@ const PROBES: RelationProbe[] = [
           ...tenant(),
           orderId: order.id,
           lineItemId: "gid://shopify/LineItem/1",
+          currencyCode: "USD",
           title: "Beans",
           discounts: JSON_EMPTY,
         },
@@ -336,6 +337,7 @@ const PROBES: RelationProbe[] = [
             create: {
               shop,
               lineItemId: "gid://shopify/LineItem/999",
+              currencyCode: "USD",
               title: "Planted",
               discounts: JSON_EMPTY,
             },

@@ -229,27 +229,27 @@ model Shop {
   /// checkout with no collections at all — so a rule that *excludes* a
   /// collection excludes nothing and the buyer is discounted on exactly the
   /// products the merchant protected. Null means it has never finished.
-  productsBackfilledAt    DateTime?
-  productsBackfillCursor  String?
+  productsBackfilledAt   DateTime?
+  productsBackfillCursor String?
   /// How many products have had their collections published. Shown to the
   /// merchant beside any collection-scoped rule, because a half-finished
   /// backfill is a price that is wrong for a reason they can see.
-  productsPublished       Int       @default(0)
+  productsPublished      Int       @default(0)
 
   // --- Settings (phase 6.4) ------------------------------------------------
   /// Show the retail price struck through beside the wholesale one. Off for
   /// merchants whose trade buyers should never see retail at all.
-  showCompareAt         Boolean @default(true)
+  showCompareAt         Boolean   @default(true)
   /// "Log in to see prices" — a signed-out visitor sees no price and no
   /// add-to-cart, rather than a retail price the buyer would never pay.
-  hidePricesFromGuests  Boolean @default(false)
+  hidePricesFromGuests  Boolean   @default(false)
   /// Whether storefront prices read as tax-inclusive or tax-exclusive. Display
   /// only: Shopify still decides what is charged.
-  taxDisplay            String  @default("excl")
+  taxDisplay            String    @default("excl")
   /// Whether a wholesale price may stack with a Shopify discount code. Off by
   /// default — stacking is how a trade price accidentally becomes a giveaway.
   /// Per-rule `combinable` still applies; this is the store-wide gate.
-  allowShopifyDiscounts Boolean @default(false)
+  allowShopifyDiscounts Boolean   @default(false)
   /// The combination setting as last pushed to the live discount, so a rule
   /// save does not re-state a choice that has not moved.
   combinationsHash      String?
@@ -268,7 +268,7 @@ model Shop {
   /// resubscribing, or merely switching monthly to annual (which the Plans page
   /// invites with a toggle), bought another fortnight free. Set once, never
   /// cleared: a trial is a thing a shop has had, not a thing it is having.
-  trialUsedAt           DateTime?
+  trialUsedAt DateTime?
 
   /// Where the plan-change reconcile got to in this shop's buyers.
   ///
@@ -276,16 +276,16 @@ model Shop {
   /// per buyer who has them. Paged like the backfills, for the same reason: a
   /// request-triggered runner has a timeout, and a sweep that tries to do a
   /// whole customer base in one go finishes none of it.
-  planReconcileCursor   String?
+  planReconcileCursor String?
   /// When the effective plan last reached checkout. Null means a plan change
   /// is still working its way out to the metafields.
-  planReconciledAt      DateTime?
+  planReconciledAt    DateTime?
 
   /// When the discount was granted the PRODUCT discount class. Null on a shop
   /// whose discount was created before the app sent `discountClasses` — that
   /// discount runs on every cart and is permitted to produce nothing, so
   /// `ensureDiscount` repairs it once and stamps this.
-  discountClassesAt     DateTime?
+  discountClassesAt DateTime?
 
   /// The address the app sends from, and the domain it belongs to.
   ///
@@ -628,8 +628,6 @@ model CustomerGroup {
   limits  OrderLimit[]
 
   @@unique([shop, handle])
-  @@index([shop, sortOrder])
-
   /// Referenced by the composite foreign keys in
   /// `20260912090000_tenant_composite_fks`: a child row may only point at a
   /// parent in its own shop, and Postgres enforces it. The relations below
@@ -639,6 +637,7 @@ model CustomerGroup {
   /// reads `pg_constraint` and fails if a constraint is ever regenerated
   /// single-column.
   @@unique([shop, id])
+  @@index([shop, sortOrder])
 }
 
 /// What Mannon knows about a Shopify customer.
@@ -812,8 +811,6 @@ model RegistrationForm {
   events      FormEvent[]
 
   @@unique([shop, slug])
-  @@index([shop, status, updatedAt])
-
   /// Referenced by the composite foreign keys in
   /// `20260912090000_tenant_composite_fks`: a child row may only point at a
   /// parent in its own shop, and Postgres enforces it. The relations below
@@ -823,6 +820,7 @@ model RegistrationForm {
   /// reads `pg_constraint` and fails if a constraint is ever regenerated
   /// single-column.
   @@unique([shop, id])
+  @@index([shop, status, updatedAt])
 }
 
 /// What Claude made of an application. A recommendation, never a decision:
@@ -934,11 +932,6 @@ model FormSubmission {
 
   uploads FormUpload[]
 
-  @@index([shop, status, createdAt])
-  @@index([shop, formId, createdAt])
-  @@index([shop, email])
-  @@index([shop, ip, createdAt])
-
   /// Referenced by the composite foreign keys in
   /// `20260912090000_tenant_composite_fks`: a child row may only point at a
   /// parent in its own shop, and Postgres enforces it. The relations below
@@ -948,6 +941,10 @@ model FormSubmission {
   /// reads `pg_constraint` and fails if a constraint is ever regenerated
   /// single-column.
   @@unique([shop, id])
+  @@index([shop, status, createdAt])
+  @@index([shop, formId, createdAt])
+  @@index([shop, email])
+  @@index([shop, ip, createdAt])
 }
 
 /// A file an applicant attached — a trade licence, a tax certificate.
@@ -1167,11 +1164,6 @@ model Order {
   createdAt DateTime @default(now())
 
   @@unique([shop, orderId])
-  @@index([shop, processedAt])
-  @@index([shop, isWholesale, processedAt])
-  @@index([shop, netTermsDueAt])
-  @@index([shop, customerId])
-
   /// Referenced by the composite foreign keys in
   /// `20260912090000_tenant_composite_fks`: a child row may only point at a
   /// parent in its own shop, and Postgres enforces it. The relations below
@@ -1181,6 +1173,10 @@ model Order {
   /// reads `pg_constraint` and fails if a constraint is ever regenerated
   /// single-column.
   @@unique([shop, id])
+  @@index([shop, processedAt])
+  @@index([shop, isWholesale, processedAt])
+  @@index([shop, netTermsDueAt])
+  @@index([shop, customerId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1250,6 +1246,17 @@ model OrderLine {
   /// one revenue is attributed on; `quantity` alone reported a refunded line
   /// as money the merchant still had.
   currentQuantity Int @default(0)
+
+  /// The currency every amount on this row is in.
+  ///
+  /// Denormalised from the order rather than joined for. Every figure here is
+  /// minor units, so a reader that queries `OrderLine` without first filtering
+  /// orders by currency sums yen into dollars and reports a total no merchant
+  /// ever took. Stating the join requirement in this comment was the previous
+  /// answer, and a comment is not a guard: the column makes the currency
+  /// impossible to lose, and `tests/integration/orders.test.ts` refuses a line
+  /// whose currency is not its order's.
+  currencyCode String
 
   /// Per unit, before any discount.
   unitPrice       Int @default(0)
@@ -1413,10 +1420,6 @@ model Quote {
 
   lines QuoteLine[]
 
-  @@index([shop, status, createdAt])
-  @@index([shop, expiresAt])
-  @@index([shop, customerId])
-
   /// Referenced by the composite foreign keys in
   /// `20260912090000_tenant_composite_fks`: a child row may only point at a
   /// parent in its own shop, and Postgres enforces it. The relations below
@@ -1426,6 +1429,9 @@ model Quote {
   /// reads `pg_constraint` and fails if a constraint is ever regenerated
   /// single-column.
   @@unique([shop, id])
+  @@index([shop, status, createdAt])
+  @@index([shop, expiresAt])
+  @@index([shop, customerId])
 }
 
 /// One line of a quote, at the price it was quoted.
@@ -1458,7 +1464,7 @@ model QuoteLine {
   /// priced. Stored rather than fetched again, for the same reason the price
   /// is: the drift figure compares *today's* rules against the same line, and
   /// a line re-priced with no collections reports a drift that does not exist.
-  collectionIds  String[] @default([])
+  collectionIds String[] @default([])
 
   position Int @default(0)
 
@@ -1708,10 +1714,6 @@ model AgentConversation {
 
   messages AgentMessage[]
 
-  @@index([shop, lastMessageAt])
-  @@index([shop, customerId])
-  @@index([shop, guestKey])
-
   /// Referenced by the composite foreign keys in
   /// `20260912090000_tenant_composite_fks`: a child row may only point at a
   /// parent in its own shop, and Postgres enforces it. The relations below
@@ -1721,6 +1723,9 @@ model AgentConversation {
   /// reads `pg_constraint` and fails if a constraint is ever regenerated
   /// single-column.
   @@unique([shop, id])
+  @@index([shop, lastMessageAt])
+  @@index([shop, customerId])
+  @@index([shop, guestKey])
 }
 
 /// One turn. The buyer's words, or the agent's, or a merchant who took over.
