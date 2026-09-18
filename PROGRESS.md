@@ -1,9 +1,11 @@
 # Progress
 
-Updated: 2026-09-18T16:00:00Z
+Updated: 2026-09-18T20:00:00Z
 Current milestone: 6 — Analytics
-Current task: the pricing P1s from the 1.1/1.2 cold read [done]. The billing
-P1s and every P2 are next.
+Current task: the billing P1s from the 0.3 cold read [done]. Every P2 from all
+three cold reads is next; P2-21 is the sharpest (the margin guard never
+evaluates a cart-value rule, so one selling below cost reports "not
+applicable", which reads as safe).
 
 ## Done
 
@@ -55,6 +57,8 @@ P1s and every P2 are next.
 - [x] **The five billing P0s** from `qa/0.3/COLD-READ.md` — commit `cfc149d` — QA: `qa/billing-p0/REPORT.md` (`docs/adr/0030`). (1) **CSV import was gated nowhere at all** — `assertFeature("csv_import")` appeared nowhere in the codebase, so a Free shop could export every rule it had, have Claude map its columns on the app owner's key, and import; the link rendered on every plan. Now refused in the service layer, in the action before anything is parsed or sent to the model, and in the loader (which covers the two downloads). (2) **Nothing paused when a subscription lapsed.** The gate refused every _admin_ action correctly while three capabilities went on reaching buyers through metafields Shopify evaluates without asking us: over-quota pricing rules kept pricing, order limits kept blocking carts, and net terms kept being **extended** while `recordPayment` refused the merchant the ability to record the money coming in against invoices this app was still issuing — the credit half ran and the collection half stopped. Each publisher now asks what the effective plan allows, and `billing.reconcile` runs them the moment the answer changes, in both directions. Nothing is deleted. (3) **An out-of-order webhook dropped a paying merchant to Free** — an upgrade is exactly when Shopify sends two deliveries whose order is not guaranteed, and a cancellation landing second wrote Free over a merchant charged minutes earlier. (4) **An empty `billing.check` cancelled the plan and erased the grace period** on every Plans page load — and an empty list is not a cancellation: a renamed plan, a flipped test-mode flag or a frozen subscription all produce one. (5) **The $29 card sold the $59 plan's features**, with the table below it marking all six Not included; the hand-written taglines are deleted and each card composes its line from the ladder. Also: the usage meters had returned a hard-coded `0` since 0.3, so the downgrade preview reported no overage for any downgrade, ever.
 
 - [x] **The twelve pricing P1s** from `qa/1.1-1.2/COLD-READ.md` — commit `82b9aa0` — QA: `qa/pricing-p1/REPORT.md` (`docs/adr/0031`). Ten fixed, one built as a feature, one recorded as a deliberate gap. The money one: **the cascade multiplied in float**, so every percentage whose exact answer landed on a half-cent tie landed just below it and `half_up` rounded it down — 13,636 measured wrong answers, every one a cent in the buyer's favour, for ever. The running price is an exact integer fraction now and 39.8M brute-forced cases agree with exact half-up. Also: **"Why this price?" answered with a context checkout never sees** (no groups, no company, no collections, the unit price as the cart subtotal — four of six audience modes wrong while the route said "this answer is the checkout answer"); **schedules were a day early** and the shop's timezone, populated and used by every analytics surface, was used by none of the pricing ones; **a later combinable rule overwrote a negotiated contract price upward**, reporting both as applied; **a rule pricing above the shelf price** was honoured by the preview, the quote and the agent and silently dropped at checkout; **a buyer checking out in EUR lost exactly their contract prices** and kept the percentage discounts, with no field anywhere to price a second currency — there is one now; **a ruleset format bump would have charged every buyer on every store retail** the day anybody made it; the unreadable-rules banner was wired to a hardcoded `0`; "checkout did not update" was a one-shot query parameter; the buyer backfill published only the one configured tag, so a rule targeting `gold` priced its buyers at retail until somebody edited them; and the Function read its own sandbox clock instead of the store's. **Market scoping stays unbuilt on purpose** — the Function knows the buyer's country, not their Market, so a scoped rule would be dropped at checkout while the admin showed it applying; the parser refuses one and a test names the unblocker.
+
+- [x] **The billing P1s** from `qa/0.3/COLD-READ.md` — commit `PENDING` — QA: `qa/billing-p1/REPORT.md`. Eight fixed (P1-1 went with the P0s), one §9 item deferred with the reason stated. **The quota was racy at every call site** — two concurrent creates produced two forms on a one-form plan on nine of ten measured attempts; `createWithinLimit` now takes the count and the insert in one transaction behind a per-shop advisory lock, because READ COMMITTED alone does not stop two transactions counting the same rows. **`syncSubscriptionIfStale` had no caller outside its own tests**, so a lost webhook was never repaired and the storefront surfaces reading that cache kept working for a shop that had cancelled; it runs from the `/app` layout now. **Four capabilities were rendered "Included" and exist nowhere in the codebase** — Growth sold on shipping rules, Agentic on an API and priority support; they are `PLANNED_FEATURES` now, with a third column answer and a note saying the merchant is not paying for them today. **Twenty ✦ call sites reached Claude with no plan gate** (the cold read found two; making `feature` required on `aiGate`/`requireAi` found twenty) — a Free shop could use the segment builder, the rule-describer and the CSV column mapper on the app owner's key. **The 14-day trial could be taken repeatedly** — cancel and resubscribe, or just flip the monthly/annual toggle, and Shopify issued another fortnight. **The trial banner quoted `monthlyPrice` to annual subscribers**, so somebody about to be charged $990 once read "$99 a month". **A webhook during a trial erased the trial from the cache** and a cancellation left a stale period end, which the page prints as the date the merchant keeps their plan until. Plus three §9 items that had been strings with nothing rendering them: one-click resume, the export offered before a downgrade, and the trial-ending email — which did not exist at all, so the only warning was a banner on the page a merchant has no reason to open.
 
 ## Next up
 
@@ -177,6 +181,20 @@ Neither is blocking; both would change product decisions if answered.
 2. **Repository name.** The repo is `manosa`; the product is Mannon throughout.
 
 ## Notes for my next self
+
+- **An optional field on a gate is a list of who remembered.** `aiGate` took an
+  optional `feature` and twenty call sites left it out. The cold read found two
+  by reading; making the field required found all twenty in one `tsc` run. Same
+  lesson as `collectionIds` on `QuoteLineRequest`, and the fix is the same:
+  where a caller must not be allowed to omit something, the type says so.
+- **A transaction is not a lock.** Postgres' default READ COMMITTED lets two
+  transactions count the same rows and both insert, because neither has written
+  anything the other conflicts on. A quota needs `pg_advisory_xact_lock` (or a
+  constraint), and "we wrapped it in a transaction" is not the same claim.
+- **Two writers means two places to stamp.** `trialUsedAt` and the reconcile
+  queue both have to be set by `syncSubscription` _and_ the
+  `app_subscriptions/update` handler. Any fact derived from a plan change needs
+  checking against both, every time.
 
 - **A comment that states a property is not the property.** `money.ts` has said
   "no price arithmetic here touches a floating-point value" since 1.1, three

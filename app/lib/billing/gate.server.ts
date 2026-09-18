@@ -1,3 +1,4 @@
+import { db, type DbTransaction } from "~/db.server";
 import {
   hasFeature,
   limitFor,
@@ -11,6 +12,7 @@ import {
   type LimitKey,
   type PlanKey,
 } from "~/lib/billing/plans";
+import { shopScope } from "~/lib/tenant/shop-context.server";
 
 /**
  * Thrown when a request asks for something the shop's plan does not include.
@@ -99,6 +101,49 @@ export async function assertWithinLimit(
     );
   }
   return current;
+}
+
+/**
+ * Create the (n+1)th thing, with the count and the insert in one transaction.
+ *
+ * `assertWithinLimit` documents the race in its own docstring and could not
+ * close it: `count()` → check → `create()` with the count outside a transaction
+ * leaves two concurrent requests both seeing `limit - 1`. Measured, not
+ * theorised — two concurrent `createForm` calls on a one-form plan, repeated
+ * ten times, produced **two forms on nine of the ten attempts**.
+ *
+ * A transaction alone is not enough either: Postgres' default READ COMMITTED
+ * lets both transactions count the same rows, because neither has written
+ * anything the other can conflict on. So this takes a per-shop advisory lock
+ * first — held until the transaction ends, released automatically however it
+ * ends — which serialises exactly the shops that are racing and nothing else.
+ *
+ * Keyed on shop **and** limit, so a merchant creating a form does not wait
+ * behind one creating a pricing rule.
+ */
+export async function createWithinLimit<T>(
+  limit: LimitKey,
+  count: (tx: DbTransaction) => Promise<number>,
+  create: (tx: DbTransaction) => Promise<T>,
+  entitlements?: Entitlements,
+): Promise<T> {
+  const shop = shopScope.require("createWithinLimit");
+  const current = entitlements ?? (await loadEntitlements());
+
+  // Unlimited plans pay nothing for the lock: there is no count to protect.
+  if (limitFor(current, limit) === null) {
+    return db.$transaction((tx) => create(tx));
+  }
+
+  return db.$transaction(async (tx) => {
+    // `hashtextextended` gives a bigint, which is what the one-argument form
+    // takes. Two shops colliding on the hash would only mean one waits for the
+    // other, never a wrong answer.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${shop}:${limit}`}, 0))`;
+
+    await assertWithinLimit(limit, await count(tx), current);
+    return create(tx);
+  });
 }
 
 /** The cheapest plan that removes a quota. */

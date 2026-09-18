@@ -31,6 +31,15 @@ export interface PlansView {
   pendingChange: PendingChangeView | null;
   /** Set when Shopify rejected the last attempt. */
   error: boolean;
+  /**
+   * Whether the merchant can still take a CSV export.
+   *
+   * Offered beside a downgrade that would put them over quota — §9's "export
+   * your data first" — and only while the export is a thing their current plan
+   * includes, because a link to a page that will redirect them back here is
+   * worse than no link.
+   */
+  canExport: boolean;
 }
 
 export interface PendingChangeView {

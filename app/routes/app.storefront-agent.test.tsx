@@ -41,7 +41,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         requiredPlan: requiredPlan(entitled),
         buyerId: url.searchParams.get("buyer"),
         search: url.searchParams.get("search"),
-        hasKey: (await aiGate("draft")).allowed,
+        hasKey: (await aiGate("draft", { feature: "buyer_agent" })).allowed,
       }),
     });
   });
@@ -61,7 +61,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
     // courtesy, not enforcement. The rehearsal sends merchant-typed text
     // through a real model call, so the permission applies here too — this
     // page was the one ✦ surface the 6.5 sweep missed.
-    await requireAi("draft");
+    await requireAi("draft", { feature: "buyer_agent" });
     if (!entitled) {
       return json({
         view: await rehearsalView({
@@ -69,7 +69,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
           entitled,
           requiredPlan: requiredPlan(entitled),
           buyerId: asked,
-          hasKey: (await aiGate("draft")).allowed,
+          hasKey: (await aiGate("draft", { feature: "buyer_agent" })).allowed,
         }),
       });
     }
@@ -82,7 +82,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
           entitled,
           requiredPlan: requiredPlan(entitled),
           buyerId: asked,
-          hasKey: (await aiGate("draft")).allowed,
+          hasKey: (await aiGate("draft", { feature: "buyer_agent" })).allowed,
         }),
       });
     }
@@ -99,7 +99,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
       entitled,
       requiredPlan: null,
       buyerId: asked,
-      hasKey: (await aiGate("draft")).allowed,
+      hasKey: (await aiGate("draft", { feature: "buyer_agent" })).allowed,
     });
 
     if (!before.buyerId || message.trim() === "") return json({ view: before });
@@ -118,7 +118,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
         entitled,
         requiredPlan: null,
         buyerId: before.buyerId,
-        hasKey: (await aiGate("draft")).allowed,
+        hasKey: (await aiGate("draft", { feature: "buyer_agent" })).allowed,
         cart: turn.cart,
         failure: turn.failure,
       }),

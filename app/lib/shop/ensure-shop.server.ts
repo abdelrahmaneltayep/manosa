@@ -88,6 +88,16 @@ export async function ensureShopRecord(admin?: AdminGraphql) {
       replacePending: true,
     });
 
+    // And the trial warning, which re-queues itself daily and skips every day
+    // the shop is not within three days of a trial ending. Checklist §9 —
+    // without it the only warning was a banner on a page nobody opens until
+    // something has already gone wrong.
+    await enqueueJob({
+      kind: "billing.trial_reminder",
+      runAt: new Date(),
+      replacePending: true,
+    });
+
     // The audit log's twelve-month retention, enforced from install. It used
     // to be scheduled only from `/app/activity` — so a merchant who read the
     // promise in Settings and never opened the log had a table that grew

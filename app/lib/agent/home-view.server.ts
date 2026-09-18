@@ -121,7 +121,8 @@ export async function buildView(
   });
   const entitlements = await loadEntitlements(now);
   const agentAvailable =
-    (await aiGate("draft")).allowed && hasFeature(entitlements, "merchant_agent");
+    (await aiGate("draft", { feature: "merchant_agent" })).allowed &&
+    hasFeature(entitlements, "merchant_agent");
 
   const url = new URL(request.url);
   const requested = Number(url.searchParams.get("period"));

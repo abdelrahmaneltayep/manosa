@@ -6,6 +6,7 @@ import {
   BILLING_INTERVALS,
   featuresAddedBy,
   FEATURE_KEYS,
+  isPlanned,
   PLAN_LIST,
   planHasFeature,
   priceFor,
@@ -17,6 +18,19 @@ import type { UsageMeter } from "~/lib/billing/usage.server";
 
 /** A trial with this long or less gets its own banner, not just a pill. */
 const TRIAL_WARNING_DAYS = 3;
+
+/**
+ * What the merchant is charged when the trial ends.
+ *
+ * From their own interval, not from `monthlyPrice` regardless of it. A trial is
+ * the one moment the number has to be right: it is the last thing a merchant
+ * reads before deciding whether to keep paying.
+ */
+function trialPrice(view: PlansView): number {
+  const plan = PLAN_LIST.find((one) => one.key === view.plan);
+  if (!plan) return 0;
+  return view.interval === "annual" ? plan.annualPrice : plan.monthlyPrice;
+}
 
 /**
  * "A, B and C" — in the reader's own language.
@@ -99,6 +113,26 @@ function StatusBanners({
       <s-banner key="cancelled" tone="info">
         <s-heading>{t("plans.cancelled.heading")}</s-heading>
         <s-paragraph>{t("plans.cancelled.body")}</s-paragraph>
+        {/* Checklist §9: one click back. `plans.cancelled.resume` was written
+            and never rendered, so a merchant whose subscription had ended read
+            "pick a plan and everything comes back" beside no way to do it.
+            Their own previous plan, not an upsell — this is a resume, and
+            offering them something dearer at the moment they lapsed would be
+            the dark pattern. */}
+        {view.plan !== "free" ? (
+          <form method="post">
+            <input type="hidden" name="intent" value="change-plan" />
+            <input type="hidden" name="plan" value={view.plan} />
+            <input
+              type="hidden"
+              name="interval"
+              value={view.interval ?? view.selectedInterval}
+            />
+            <s-button type="submit" variant="primary">
+              {t("plans.cancelled.resume", { plan: planName(view.plan) })}
+            </s-button>
+          </form>
+        ) : null}
       </s-banner>,
     );
   }
@@ -114,10 +148,18 @@ function StatusBanners({
           {t("plans.trial.endingHeading", { count: view.trialDaysRemaining })}
         </s-heading>
         <s-paragraph>
-          {t("plans.trial.endingBody", {
-            plan: planName(view.plan),
-            price: PLAN_LIST.find((plan) => plan.key === view.plan)?.monthlyPrice ?? 0,
-          })}
+          {/* The price they will actually be charged. This passed
+              `monthlyPrice` whatever the interval, so an annual trialist was
+              told "Agentic is $99 a month" and then charged $990, once. */}
+          {t(
+            view.interval === "annual"
+              ? "plans.trial.endingBodyAnnual"
+              : "plans.trial.endingBodyMonthly",
+            {
+              plan: planName(view.plan),
+              price: trialPrice(view),
+            },
+          )}
         </s-paragraph>
       </s-banner>,
     );
@@ -451,6 +493,17 @@ function ChangeConfirmation({
                   })}
                 </s-paragraph>
               ))}
+            {/* Checklist §9: offer the export before taking the plan down.
+                `plans.change.exportFirst` was written and never rendered.
+                Nothing is deleted by a downgrade — over-quota rules stay saved
+                and stop applying — but a merchant about to lose the use of them
+                should be offered a copy, while they still have the export that
+                this same downgrade may take away. */}
+            {view.canExport ? (
+              <s-link href="/app/pricing/csv?download=export">
+                {t("plans.change.exportFirst")}
+              </s-link>
+            ) : null}
           </s-banner>
         ) : null}
 
@@ -508,14 +561,25 @@ function ComparisonTable({
               {PLAN_LIST.map((plan) => (
                 <s-table-cell key={plan.key}>
                   {/* A tick alone is meaningless to a screen reader: the word
-                      is announced, the glyph is decorative. */}
+                      is announced, the glyph is decorative.
+
+                      Three answers, not two. A capability this app has not
+                      built says **Planned** — it used to say "Included", which
+                      sold Growth on wholesale shipping rules and Agentic on an
+                      API, neither of which exists. */}
                   <s-text accessibilityVisibility="exclusive">
-                    {planHasFeature(plan.key, feature)
-                      ? t("plans.compare.included")
-                      : t("plans.compare.notIncluded")}
+                    {!planHasFeature(plan.key, feature)
+                      ? t("plans.compare.notIncluded")
+                      : isPlanned(feature)
+                        ? t("plans.compare.planned")
+                        : t("plans.compare.included")}
                   </s-text>
                   <s-text accessibilityVisibility="hidden">
-                    {planHasFeature(plan.key, feature) ? "✓" : "—"}
+                    {!planHasFeature(plan.key, feature)
+                      ? "—"
+                      : isPlanned(feature)
+                        ? "◷"
+                        : "✓"}
                   </s-text>
                 </s-table-cell>
               ))}
@@ -523,6 +587,10 @@ function ComparisonTable({
           ))}
         </s-table-body>
       </s-table>
+
+      {FEATURE_KEYS.some(isPlanned) ? (
+        <s-paragraph color="subdued">{t("plans.compare.plannedNote")}</s-paragraph>
+      ) : null}
     </s-section>
   );
 }

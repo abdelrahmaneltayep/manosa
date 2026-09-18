@@ -89,7 +89,8 @@
       "pill_other": "{{count}} days left in your trial",
       "endingHeading_one": "Your trial ends in {{count}} day",
       "endingHeading_other": "Your trial ends in {{count}} days",
-      "endingBody": "After that, {{plan}} is ${{price}} a month. Nothing is deleted if you decide not to continue."
+      "endingBodyMonthly": "After that, {{plan}} is ${{price}} a month. Nothing is deleted if you decide not to continue.",
+      "endingBodyAnnual": "After that, {{plan}} is ${{price}} for the year, charged once. Nothing is deleted if you decide not to continue."
     },
     "pastDue": {
       "heading": "We couldn't take the last payment",
@@ -138,7 +139,9 @@
       "heading": "What's in each plan",
       "feature": "Feature",
       "included": "Included",
-      "notIncluded": "Not included"
+      "notIncluded": "Not included",
+      "planned": "Planned",
+      "plannedNote": "Planned means we have not built it yet. It is on the roadmap for the plans marked, and you are not paying for it today."
     },
     "test": {
       "heading": "Test subscription",

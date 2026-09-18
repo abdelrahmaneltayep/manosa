@@ -121,7 +121,7 @@ async function baseView(): Promise<{
 }> {
   const entitlements = await loadEntitlements();
   const entitled = hasFeature(entitlements, "merchant_agent");
-  const keyed = (await aiGate("draft")).allowed;
+  const keyed = (await aiGate("draft", { feature: "merchant_agent" })).allowed;
   const shop = await db.shop.findUnique({
     where: { shop: shopScope.require("setup wizard") },
   });

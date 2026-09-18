@@ -776,3 +776,167 @@ describe("an empty answer from Shopify", () => {
     error.mockRestore();
   });
 });
+
+/**
+ * A trial is a thing a shop has had, not a thing it gets on every request.
+ *
+ * The billing config asks Shopify for fourteen days on all four paid plans and
+ * Shopify issues whatever it is asked for. Nothing recorded that a shop had
+ * already had one — so cancel-and-resubscribe, or simply flipping the
+ * monthly/annual toggle on the Plans page, bought another free fortnight.
+ */
+describe("the free trial", () => {
+  const trialSubscription = () =>
+    subscription({ trialDays: 14, createdAt: "2026-06-10T12:00:00Z" });
+
+  it("is recorded the first time it is seen, and never unrecorded", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(() => syncSubscription(billingReturning([trialSubscription()]), NOW));
+    const first = await inAlpha(() =>
+      db.shop.findUniqueOrThrow({ where: { shop: ALPHA } }),
+    );
+    expect(first.billingStatus).toBe("TRIAL");
+    expect(first.trialUsedAt).toEqual(NOW);
+
+    // The trial ends and the subscription carries on. The stamp stays.
+    const later = new Date("2026-07-15T12:00:00Z");
+    await inAlpha(() => syncSubscription(billingReturning([subscription()]), later));
+    const after = await inAlpha(() =>
+      db.shop.findUniqueOrThrow({ where: { shop: ALPHA } }),
+    );
+    expect(after.billingStatus).toBe("ACTIVE");
+    expect(after.trialUsedAt).toEqual(NOW);
+  });
+
+  it("resets the reminder when a genuinely new trial starts", async () => {
+    await installShop(ALPHA);
+    await inAlpha(() => syncSubscription(billingReturning([trialSubscription()]), NOW));
+    await inAlpha(() =>
+      db.shop.update({ where: { shop: ALPHA }, data: { trialReminderSentAt: NOW } }),
+    );
+
+    // The same trial again — the reminder already sent stands.
+    await inAlpha(() => syncSubscription(billingReturning([trialSubscription()]), NOW));
+    expect(
+      (await inAlpha(() => db.shop.findUniqueOrThrow({ where: { shop: ALPHA } })))
+        .trialReminderSentAt,
+    ).toEqual(NOW);
+
+    // A different trial is a different thing to be warned about.
+    await inAlpha(() =>
+      syncSubscription(
+        billingReturning([
+          subscription({ trialDays: 14, createdAt: "2026-08-01T12:00:00Z" }),
+        ]),
+        new Date("2026-08-02T12:00:00Z"),
+      ),
+    );
+    expect(
+      (await inAlpha(() => db.shop.findUniqueOrThrow({ where: { shop: ALPHA } })))
+        .trialReminderSentAt,
+    ).toBeNull();
+  });
+});
+
+/**
+ * The handler mapped `ACTIVE → ACTIVE` and wrote neither `trialEndsAt` nor
+ * `currentPeriodEnd`, so any delivery during a trial told the cache the trial
+ * was over — no days-left pill, no three-day banner — until a Plans page sync
+ * happened to restore it.
+ */
+describe("a subscription webhook during a trial", () => {
+  const send = (payload: Record<string, unknown>, webhookId = "wh_t1") =>
+    post(
+      signedWebhookRequest({
+        topic: "app_subscriptions/update",
+        shop: ALPHA,
+        webhookId,
+        payload,
+      }),
+    );
+
+  it("keeps the shop in its trial, with the date", async () => {
+    await installShop(ALPHA);
+
+    await send({
+      app_subscription: {
+        admin_graphql_api_id: "gid://shopify/AppSubscription/1",
+        name: "growth-monthly",
+        status: "ACTIVE",
+        created_at: new Date(Date.now() - 86_400_000).toISOString(),
+        trial_days: 14,
+        current_period_end: "2026-12-01T12:00:00Z",
+      },
+    });
+
+    const shop = await inAlpha(() =>
+      db.shop.findUniqueOrThrow({ where: { shop: ALPHA } }),
+    );
+    expect(shop.billingStatus).toBe("TRIAL");
+    expect(shop.trialEndsAt).not.toBeNull();
+    expect(shop.currentPeriodEnd?.toISOString()).toBe("2026-12-01T12:00:00.000Z");
+    // And the trial is recorded, so a second one is not free.
+    expect(shop.trialUsedAt).not.toBeNull();
+  });
+
+  it("does not erase dates a sync already knew, on a payload without them", async () => {
+    await installShop(ALPHA);
+    await inAlpha(() =>
+      syncSubscription(
+        billingReturning([
+          subscription({ trialDays: 14, createdAt: "2026-06-10T12:00:00Z" }),
+        ]),
+        NOW,
+      ),
+    );
+
+    await send({
+      app_subscription: {
+        admin_graphql_api_id: "gid://shopify/AppSubscription/1",
+        name: "growth-monthly",
+        status: "ACTIVE",
+      },
+    });
+
+    const shop = await inAlpha(() =>
+      db.shop.findUniqueOrThrow({ where: { shop: ALPHA } }),
+    );
+    expect(shop.trialEndsAt).not.toBeNull();
+    expect(shop.currentPeriodEnd).not.toBeNull();
+  });
+
+  it("clears the period end on a cancellation rather than leaving a stale date", async () => {
+    await installShop(ALPHA);
+    await send(
+      {
+        app_subscription: {
+          admin_graphql_api_id: "gid://shopify/AppSubscription/1",
+          name: "growth-monthly",
+          status: "ACTIVE",
+          current_period_end: "2026-12-01T12:00:00Z",
+        },
+      },
+      "wh_a",
+    );
+    await send(
+      {
+        app_subscription: {
+          admin_graphql_api_id: "gid://shopify/AppSubscription/1",
+          name: "growth-monthly",
+          status: "CANCELLED",
+        },
+      },
+      "wh_b",
+    );
+
+    // It is what `plans.change.takesEffectAtPeriodEnd` prints as the date the
+    // merchant "keeps" their plan until. A stale one is a promise about a
+    // subscription that has ended.
+    const shop = await inAlpha(() =>
+      db.shop.findUniqueOrThrow({ where: { shop: ALPHA } }),
+    );
+    expect(shop.currentPeriodEnd).toBeNull();
+    expect(shop.trialEndsAt).toBeNull();
+  });
+});

@@ -127,7 +127,7 @@ async function baseView(request: Request): Promise<SegmentsView> {
   const t = translate(await getFixedT(detectLocale(request)));
 
   return {
-    aiAvailable: (await aiGate("draft")).allowed,
+    aiAvailable: (await aiGate("draft", { feature: "merchant_agent" })).allowed,
     sentence: "",
     examples: EXAMPLE_KEYS.map((key) => t(key)),
     failure: null,
@@ -205,7 +205,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     if (intent === "draft") {
       // Enforcement, not the disabled button.
-      await requireAi("draft");
+      await requireAi("draft", { feature: "merchant_agent" });
       const sentence = (form.get("sentence") ?? "").toString().trim();
       if (!sentence) {
         return json({ view: { ...base, failure: "empty" as const } }, { status: 422 });

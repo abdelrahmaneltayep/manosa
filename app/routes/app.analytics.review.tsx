@@ -38,7 +38,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     ]);
 
     const entitled = hasFeature(entitlements, "merchant_agent");
-    const key = (await aiGate("draft")).allowed;
+    const key = (await aiGate("draft", { feature: "merchant_agent" })).allowed;
     const t = translate(await getFixedT(locale));
 
     // Queued here as well as from the charts page, so a merchant who lands

@@ -68,7 +68,7 @@ async function askView(
 ): Promise<AskView> {
   const entitlements = await loadEntitlements();
   const entitled = hasFeature(entitlements, "merchant_agent");
-  const key = (await aiGate("draft")).allowed;
+  const key = (await aiGate("draft", { feature: "merchant_agent" })).allowed;
 
   return {
     available: entitled && key,

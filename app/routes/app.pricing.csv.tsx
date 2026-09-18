@@ -336,7 +336,7 @@ async function mappingView(
     data: { ...tenant(), fileName, content, template },
   });
 
-  const proposed = (await aiGate("draft")).allowed
+  const proposed = (await aiGate("draft", { feature: "csv_import" })).allowed
     ? await mapColumns(doc, template, { actorId })
     : null;
 

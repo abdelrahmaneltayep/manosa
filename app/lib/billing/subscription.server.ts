@@ -220,6 +220,17 @@ export async function syncSubscription(
           : null,
       isTestSubscription: snapshot.isTest,
       billingSyncedAt: now,
+      // Stamped once, the first time a trial is seen, and never cleared. A
+      // trial is a thing a shop has *had*, not a thing it is having — and
+      // without the record, cancelling and resubscribing (or just switching
+      // monthly to annual) bought another free fortnight, every time.
+      ...(snapshot.trialEndsAt && !previous?.trialUsedAt ? { trialUsedAt: now } : {}),
+      // A new trial is a new thing to be warned about. Cleared when one starts
+      // that is not the one already reminded for, so a merchant who trials
+      // twice hears twice and never twice for the same trial.
+      ...(snapshot.trialEndsAt?.getTime() !== previous?.trialEndsAt?.getTime()
+        ? { trialReminderSentAt: null }
+        : {}),
     },
   });
 

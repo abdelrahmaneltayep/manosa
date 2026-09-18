@@ -53,9 +53,25 @@ export interface AiGate {
 
 const ALLOWED: AiGate = { allowed: true, blockedBy: null, requiredPlan: null };
 
+/**
+ * Which plan capability pays for this call.
+ *
+ * **Required**, and that is the fix. It used to be optional, and four of the
+ * eight call sites simply left it out — so a Free shop reached Claude through
+ * the segment builder and the rule-describer on the app owner's key. A default
+ * would have made the same mistake reachable again; an optional field on a
+ * gate is a hand-kept list of who remembered.
+ *
+ * `"none"` is the deliberate escape, and there are two: the storefront Buyer
+ * Agent rehearsal, which is already gated on `buyer_agent` by the route around
+ * it, and the background jobs, which check their own entitlement before they
+ * queue any work. Both say so where they use it.
+ */
+export type AiFeature = Parameters<typeof hasFeature>[1] | "none";
+
 export async function aiGate(
   permission: AiPermission,
-  options: { feature?: Parameters<typeof hasFeature>[1]; now?: Date } = {},
+  options: { feature: AiFeature; now?: Date },
 ): Promise<AiGate> {
   const shop = shopScope.require(`aiGate(${permission})`);
   const record = await db.shop.findUnique({ where: { shop } });
@@ -66,7 +82,7 @@ export async function aiGate(
     return { allowed: false, blockedBy: "permission", requiredPlan: null };
   }
 
-  if (options.feature) {
+  if (options.feature !== "none") {
     const entitlements = await loadEntitlements(options.now);
     if (!hasFeature(entitlements, options.feature)) {
       return { allowed: false, blockedBy: "plan", requiredPlan: null };
@@ -107,7 +123,7 @@ export async function aiPermissions(): Promise<Record<AiPermission, boolean>> {
  */
 export async function requireAi(
   permission: AiPermission,
-  options: { feature?: Parameters<typeof hasFeature>[1]; now?: Date } = {},
+  options: { feature: AiFeature; now?: Date },
 ): Promise<void> {
   const gate = await aiGate(permission, options);
   if (gate.allowed) return;

@@ -41,6 +41,42 @@ export const FEATURE_KEYS = [
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
+/**
+ * Capabilities the plans name and the product does not have yet.
+ *
+ * Every one of these appeared **nowhere** in `app/`, `extensions/` or
+ * `packages/` outside this file, and the comparison table rendered each of them
+ * "Included" against the plans that list them — so Growth was sold on wholesale
+ * shipping rules and Agentic on quote drafting, an API and priority support.
+ * Invariant 4, on the page that takes the money.
+ *
+ * Marked rather than deleted, deliberately. Deleting them would hide a roadmap
+ * a merchant may reasonably want to see; leaving them indistinguishable from
+ * what ships today is selling them. So the table says **Planned** in its own
+ * column and the plan cards leave them out of what a tier "adds", because a
+ * card is a promise about now.
+ *
+ * Moving one to shipped is deleting a line from this set — and the test in
+ * `tests/unit/plans.test.ts` fails if the capability still has no code behind
+ * it, so the line cannot be deleted in hope.
+ */
+export const PLANNED_FEATURES = [
+  "shipping_rules",
+  "quote_assistant",
+  "api_sync",
+  "priority_support",
+  // `pos` occurs once, as an order-source label, and `markets` once, as a rule
+  // targeting dimension. Neither is gated, and neither is a thing a merchant
+  // gets by paying more. Market scoping is unbuilt on purpose — see ADR 0031.
+  "pos",
+  "markets",
+] as const satisfies readonly FeatureKey[];
+
+export type PlannedFeature = (typeof PLANNED_FEATURES)[number];
+
+export const isPlanned = (feature: FeatureKey): boolean =>
+  (PLANNED_FEATURES as readonly FeatureKey[]).includes(feature);
+
 /** Countable things a plan caps. `null` means unlimited. */
 export interface PlanLimits {
   pricingRules: number | null;
@@ -112,7 +148,11 @@ export function featuresAddedBy(plan: PlanKey): readonly FeatureKey[] {
   const ladder = [...PLAN_KEYS].sort((a, b) => PLANS[a].rank - PLANS[b].rank);
   const index = ladder.indexOf(plan);
   const below = index > 0 ? PLANS[ladder[index - 1]!].features : [];
-  return PLANS[plan].features.filter((feature) => !below.includes(feature));
+  return PLANS[plan].features.filter(
+    // A card is a promise about now, so what is planned stays off it. The
+    // comparison table shows those in their own column instead.
+    (feature) => !below.includes(feature) && !isPlanned(feature),
+  );
 }
 
 export const PLANS: Record<PlanKey, PlanDefinition> = {

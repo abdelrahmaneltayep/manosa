@@ -93,7 +93,9 @@ async function buildView(request: Request): Promise<ApplicationsView> {
   // merchant who had switched drafting off got it anyway from a URL.
   const asked =
     editing && template && panelIntent && url.searchParams.get("draft") === "1";
-  const mayDraft = asked ? (await aiGate("draft")).allowed : false;
+  const mayDraft = asked
+    ? (await aiGate("draft", { feature: "merchant_agent" })).allowed
+    : false;
 
   const draft =
     mayDraft && editing && template && panelIntent
@@ -113,7 +115,7 @@ async function buildView(request: Request): Promise<ApplicationsView> {
         })
       : null;
 
-  const screening = await aiGate("screen");
+  const screening = await aiGate("screen", { feature: "merchant_agent" });
 
   const view: ApplicationsView = {
     rows: page.rows.map((row) => ({

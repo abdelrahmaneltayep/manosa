@@ -24,6 +24,9 @@ interface SubscriptionPayload {
     status?: string;
     created_at?: string;
     test?: boolean;
+    /** Shopify sends these; the handler used to read neither. */
+    trial_days?: number;
+    current_period_end?: string;
   };
 }
 
@@ -73,11 +76,21 @@ export async function handleAppSubscriptionsUpdate({ shop, payload }: WebhookCon
   const now = new Date();
   const plan = status === "CANCELLED" ? "free" : (parsed?.plan ?? "free");
 
+  // A delivery arriving during a trial used to erase the trial from the cache:
+  // it mapped `ACTIVE → ACTIVE` and wrote neither `trialEndsAt` nor
+  // `currentPeriodEnd`, so the days-left pill and the three-day banner vanished
+  // until a Plans page sync happened to restore them. The payload carries both.
+  const dates = readDates(subscription, existing, status, now);
+
   await db.shop.update({
     where: { shop },
     data: {
       planKey: plan,
-      billingStatus: status,
+      billingStatus: dates.status,
+      trialEndsAt: dates.trialEndsAt,
+      currentPeriodEnd: dates.currentPeriodEnd,
+      // Stamped once and never cleared — a trial is a thing a shop has had.
+      ...(dates.trialEndsAt && !existing.trialUsedAt ? { trialUsedAt: now } : {}),
       billingInterval: status === "CANCELLED" ? null : (parsed?.interval ?? null),
       subscriptionId: subscription.admin_graphql_api_id ?? existing.subscriptionId,
       subscriptionName: subscription.name,
@@ -97,7 +110,7 @@ export async function handleAppSubscriptionsUpdate({ shop, payload }: WebhookCon
   // metafields Shopify evaluates without asking us, so withdrawing or
   // restoring them is work rather than a flag. Only when something actually
   // moved — a repeated delivery must not queue a sweep per delivery.
-  if (existing.planKey !== plan || existing.billingStatus !== status) {
+  if (existing.planKey !== plan || existing.billingStatus !== dates.status) {
     await enqueueJob({
       kind: "billing.reconcile",
       runAt: now,
@@ -107,8 +120,8 @@ export async function handleAppSubscriptionsUpdate({ shop, payload }: WebhookCon
 
   await recordAudit({
     actor: SYSTEM_ACTOR,
-    action: `billing.${status.toLowerCase()}`,
-    summary: summarise(status, plan, existing.planKey),
+    action: `billing.${dates.status.toLowerCase()}`,
+    summary: summarise(dates.status, plan, existing.planKey),
     subject: { type: "Shop", id: shop },
     metadata: {
       subscriptionName: subscription.name,
@@ -156,6 +169,52 @@ function isStale(
   }
 
   return false;
+}
+
+/**
+ * The trial and period dates this delivery carries, and the status they change.
+ *
+ * `ACTIVE` with a trial still running is `TRIAL`, which this handler could not
+ * express at all — it mapped `ACTIVE → ACTIVE` unconditionally, so any delivery
+ * during a trial told the cache the trial was over.
+ *
+ * On a cancellation the period end is cleared rather than left behind: it is
+ * what `plans.change.takesEffectAtPeriodEnd` prints as the date the merchant
+ * "keeps" their plan until, and a stale one is a promise about a subscription
+ * that has ended.
+ */
+function readDates(
+  subscription: { created_at?: string; trial_days?: number; current_period_end?: string },
+  existing: { trialEndsAt: Date | null; currentPeriodEnd: Date | null },
+  status: BillingStatus,
+  now: Date,
+): { status: BillingStatus; trialEndsAt: Date | null; currentPeriodEnd: Date | null } {
+  if (status === "CANCELLED") {
+    return { status, trialEndsAt: null, currentPeriodEnd: null };
+  }
+
+  const createdAt = subscription.created_at ? new Date(subscription.created_at) : null;
+  const trialDays = subscription.trial_days ?? 0;
+
+  const trialEndsAt =
+    createdAt && !Number.isNaN(createdAt.getTime()) && trialDays > 0
+      ? new Date(createdAt.getTime() + trialDays * 86_400_000)
+      : // A payload without the fields must not erase what a sync already knew.
+        existing.trialEndsAt;
+
+  const periodEnd = subscription.current_period_end
+    ? new Date(subscription.current_period_end)
+    : null;
+
+  return {
+    // The one status this handler could not reach.
+    status: status === "ACTIVE" && trialEndsAt && trialEndsAt > now ? "TRIAL" : status,
+    trialEndsAt,
+    currentPeriodEnd:
+      periodEnd && !Number.isNaN(periodEnd.getTime())
+        ? periodEnd
+        : existing.currentPeriodEnd,
+  };
 }
 
 function mapStatus(shopifyStatus: string): BillingStatus {

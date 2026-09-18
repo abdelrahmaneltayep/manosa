@@ -89,7 +89,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       wholesaleTag: settings.wholesaleTag,
       atRiskDays: AT_RISK_DAYS,
       // ✦ The segment builder needs the AI layer, which lands in phase 4.3.
-      aiAvailable: (await aiGate("draft")).allowed,
+      aiAvailable: (await aiGate("draft", { feature: "merchant_agent" })).allowed,
     };
 
     return json({ view });

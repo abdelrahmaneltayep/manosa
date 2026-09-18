@@ -36,3 +36,12 @@ if (process.env.NODE_ENV !== "production") {
 export const db = withShopScope(prismaBase);
 
 export type Db = typeof db;
+
+/**
+ * The client inside a `db.$transaction(async (tx) => …)`.
+ *
+ * Prisma's own `Prisma.TransactionClient` describes the *unextended* client, so
+ * it does not fit ours — the tenant extension changes the shape. Derived from
+ * the real thing instead, so it cannot drift from it.
+ */
+export type DbTransaction = Parameters<Parameters<Db["$transaction"]>[0]>[0];

@@ -90,7 +90,7 @@ async function baseView(
 ): Promise<PurchaseOrderView> {
   const entitlements = await loadEntitlements();
   const entitled = hasFeature(entitlements, "po_to_order");
-  const keyed = (await aiGate("draft")).allowed;
+  const keyed = (await aiGate("draft", { feature: "po_to_order" })).allowed;
   const { rows, truncated } = await buyers(selectedId);
 
   return {

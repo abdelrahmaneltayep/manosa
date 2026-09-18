@@ -62,16 +62,16 @@ describe("the permission gate", () => {
     await installShop(ALPHA);
 
     await inAlpha(async () => {
-      expect((await aiGate("screen")).allowed).toBe(true);
+      expect((await aiGate("screen", { feature: "none" })).allowed).toBe(true);
 
       // The merchant's own choice comes first, because it is the only one of
       // the three they can change here and now.
       await saveSettings("agent", body({ aiMayDraft: "on" }), { actor: ACTOR });
-      const screen = await aiGate("screen");
+      const screen = await aiGate("screen", { feature: "none" });
       expect(screen.allowed).toBe(false);
       expect(screen.blockedBy).toBe("permission");
       // And the other permission is untouched: they are separate choices.
-      expect((await aiGate("draft")).allowed).toBe(true);
+      expect((await aiGate("draft", { feature: "none" })).allowed).toBe(true);
     });
   });
 
@@ -80,7 +80,7 @@ describe("the permission gate", () => {
 
     await inAlpha(async () => {
       vi.stubEnv("ANTHROPIC_API_KEY", "");
-      const gate = await aiGate("draft");
+      const gate = await aiGate("draft", { feature: "none" });
       expect(gate.allowed).toBe(false);
       expect(gate.blockedBy).toBe("no_key");
 
@@ -88,7 +88,7 @@ describe("the permission gate", () => {
       // hunting for a key they cannot see.
       vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
       await saveSettings("agent", body({ aiMayScreen: "on" }), { actor: ACTOR });
-      expect((await aiGate("draft")).blockedBy).toBe("permission");
+      expect((await aiGate("draft", { feature: "none" })).blockedBy).toBe("permission");
     });
   });
 
@@ -127,7 +127,9 @@ describe("enforcement, not the disabled button", () => {
       await saveSettings("agent", body({}), { actor: ACTOR });
 
       for (const permission of ["screen", "draft"] as const) {
-        const refused = await requireAi(permission).catch((error: unknown) => error);
+        const refused = await requireAi(permission, { feature: "none" }).catch(
+          (error: unknown) => error,
+        );
         expect(refused, permission).toBeInstanceOf(Response);
         if (refused instanceof Response) {
           expect(refused.status, permission).toBe(403);
@@ -157,8 +159,10 @@ describe("enforcement, not the disabled button", () => {
 
     await inAlpha(async () => {
       await saveSettings("agent", body({ aiMayDraft: "on" }), { actor: ACTOR });
-      await expect(requireAi("draft")).resolves.toBeUndefined();
-      await expect(requireAi("screen")).rejects.toBeInstanceOf(Response);
+      await expect(requireAi("draft", { feature: "none" })).resolves.toBeUndefined();
+      await expect(requireAi("screen", { feature: "none" })).rejects.toBeInstanceOf(
+        Response,
+      );
     });
   });
 });

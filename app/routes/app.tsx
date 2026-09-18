@@ -5,13 +5,29 @@ import { boundary } from "@shopify/shopify-app-remix/server";
 
 import { useTranslation } from "react-i18next";
 
+import { syncSubscriptionIfStale } from "~/lib/billing/subscription.server";
 import { ensureShopRecord } from "~/lib/shop/ensure-shop.server";
 import { NAV_PAGES, navHref, navLabelKey } from "~/lib/nav/pages";
 import { withAdmin } from "~/shopify.server";
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
-  withAdmin(request, async ({ admin, session }) => {
+  withAdmin(request, async ({ admin, session, billing }) => {
     const record = await ensureShopRecord(admin);
+
+    // ADR 0005 lists three ways the cached plan stays fresh: the webhook, the
+    // Plans page, and an hourly staleness check on ordinary page loads. There
+    // were two — `syncSubscriptionIfStale` had no caller outside its own tests.
+    //
+    // It matters most where it is least visible: if the
+    // `app_subscriptions/update` delivery is lost, nothing corrects the cache,
+    // and the storefront surfaces that gate correctly — the Buyer Agent, quick
+    // order, the variants block — all read it. A shop that cancelled kept them
+    // until somebody happened to open the Plans page.
+    //
+    // Here rather than per-route: it is one Admin call an hour, on the layout
+    // every admin page already goes through, and it swallows its own failures.
+    await syncSubscriptionIfStale(billing);
+
     return json({
       shop: session.shop,
       paused: record?.pausedAt !== null && record?.pausedAt !== undefined,

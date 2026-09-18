@@ -6,6 +6,8 @@ import {
   billingPlanId,
   featuresAddedBy,
   FEATURE_KEYS,
+  isPlanned,
+  PLANNED_FEATURES,
   lowestPlanWithFeature,
   PAID_BILLING_PLAN_IDS,
   parseBillingPlanId,
@@ -116,13 +118,49 @@ describe("feature placement", () => {
     }
   });
 
-  it("names every capability exactly once across the ladder", () => {
+  it("names every shipped capability exactly once across the ladder", () => {
+    // Planned ones are deliberately off the cards — see the test below, which
+    // checks they are still in the comparison table.
     const named = PLAN_KEYS.flatMap((key) => [...featuresAddedBy(key)]);
-    expect([...named].sort()).toEqual([...FEATURE_KEYS].sort());
+    expect([...named].sort()).toEqual(
+      [...FEATURE_KEYS].filter((feature) => !isPlanned(feature)).sort(),
+    );
   });
 
   it("adds nothing on Free, which is described by its limits", () => {
     expect(featuresAddedBy("free")).toEqual([]);
+  });
+
+  /**
+   * Four capabilities were sold on the comparison table and appear nowhere in
+   * `app/`, `extensions/` or `packages/` — so Growth was rendered "Included"
+   * against wholesale shipping rules and Agentic against an API and priority
+   * support. Invariant 4, on the page that takes the money.
+   */
+  it("never puts a planned capability on a plan's card", () => {
+    // A card is a promise about now. The comparison table shows the roadmap in
+    // its own column instead, with a note saying what Planned means.
+    for (const key of PLAN_KEYS) {
+      for (const feature of featuresAddedBy(key)) {
+        expect(isPlanned(feature), `${key} → ${feature}`).toBe(false);
+      }
+    }
+  });
+
+  it("keeps every planned capability inside the ladder it describes", () => {
+    for (const feature of PLANNED_FEATURES) {
+      expect(FEATURE_KEYS).toContain(feature);
+    }
+  });
+
+  it("still names every capability somewhere across the ladder", () => {
+    // The earlier "exactly once" property, restated: marking something planned
+    // must not make it vanish from the comparison table.
+    const named = PLAN_KEYS.flatMap((key) => [
+      ...featuresAddedBy(key),
+      ...PLANS[key].features.filter(isPlanned),
+    ]);
+    expect(new Set(named)).toEqual(new Set(FEATURE_KEYS));
   });
 });
 

@@ -85,7 +85,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       pausedByPlan: live.pausedByPlan,
       archiveRetentionDays: ARCHIVE_RETENTION_DAYS,
       // ✦ Describe a rule works whenever there is a key to ask with.
-      aiAvailable: (await aiGate("draft")).allowed,
+      aiAvailable: (await aiGate("draft", { feature: "merchant_agent" })).allowed,
       csvEntitled: hasFeature(entitlements, "csv_import"),
     };
 

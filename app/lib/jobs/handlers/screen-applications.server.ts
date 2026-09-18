@@ -39,7 +39,7 @@ export async function screenApplications() {
   // plan does not include it, or there is no key — and `aiGate` is the only
   // place that knows all three. Marked OFF rather than left WAITING: a queue
   // that says "checking…" forever is a worse lie than "not screened".
-  if (!(await aiGate("screen")).allowed) {
+  if (!(await aiGate("screen", { feature: "merchant_agent" })).allowed) {
     await db.formSubmission.updateMany({
       where: { id: { in: waiting.map((row) => row.id) } },
       data: { screening: "OFF", screenedAt: new Date() },

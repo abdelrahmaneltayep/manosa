@@ -8,7 +8,7 @@ import {
   type AuditActor,
 } from "~/lib/audit/record.server";
 import { limitFor, loadEntitlements } from "~/lib/billing/entitlements.server";
-import { assertWithinLimit } from "~/lib/billing/gate.server";
+import { createWithinLimit } from "~/lib/billing/gate.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { toEngineRule, toEngineRules, toRowData } from "~/lib/pricing/rule-mapper.server";
 import { publishRuleset } from "~/lib/pricing/ruleset.server";
@@ -242,41 +242,47 @@ export async function createRule(
 
   // Free allows one rule. Counted here rather than by the caller so the check
   // and the insert cannot drift apart.
-  const activeCount = await db.pricingRule.count({ where: { archivedAt: null } });
-  await assertWithinLimit("pricingRules", activeCount);
+  // Three things in one transaction, and each is there for its own reason.
+  //
+  // The **count** because it used to be taken outside one, so two concurrent
+  // creates on a one-rule plan both saw zero and both succeeded.
+  //
+  // The **audit entry** because an audit failure — an AI-assisted entry with no
+  // approver, most of all — would otherwise leave a live pricing rule nobody is
+  // recorded as having approved.
+  const created = await createWithinLimit(
+    "pricingRules",
+    (tx) => tx.pricingRule.count({ where: { archivedAt: null } }),
+    async (tx) => {
+      const row = await tx.pricingRule.create({
+        data: {
+          ...tenant(),
+          ...toRowData(rule),
+          createdBy: actor.id ?? null,
+          updatedBy: actor.id ?? null,
+        },
+      });
 
-  // The rule and the entry that says who made it commit together. Without the
-  // transaction an audit failure — an AI-assisted entry with no approver, most
-  // of all — leaves a live pricing rule nobody is recorded as having approved.
-  const created = await db.$transaction(async (tx) => {
-    const row = await tx.pricingRule.create({
-      data: {
-        ...tenant(),
-        ...toRowData(rule),
-        createdBy: actor.id ?? null,
-        updatedBy: actor.id ?? null,
-      },
-    });
+      await recordAudit(
+        {
+          actor,
+          action: "pricing_rule.created",
+          summary: provenance
+            ? `Approved Claude's draft and created the pricing rule “${row.name}”.`
+            : `Created the pricing rule “${row.name}”.`,
+          subject: { type: "PricingRule", id: row.id },
+          metadata: { kind: row.kind, status: row.status, ...provenance?.metadata },
+          ai: provenance?.ai ?? null,
+          // Live pricing, changed on Claude's suggestion. The approval is the point.
+          aiAssisted: Boolean(provenance),
+          approval: provenance ? { byId: provenance.approvedById } : null,
+        },
+        tx,
+      );
 
-    await recordAudit(
-      {
-        actor,
-        action: "pricing_rule.created",
-        summary: provenance
-          ? `Approved Claude's draft and created the pricing rule “${row.name}”.`
-          : `Created the pricing rule “${row.name}”.`,
-        subject: { type: "PricingRule", id: row.id },
-        metadata: { kind: row.kind, status: row.status, ...provenance?.metadata },
-        ai: provenance?.ai ?? null,
-        // Live pricing, changed on Claude's suggestion. The approval is the point.
-        aiAssisted: Boolean(provenance),
-        approval: provenance ? { byId: provenance.approvedById } : null,
-      },
-      tx,
-    );
-
-    return row;
-  });
+      return row;
+    },
+  );
 
   if (created.status === "ACTIVE") await republish(admin);
 

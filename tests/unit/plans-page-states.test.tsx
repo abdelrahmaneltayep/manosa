@@ -102,6 +102,7 @@ const baseView = (overrides: Partial<PlansView> = {}): PlansView => ({
   plan: "free",
   effectivePlan: "free",
   status: "NONE",
+  canExport: false,
   interval: null,
   selectedInterval: "monthly",
   trialDaysRemaining: null,

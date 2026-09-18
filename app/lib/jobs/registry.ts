@@ -3,6 +3,7 @@ import { dailyBriefing } from "~/lib/jobs/handlers/daily-briefing.server";
 import { backfillOrders } from "~/lib/jobs/handlers/backfill-orders.server";
 import { backfillProducts } from "~/lib/jobs/handlers/backfill-products.server";
 import { reconcilePlan } from "~/lib/jobs/handlers/reconcile-plan.server";
+import { sendTrialReminder } from "~/lib/jobs/handlers/trial-reminder.server";
 import { monthlyReviewJob } from "~/lib/jobs/handlers/monthly-review.server";
 import { expireQuotes } from "~/lib/jobs/handlers/expire-quotes.server";
 import { decideApplications } from "~/lib/jobs/handlers/decide-applications.server";
@@ -32,6 +33,10 @@ export const JOB_HANDLERS = {
   /// metafield Shopify evaluates without asking us, so a gate on editing them
   /// stopped none of them when a subscription lapsed.
   "billing.reconcile": reconcilePlan,
+  /// Checklist §9: three days before a trial starts charging, in the place a
+  /// merchant will actually see it. The banner on the Plans page was the only
+  /// warning, and it is the page they have no reason to open.
+  "billing.trial_reminder": sendTrialReminder,
   "analytics.monthly_review": monthlyReviewJob,
   "quotes.expire": expireQuotes,
   "forms.decide_applications": decideApplications,

@@ -59,7 +59,7 @@ export async function generateMonthlyReview(
   // The product works with the key unset: the page says the review is off
   // rather than showing an empty card, and the figures are still on the
   // analytics page either way.
-  if (!(await aiGate("draft")).allowed && !deps.messages) {
+  if (!(await aiGate("draft", { feature: "merchant_agent" })).allowed && !deps.messages) {
     return { review: null, skipped: "no_key", failure: null };
   }
 

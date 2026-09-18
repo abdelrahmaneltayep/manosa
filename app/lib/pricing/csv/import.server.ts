@@ -3,7 +3,7 @@ import { serializeRuleset, type PricingRule } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
 import { recordAudit, type AuditActor } from "~/lib/audit/record.server";
-import { assertFeature, assertWithinLimit } from "~/lib/billing/gate.server";
+import { assertFeature, createWithinLimit } from "~/lib/billing/gate.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { toCsv } from "~/lib/pricing/csv/parse";
 import type { ImportPlan } from "~/lib/pricing/csv/plan";
@@ -71,26 +71,32 @@ export async function runImport(
   // this one.
   await assertFeature("csv_import");
 
-  const existingCount = await db.pricingRule.count({ where: { archivedAt: null } });
-  // Checked once for the whole batch: importing 200 rules on a plan that allows
-  // one should fail before the first insert, not after the hundredth.
-  await assertWithinLimit("pricingRules", existingCount + plan.planned.length - 1);
-
   const createdIds: string[] = [];
 
-  await db.$transaction(async (tx) => {
-    for (const item of plan.planned) {
-      const created = await tx.pricingRule.create({
-        data: {
-          ...tenant(),
-          ...toRowData(item.rule),
-          createdBy: options.actor.id ?? null,
-          updatedBy: options.actor.id ?? null,
-        },
-      });
-      createdIds.push(created.id);
-    }
-  });
+  // Counted inside the transaction that inserts, and checked once for the whole
+  // batch: importing 200 rules on a plan that allows one should fail before the
+  // first insert, not after the hundredth. `+ length - 1` because
+  // `assertWithinLimit` asks "may there be one more than `used`".
+  await createWithinLimit(
+    "pricingRules",
+    async (tx) =>
+      (await tx.pricingRule.count({ where: { archivedAt: null } })) +
+      plan.planned.length -
+      1,
+    async (tx) => {
+      for (const item of plan.planned) {
+        const created = await tx.pricingRule.create({
+          data: {
+            ...tenant(),
+            ...toRowData(item.rule),
+            createdBy: options.actor.id ?? null,
+            updatedBy: options.actor.id ?? null,
+          },
+        });
+        createdIds.push(created.id);
+      }
+    },
+  );
 
   const record = await db.ruleImport.create({
     data: {

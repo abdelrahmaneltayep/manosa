@@ -42,7 +42,9 @@ export async function dailyBriefing() {
   }
   // Not just the key: a merchant who switched drafting off should not get a
   // briefing written for them every morning regardless.
-  const gate = await aiGate("draft");
+  // `"none"`: the plan is checked three lines above, and checking it twice
+  // would mean two answers to one question.
+  const gate = await aiGate("draft", { feature: "none" });
   if (!gate.allowed) return { skipped: gate.blockedBy };
 
   const { briefing, failure } = await generateBriefing({

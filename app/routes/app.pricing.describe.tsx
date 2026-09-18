@@ -59,7 +59,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 
     return json({
       view: describeView({
-        aiAvailable: (await aiGate("draft")).allowed,
+        aiAvailable: (await aiGate("draft", { feature: "merchant_agent" })).allowed,
         sentence: "",
         atRuleLimit: await atRuleLimit(new Date()),
         t,
@@ -119,7 +119,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     if (intent === "discard") return redirect("/app/pricing");
 
-    const aiAvailable = (await aiGate("draft")).allowed;
+    const aiAvailable = (await aiGate("draft", { feature: "merchant_agent" })).allowed;
     const currencyCode = await shopCurrency();
     const limited = await atRuleLimit(now);
     const common = { aiAvailable, atRuleLimit: limited, t };
@@ -127,7 +127,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
     if (intent === "draft") {
       // Enforcement, not the disabled button. This route used to compute
       // `aiAvailable` for the view and call the model regardless.
-      await requireAi("draft");
+      await requireAi("draft", { feature: "merchant_agent" });
       const sentence = (form.get("sentence") ?? "").toString().trim();
 
       if (!sentence) {

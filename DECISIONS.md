@@ -1101,3 +1101,65 @@ Rejected: enumerating the shop's currencies from Shopify Markets (not reachable
 from this environment, and it would turn an optional field into a required
 matrix); converting from the base amount at a fetched rate (a price on a
 storefront that no other part of the system agrees with).
+
+## 2026-09-18 — The plan capability is required on every AI gate
+
+`aiGate` and `requireAi` took an optional `feature`, and twenty of the call
+sites left it out — so a Free shop reached Claude through the segment builder,
+the rule-describer and the CSV column mapper, on the app owner's key. The cold
+read found two; the type system found twenty.
+
+It is required now, with `"none"` as a named, commented escape. Rejected: a
+default of `merchant_agent` (it would have silently gated the Buyer Agent
+rehearsal on the wrong plan and made the omission unreachable to review) and
+fixing the two the reviewer named (the same mistake was already made eighteen
+more times, which is what an optional field on a gate produces).
+
+## 2026-09-18 — A quota is held by an advisory lock, not by hope
+
+`count()` → check → `create()` with the count outside a transaction let two
+concurrent requests both see `limit - 1`: two forms on a one-form plan, on nine
+of ten measured attempts.
+
+A transaction alone does not fix it — READ COMMITTED lets both count the same
+rows, because neither has written anything the other conflicts on. So
+`createWithinLimit` takes a per-shop advisory lock first, held to the end of the
+transaction and released however it ends, keyed on shop **and** limit so
+unrelated creates do not queue behind each other.
+
+Rejected: a unique index (Postgres cannot express "at most N live rows per
+shop" without a trigger); `SERIALIZABLE` (it turns the race into a retry the
+caller has to handle, at every call site); optimistic retry on a count check
+(the same race, run twice).
+
+## 2026-09-18 — A capability with no code is marked Planned, not deleted and not sold
+
+Four capabilities on the comparison table appear nowhere outside the plan
+catalogue, and the table rendered them "Included". Two bad options: delete
+them, which hides a roadmap a merchant may want to see, or leave them, which is
+selling them.
+
+Third option taken: `PLANNED_FEATURES`, a third column answer, and a note
+saying what Planned means — including that they are not paying for it today.
+The plan **cards** leave them out entirely, because a card is a promise about
+now and a comparison table is allowed to show what is coming.
+
+Two tests hold it honest in both directions: nothing without code behind it is
+rendered Included, and nothing that has shipped stays marked planned.
+
+## 2026-09-18 — A trial is a thing a shop has had
+
+Shopify issues whatever trial the billing config asks for, every time, and
+nothing recorded that a shop had already taken one — so cancel-and-resubscribe,
+or the monthly/annual toggle the Plans page invites, bought another free
+fortnight, for ever.
+
+`Shop.trialUsedAt` is stamped by both plan writers the first time a trial is
+seen and never cleared; `billing.request` passes `trialDays: 0` once it is set.
+Rejected: refusing the resubscribe (it punishes a merchant for leaving and
+coming back) and detecting it from Shopify's subscription history (the check
+call does not carry cancelled subscriptions, so there is nothing to read).
+
+Separately, `trialReminderSentAt` **is** cleared when a genuinely different
+trial starts, so a merchant who trials twice is warned twice and never twice
+for the same one.

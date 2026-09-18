@@ -2,7 +2,7 @@ import type { Prisma, RegistrationForm } from "@prisma/client";
 
 import { db } from "~/db.server";
 import { recordAudit, type AuditActor } from "~/lib/audit/record.server";
-import { assertWithinLimit } from "~/lib/billing/gate.server";
+import { createWithinLimit } from "~/lib/billing/gate.server";
 import {
   readAppearance,
   readPublish,
@@ -198,24 +198,28 @@ export async function createForm(
   actor: AuditActor,
   template?: string | null,
 ): Promise<RegistrationForm> {
-  // Free allows one form. Counted here rather than by the caller so the check
-  // and the insert cannot drift apart.
-  const existing = await db.registrationForm.count({ where: { archivedAt: null } });
-  await assertWithinLimit("forms", existing);
-
   if (input.status === "LIVE") assertPublishable(input);
 
-  const created = await db.registrationForm.create({
-    data: {
-      ...tenant(),
-      ...jsonData(input),
-      slug: await availableSlug(input.slug ?? input.name),
-      status: input.status ?? "DRAFT",
-      template: template ?? null,
-      createdBy: actor.id ?? null,
-      updatedBy: actor.id ?? null,
-    },
-  });
+  // Free allows one form, and the count is taken in the same transaction as the
+  // insert. It used to be taken outside one: two concurrent creates both saw
+  // zero and both succeeded, on nine of ten measured attempts.
+  const slug = await availableSlug(input.slug ?? input.name);
+  const created = await createWithinLimit(
+    "forms",
+    (tx) => tx.registrationForm.count({ where: { archivedAt: null } }),
+    (tx) =>
+      tx.registrationForm.create({
+        data: {
+          ...tenant(),
+          ...jsonData(input),
+          slug,
+          status: input.status ?? "DRAFT",
+          template: template ?? null,
+          createdBy: actor.id ?? null,
+          updatedBy: actor.id ?? null,
+        },
+      }),
+  );
 
   await recordAudit({
     actor,
@@ -292,27 +296,30 @@ export async function duplicateForm(
   const current = await db.registrationForm.findUnique({ where: { id } });
   if (!current) throw new Response("Form not found", { status: 404 });
 
-  const existing = await db.registrationForm.count({ where: { archivedAt: null } });
-  await assertWithinLimit("forms", existing);
-
-  const copy = await db.registrationForm.create({
-    data: {
-      ...tenant(),
-      name: `${current.name} ${copySuffix}`,
-      slug: await availableSlug(`${current.slug}-copy`),
-      // Never live: two identical forms both accepting applications is a
-      // merchant's copy quietly competing with their original.
-      status: "DRAFT",
-      fields: current.fields as Prisma.InputJsonValue,
-      appearance: current.appearance as Prisma.InputJsonValue,
-      emails: current.emails as Prisma.InputJsonValue,
-      publish: current.publish as Prisma.InputJsonValue,
-      approval: (current.approval ?? DEFAULT_APPROVAL) as Prisma.InputJsonValue,
-      template: current.template,
-      createdBy: actor.id ?? null,
-      updatedBy: actor.id ?? null,
-    },
-  });
+  const copySlug = await availableSlug(`${current.slug}-copy`);
+  const copy = await createWithinLimit(
+    "forms",
+    (tx) => tx.registrationForm.count({ where: { archivedAt: null } }),
+    (tx) =>
+      tx.registrationForm.create({
+        data: {
+          ...tenant(),
+          name: `${current.name} ${copySuffix}`,
+          slug: copySlug,
+          // Never live: two identical forms both accepting applications is a
+          // merchant's copy quietly competing with their original.
+          status: "DRAFT",
+          fields: current.fields as Prisma.InputJsonValue,
+          appearance: current.appearance as Prisma.InputJsonValue,
+          emails: current.emails as Prisma.InputJsonValue,
+          publish: current.publish as Prisma.InputJsonValue,
+          approval: (current.approval ?? DEFAULT_APPROVAL) as Prisma.InputJsonValue,
+          template: current.template,
+          createdBy: actor.id ?? null,
+          updatedBy: actor.id ?? null,
+        },
+      }),
+  );
 
   await recordAudit({
     actor,

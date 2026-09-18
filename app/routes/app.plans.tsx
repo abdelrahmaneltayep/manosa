@@ -5,8 +5,9 @@ import { useLoaderData } from "@remix-run/react";
 
 import { PlansPage } from "~/components/plans/PlansPage";
 import type { PendingChangeView, PlansView } from "~/components/plans/types";
+import { db } from "~/db.server";
 import { recordAudit } from "~/lib/audit/record.server";
-import { loadEntitlements } from "~/lib/billing/entitlements.server";
+import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { planChangeFor } from "~/lib/billing/plan-change";
 import {
   billingPlanId,
@@ -91,6 +92,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       meters,
       pendingChange,
       error: url.searchParams.get("error") === "billing",
+      canExport: hasFeature(entitlements, "csv_import"),
     };
 
     return json({ view });
@@ -129,6 +131,14 @@ export const action = ({ request }: ActionFunctionArgs) =>
 
     const goingDown = PLANS[plan].rank < PLANS[entitlements.effectivePlan].rank;
 
+    // A trial is a thing a shop has had, not a thing it gets on every request.
+    // The billing config asks for fourteen days on all four paid plans and
+    // Shopify issues whatever it is asked for — so cancel-and-resubscribe, or
+    // simply flipping the monthly/annual toggle on this page, bought another
+    // free fortnight, every time, for ever.
+    const record = await db.shop.findUnique({ where: { shop: session.shop } });
+    const trialDays = record?.trialUsedAt ? 0 : PLANS[plan].trialDays;
+
     await recordAudit({
       actor: { type: "STAFF", id: session.id },
       action: goingDown ? "billing.downgrade_requested" : "billing.upgrade_requested",
@@ -141,6 +151,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
       const confirmationUrl = await billing.request({
         plan: billingPlanId(plan, interval),
         isTest,
+        trialDays,
         returnUrl: `${process.env.SHOPIFY_APP_URL}/app/plans`,
         // An upgrade takes effect now and is prorated. A downgrade waits for the
         // end of the period the merchant already paid for — taking away what

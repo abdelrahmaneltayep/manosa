@@ -247,6 +247,23 @@ model Shop {
   /// The combination setting as last pushed to the live discount, so a rule
   /// save does not re-state a choice that has not moved.
   combinationsHash      String?
+  /// When the "your trial ends in three days" email went out.
+  ///
+  /// Checklist §9 asks for it and it did not exist: the warning was a banner on
+  /// the Plans page, which is the one place a merchant whose trial is ending
+  /// may not be looking. Stamped so the reminder is sent once per trial and
+  /// cleared when a new trial starts.
+  trialReminderSentAt   DateTime?
+
+  /// When this shop first took a free trial.
+  ///
+  /// Shopify issues the trial the billing config asks for, every time, and the
+  /// config asked for fourteen days on all four paid plans — so cancelling and
+  /// resubscribing, or merely switching monthly to annual (which the Plans page
+  /// invites with a toggle), bought another fortnight free. Set once, never
+  /// cleared: a trial is a thing a shop has had, not a thing it is having.
+  trialUsedAt           DateTime?
+
   /// Where the plan-change reconcile got to in this shop's buyers.
   ///
   /// A lapse has to reach checkout, and for net terms that is one metafield
