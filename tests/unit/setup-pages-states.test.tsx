@@ -109,6 +109,7 @@ const log = (overrides: Partial<ActivityLogView> = {}): ActivityLogView => ({
   retentionMonths: 12,
   keptFrom: "2025-06-01",
   filtered: false,
+  rangeInverted: false,
   nextHref: "/app/activity?filter=all&before=2026-05-29T09%3A00%3A00.000Z",
   ...overrides,
 });
@@ -148,6 +149,30 @@ describe("the activity log's filters", () => {
     expect(html).toContain("Clear filters");
     expect(html).not.toContain("Nothing has happened yet");
     capture("10-activity-filtered-empty", html);
+  });
+
+  it("says the dates are backwards rather than showing an empty log", () => {
+    // A `from` later than its `to` matches nothing, and an empty page is the
+    // one answer a merchant reads as "there is nothing here" — so the page
+    // never said which zero they were looking at.
+    const html = render(
+      <ActivityPage
+        view={log({
+          rows: [],
+          from: "2026-09-07",
+          to: "2026-09-01",
+          filtered: true,
+          rangeInverted: true,
+          nextHref: null,
+        })}
+      />,
+    );
+
+    expect(html).toContain("the dates are the wrong way round");
+    // Beside the field that is wrong, not only at the bottom of the page.
+    expect(html).toContain("This date is before the one you started from.");
+    expect(html).not.toContain("Nothing of this kind yet");
+    capture("11-activity-inverted-range", html);
   });
 });
 

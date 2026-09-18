@@ -2210,6 +2210,8 @@
     "heading": "Activity",
     "empty": "Activity will appear here — orders, registrations, rule changes.",
     "emptyFiltered": "Nothing of this kind yet. Try another filter.",
+    "rangeInverted": "This date is before the one you started from.",
+    "emptyInverted": "Nothing matches, because the dates are the wrong way round. Swap them and try again.",
     "more": "Show older",
     "filter": {
       "all": "Everything",

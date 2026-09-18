@@ -449,6 +449,20 @@ describe("the settings page", () => {
     capture("17-voice-rejected", html);
   });
 
+  it("guards the pasted message against a misclick on the nav", () => {
+    const html = render(<SettingsPage view={view()} />);
+
+    // Every other form on this page carries the contextual save bar; the one a
+    // merchant pastes a real 4,000-character email into did not, so navigating
+    // away lost it without a word. Two forms, both marked — they are siblings,
+    // not nested (see `Section`'s `after`), which is the distinction 6.4's P0
+    // was about.
+    const addSample = html.indexOf('value="addSample"');
+    expect(addSample).toBeGreaterThan(-1);
+    const openingTag = html.lastIndexOf("<form", addSample);
+    expect(html.slice(openingTag, addSample)).toContain("data-save-bar");
+  });
+
   it("confirms before deleting the merchant's own writing", () => {
     const html = render(
       <SettingsPage view={view({ agent: { ...view().agent, removing: "s1" } })} />,

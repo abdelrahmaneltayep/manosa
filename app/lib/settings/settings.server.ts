@@ -205,14 +205,27 @@ export async function saveSettings(
       ? { senderVerifiedAt: null, senderCheckedAt: null, senderCheckError: null }
       : {};
 
-  await db.shop.update({ where: { shop }, data: { ...data, ...extra } });
+  // One transaction, not two awaits. A setting that changed with no entry
+  // saying who changed it is invariant 5 broken on the page that decides what
+  // the app does — and the merchant would have no way to tell that from a
+  // setting that never changed at all.
+  await db.$transaction(async (tx) => {
+    await tx.shop.update({ where: { shop }, data: { ...data, ...extra } });
 
-  await recordAudit({
-    actor,
-    action: `settings.${section}_updated`,
-    summary: summaryFor(section, Math.max(1, reported.length)),
-    subject: { type: "Shop", id: shop },
-    metadata: { section, changed: changed.map(([key]) => key), at: now.toISOString() },
+    await recordAudit(
+      {
+        actor,
+        action: `settings.${section}_updated`,
+        summary: summaryFor(section, Math.max(1, reported.length)),
+        subject: { type: "Shop", id: shop },
+        metadata: {
+          section,
+          changed: changed.map(([key]) => key),
+          at: now.toISOString(),
+        },
+      },
+      tx,
+    );
   });
 }
 

@@ -504,7 +504,12 @@ function BrandVoice({ view }: { view: SettingsView }) {
       {full ? (
         <s-text color="subdued">{t("settings.agent.voiceFull")}</s-text>
       ) : (
-        <form method="post">
+        /* Its own save bar. This is a form a merchant pastes a real email into
+           — up to 4,000 characters of something they wrote to a buyer — and it
+           is the one form on this page that had no unsaved-changes guard, so a
+           misclick on the nav lost the lot. It sits outside the section form
+           (see `Section`'s `after`), so the two never fold into one. */
+        <form method="post" data-save-bar>
           <input type="hidden" name="section" value="agent" />
           <input type="hidden" name="intent" value="addSample" />
           <s-stack direction="block" gap="small">

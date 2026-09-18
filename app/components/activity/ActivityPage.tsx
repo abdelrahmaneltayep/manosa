@@ -55,7 +55,12 @@ export function ActivityPage({ view }: { view: ActivityLogView }) {
                 label={t("activity.fromLabel")}
                 value={view.from}
               />
-              <s-date-field name="to" label={t("activity.toLabel")} value={view.to} />
+              <s-date-field
+                name="to"
+                label={t("activity.toLabel")}
+                value={view.to}
+                {...(view.rangeInverted ? { error: t("activity.rangeInverted") } : {})}
+              />
               <s-button type="submit">{t("activity.apply")}</s-button>
               {view.filtered ? (
                 <s-link href={`/app/activity?filter=${view.filter}`}>
@@ -68,9 +73,11 @@ export function ActivityPage({ view }: { view: ActivityLogView }) {
           {view.rows.length === 0 ? (
             <s-paragraph>
               {t(
-                view.filtered || view.filter !== "all"
-                  ? "activity.emptyFiltered"
-                  : "activity.empty",
+                view.rangeInverted
+                  ? "activity.emptyInverted"
+                  : view.filtered || view.filter !== "all"
+                    ? "activity.emptyFiltered"
+                    : "activity.empty",
               )}
             </s-paragraph>
           ) : (

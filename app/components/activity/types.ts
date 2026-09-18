@@ -30,6 +30,15 @@ export interface ActivityLogView {
   keptFrom: string;
   /** Whether any filter is set, so "no rows" can say which. */
   filtered: boolean;
+  /**
+   * The dates are the wrong way round.
+   *
+   * A `from` later than its `to` matches nothing, and an empty log is the one
+   * answer a merchant reads as "there is nothing here" rather than as "you
+   * asked the wrong question". Said beside the field, not inferred from a
+   * blank page.
+   */
+  rangeInverted: boolean;
   /** Where "Show more" goes. Null when this is the end of the log. */
   nextHref: string | null;
 }

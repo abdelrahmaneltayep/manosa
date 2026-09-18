@@ -124,6 +124,18 @@ export function readDay(value: string | null | undefined): Date | null {
   return Number.isNaN(at.getTime()) ? null : at;
 }
 
+/**
+ * The dates are the wrong way round.
+ *
+ * `loadActivity` answers an inverted range with zero rows, which is correct and
+ * useless: an empty log is the one answer a merchant reads as "there is nothing
+ * here" rather than as "you asked the wrong question". A range with only one
+ * end is not inverted — it is open.
+ */
+export function rangeIsInverted(from: Date | null, to: Date | null): boolean {
+  return from !== null && to !== null && from.getTime() > to.getTime();
+}
+
 /** Row ids carry their table (`audit:`/`order:`); the cursor wants the id. */
 const rawId = (id: string) => id.slice(id.indexOf(":") + 1);
 

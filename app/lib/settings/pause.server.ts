@@ -56,20 +56,27 @@ export async function pauseApp({
   // still runs, because that is how an incomplete pause is retried.
   const pausedAt = record?.pausedAt ?? now;
   if (!record?.pausedAt) {
-    await db.shop.update({
-      where: { shop },
-      data: { pausedAt, pausePublishedAt: null },
-    });
-
-    // Written before the publish, not after. The publish is the part that can
+    // Written before the publish, not after: the publish is the part that can
     // fail, and an app that is paused with no record of who paused it is
-    // Invariant 5 broken on the most consequential control on the page.
-    await recordAudit({
-      actor,
-      action: "settings.app_paused",
-      summary: "Paused Mannon. Wholesale prices stopped applying; nothing was deleted.",
-      subject: { type: "Shop", id: shop },
-      metadata: { pausedAt: pausedAt.toISOString() },
+    // invariant 5 broken on the most consequential control on the page. In one
+    // transaction with the flag, so the two cannot disagree either.
+    await db.$transaction(async (tx) => {
+      await tx.shop.update({
+        where: { shop },
+        data: { pausedAt, pausePublishedAt: null },
+      });
+
+      await recordAudit(
+        {
+          actor,
+          action: "settings.app_paused",
+          summary:
+            "Paused Mannon. Wholesale prices stopped applying; nothing was deleted.",
+          subject: { type: "Shop", id: shop },
+          metadata: { pausedAt: pausedAt.toISOString() },
+        },
+        tx,
+      );
     });
   }
 
@@ -108,6 +115,11 @@ export async function resumeApp({
     data: { pausedAt: null, pausePublishedAt: null },
   });
 
+  // Resume's two writes are deliberately *not* one transaction: the publish
+  // sits between them, and the entry says how many rules went live — a number
+  // that does not exist until the publish has. Holding a database transaction
+  // open across a call to Shopify would be the worse trade. The compensating
+  // action below is what keeps the pair honest instead.
   try {
     const { rules } = await activeEngineRules();
     if (record.discountId) await publishRuleset(admin, rules);

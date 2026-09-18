@@ -14,6 +14,7 @@ import {
   isActorFilter,
   actionLabel,
   loadActivity,
+  rangeIsInverted,
   readDay,
   recordedActions,
 } from "~/lib/activity/feed.server";
@@ -119,6 +120,9 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
       // is the page claiming a history that does not exist.
       keptFrom: keptFrom(retentionCutoff(now), shop?.installedAt ?? null),
       filtered: actor !== "anyone" || action !== "" || from !== null || to !== null,
+      // Zero rows is the answer either way; only this can tell a merchant
+      // which zero they are looking at.
+      rangeInverted: rangeIsInverted(from, to),
       nextHref: page.nextCursor
         ? `${keeping(url)}${keeping(url).includes("?") ? "&" : "?"}before=${encodeURIComponent(page.nextCursor)}`
         : null,
