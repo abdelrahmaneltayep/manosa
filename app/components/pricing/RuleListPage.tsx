@@ -73,6 +73,18 @@ function Banners({ view }: { view: RuleListView }) {
     );
   }
 
+  if (view.pausedByPlan > 0) {
+    banners.push(
+      <s-banner key="paused-by-plan" tone="warning">
+        <s-heading>
+          {t("pricing.list.pausedByPlanHeading", { count: view.pausedByPlan })}
+        </s-heading>
+        <s-paragraph>{t("pricing.list.pausedByPlanBody")}</s-paragraph>
+        <s-button href="/app/plans">{t("pricing.list.pausedByPlanAction")}</s-button>
+      </s-banner>,
+    );
+  }
+
   if (view.collectionsPending) {
     banners.push(
       <s-banner key="collections" tone="warning">
@@ -163,7 +175,9 @@ function Toolbar({ view }: { view: RuleListView }) {
         <s-link href="?archived=1" {...(view.archived ? { "aria-current": "page" } : {})}>
           {t("pricing.list.tabArchived")}
         </s-link>
-        <s-link href="/app/pricing/csv">{t("pricing.list.csvLink")}</s-link>
+        <s-link href={view.csvEntitled ? "/app/pricing/csv" : "/app/plans?from=import"}>
+          {t("pricing.list.csvLink")}
+        </s-link>
         <s-button
           href="/app/pricing/describe"
           {...whenDisabled(!view.aiAvailable || view.atRuleLimit)}

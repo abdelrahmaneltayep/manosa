@@ -4,6 +4,7 @@ import type { PendingChangeView, PlansView } from "~/components/plans/types";
 import {
   annualSaving,
   BILLING_INTERVALS,
+  featuresAddedBy,
   FEATURE_KEYS,
   PLAN_LIST,
   planHasFeature,
@@ -16,6 +17,25 @@ import type { UsageMeter } from "~/lib/billing/usage.server";
 
 /** A trial with this long or less gets its own banner, not just a pill. */
 const TRIAL_WARNING_DAYS = 3;
+
+/**
+ * "A, B and C" — in the reader's own language.
+ *
+ * `Intl.ListFormat` rather than `join(", ")`: Arabic uses "و" with no comma
+ * before it, and a hand-rolled join gets that wrong in the half of this app's
+ * market that reads it.
+ */
+function listOf(items: string[], locale: string): string {
+  if (items.length === 0) return "";
+  try {
+    return new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(
+      items,
+    );
+  } catch {
+    // An unknown locale tag must not take the Plans page down over a comma.
+    return items.join(", ");
+  }
+}
 
 export function PlansPage({ view }: { view: PlansView }) {
   const { t } = useTranslation();
@@ -252,7 +272,7 @@ function PlanCard({
   view: PlansView;
   planName: (key: PlanKey) => string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isCurrent = plan.key === view.effectivePlan;
   const price = priceFor(plan, view.selectedInterval);
   const saving = annualSaving(plan);
@@ -283,7 +303,17 @@ function PlanCard({
           <s-badge tone="success">{t("plans.annualSaving", { amount: saving })}</s-badge>
         ) : null}
 
-        <s-paragraph color="subdued">{t(`planTagline.${plan.key}`)}</s-paragraph>
+        <s-paragraph color="subdued">
+          {plan.key === "free"
+            ? t("planTagline.free")
+            : // Composed from the ladder, not from a written line. The four
+              // written ones had Pro's and Growth's the wrong way round, so
+              // the card sold what the table below it marked Not included.
+              listOf(
+                featuresAddedBy(plan.key).map((feature) => t(`feature.${feature}`)),
+                i18n.language,
+              )}
+        </s-paragraph>
 
         <s-unordered-list>
           <s-list-item>

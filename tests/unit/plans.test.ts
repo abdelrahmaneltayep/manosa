@@ -4,12 +4,14 @@ import en from "~/i18n/locales/en.json";
 import {
   annualSaving,
   billingPlanId,
+  featuresAddedBy,
   FEATURE_KEYS,
   lowestPlanWithFeature,
   PAID_BILLING_PLAN_IDS,
   parseBillingPlanId,
   PLAN_KEYS,
   PLAN_LIST,
+  planHasFeature,
   PLANS,
   priceFor,
 } from "~/lib/billing/plans";
@@ -85,8 +87,42 @@ describe("feature placement", () => {
     }
     for (const key of PLAN_KEYS) {
       expect(en.planName[key], key).toBeTypeOf("string");
-      expect(en.planTagline[key], key).toBeTypeOf("string");
     }
+    // Only Free has a written tagline — it is about its limits, not its
+    // capabilities. Every paid card composes its line from `featuresAddedBy`,
+    // so there is no second list of capabilities to keep in step with this one.
+    expect(en.planTagline.free).toBeTypeOf("string");
+  });
+
+  /**
+   * The Pro card sold the Growth plan's features.
+   *
+   * `planTagline.pro` read "Net terms, shipping rules, draft orders, POS,
+   * Markets — and the Merchant Agent" while the comparison table immediately
+   * below it marked all six Not included for Pro, because the strings were
+   * written from `docs/spec/pages-features.md`, where the tier names are the
+   * other way round from this catalogue. A merchant who read the card and
+   * subscribed had bought something they were not going to get.
+   *
+   * The card composes from the ladder now. This pins the two properties that
+   * makes true, so a plan card can never again advertise a capability the
+   * plan does not carry.
+   */
+  it("summarises each plan with capabilities that plan actually has", () => {
+    for (const key of PLAN_KEYS) {
+      for (const feature of featuresAddedBy(key)) {
+        expect(planHasFeature(key, feature), `${key} → ${feature}`).toBe(true);
+      }
+    }
+  });
+
+  it("names every capability exactly once across the ladder", () => {
+    const named = PLAN_KEYS.flatMap((key) => [...featuresAddedBy(key)]);
+    expect([...named].sort()).toEqual([...FEATURE_KEYS].sort());
+  });
+
+  it("adds nothing on Free, which is described by its limits", () => {
+    expect(featuresAddedBy("free")).toEqual([]);
   });
 });
 

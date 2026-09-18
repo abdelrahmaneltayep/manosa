@@ -15,6 +15,7 @@ import { db } from "~/db.server";
 import { DEFAULT_LOCALE, isSupportedLocale, type Locale } from "~/i18n/config";
 import { overridesFor, shippedString } from "~/lib/i18n/strings.server";
 import { recordAudit, type AuditActor } from "~/lib/audit/record.server";
+import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { assertFeature } from "~/lib/billing/gate.server";
 import { runMutation, type AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { MANNON_NAMESPACE } from "~/lib/pricing/ruleset.server";
@@ -232,7 +233,14 @@ export async function publishLimits(admin: AdminGraphql) {
   const record = await db.shop.findUnique({ where: { shop } });
   const currencyCode = record?.currencyCode ?? "USD";
 
-  const rows = await listLimits();
+  // A lapsed plan publishes no limits. The Function reads a metafield rather
+  // than calling us, so editing being gated stopped nothing: a merchant who
+  // cancelled kept every minimum and case pack blocking their buyers' carts,
+  // for ever, under copy saying paid features are paused. Nothing is deleted —
+  // the rows stay, and resubscribing republishes them.
+  const entitled = hasFeature(await loadEntitlements(), "order_limits");
+  const rows = entitled ? await listLimits() : [];
+
   const payload = serializeLimits(
     rows.map((row) => toEngineLimit(row, currencyCode)),
     await messageTemplates(),

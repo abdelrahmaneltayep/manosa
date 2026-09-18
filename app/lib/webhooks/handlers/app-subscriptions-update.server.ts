@@ -4,6 +4,7 @@ import { db } from "~/db.server";
 import { recordAudit, SYSTEM_ACTOR } from "~/lib/audit/record.server";
 import { GRACE_PERIOD_DAYS } from "~/lib/billing/entitlements.server";
 import { parseBillingPlanId } from "~/lib/billing/plans";
+import { enqueueJob } from "~/lib/jobs/queue.server";
 import type { WebhookContext } from "~/lib/webhooks/registry";
 
 /**
@@ -53,6 +54,22 @@ export async function handleAppSubscriptionsUpdate({ shop, payload }: WebhookCon
     return;
   }
 
+  // An upgrade is exactly when Shopify emits two deliveries — the new
+  // subscription becoming ACTIVE and the replaced one becoming CANCELLED — and
+  // their order is not guaranteed. This handler used to write whatever the
+  // payload said, so a cancellation landing second dropped a merchant who had
+  // just been charged for Growth to Free, with an audit line saying their pro
+  // subscription had ended. The dispatch layer's idempotency does not help:
+  // both deliveries are genuinely distinct events.
+  if (isStale(subscription, existing)) {
+    console.info(
+      `[billing] ignoring app_subscriptions/update for ${shop}: ` +
+        `"${subscription.name}" (${subscription.status}) is not this shop's current ` +
+        `subscription.`,
+    );
+    return;
+  }
+
   const now = new Date();
   const plan = status === "CANCELLED" ? "free" : (parsed?.plan ?? "free");
 
@@ -76,6 +93,18 @@ export async function handleAppSubscriptionsUpdate({ shop, payload }: WebhookCon
     },
   });
 
+  // Same reason as the sync path: three capabilities reach a buyer through
+  // metafields Shopify evaluates without asking us, so withdrawing or
+  // restoring them is work rather than a flag. Only when something actually
+  // moved — a repeated delivery must not queue a sweep per delivery.
+  if (existing.planKey !== plan || existing.billingStatus !== status) {
+    await enqueueJob({
+      kind: "billing.reconcile",
+      runAt: now,
+      replacePending: true,
+    });
+  }
+
   await recordAudit({
     actor: SYSTEM_ACTOR,
     action: `billing.${status.toLowerCase()}`,
@@ -88,6 +117,45 @@ export async function handleAppSubscriptionsUpdate({ shop, payload }: WebhookCon
       to: plan,
     },
   });
+}
+
+/**
+ * Is this delivery about a subscription the shop has already moved on from?
+ *
+ * Two independent signals, because Shopify sends both and either alone has a
+ * hole:
+ *
+ * - **A different subscription id.** A terminal status for a subscription that
+ *   is not the cached one is the replaced half of a plan change. It says
+ *   nothing about what the shop is on now. (A *non*-terminal status for a
+ *   different id is a new subscription taking over, which is not stale.)
+ * - **An older `created_at`.** When ids are missing — the field is optional in
+ *   the payload — a delivery created before the one we have cached cannot be
+ *   describing a later state than the one we already hold.
+ */
+function isStale(
+  subscription: { admin_graphql_api_id?: string; created_at?: string; status?: string },
+  existing: { subscriptionId: string | null; billingSyncedAt: Date | null },
+): boolean {
+  const id = subscription.admin_graphql_api_id;
+  const terminal = ["CANCELLED", "EXPIRED", "DECLINED"].includes(
+    (subscription.status ?? "").toUpperCase(),
+  );
+
+  if (id && existing.subscriptionId && id !== existing.subscriptionId) {
+    // Only the terminal half. A different id going ACTIVE is the merchant's
+    // new plan and must be applied.
+    return terminal;
+  }
+
+  const createdAt = subscription.created_at ? new Date(subscription.created_at) : null;
+  if (createdAt && existing.billingSyncedAt && createdAt < existing.billingSyncedAt) {
+    // Nothing cached is older than this delivery's subject, so it cannot be
+    // news. Only used to break a tie the id could not.
+    return !id && terminal;
+  }
+
+  return false;
 }
 
 function mapStatus(shopifyStatus: string): BillingStatus {

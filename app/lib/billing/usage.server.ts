@@ -1,3 +1,4 @@
+import { db } from "~/db.server";
 import type { Entitlements } from "~/lib/billing/entitlements.server";
 import { LIMIT_KEYS, type LimitKey } from "~/lib/billing/plans";
 import { shopScope } from "~/lib/tenant/shop-context.server";
@@ -19,20 +20,25 @@ export interface UsageMeter {
 /**
  * Count what the shop is using against its quotas.
  *
- * The counts are zero until the features that produce them exist — pricing
- * rules in phase 1.3, forms in 2.2. Each is a one-line change here when its
- * table lands, and `tests/unit/usage.test.ts` covers the meter arithmetic now
- * so those changes arrive already verified.
+ * These were hard-coded `0` behind `TODO(phase 1.3)` and `TODO(phase 2.2)`
+ * long after both phases shipped, and the zeros were not inert. They made the
+ * meters read "Pricing rules 0 of 1" on a shop with forty rules; they made the
+ * 80% warning and the at-limit banner unable to fire at all; and they fed
+ * `planChangeFor`, so the downgrade preview — the screen whose entire job is
+ * to name what will pause — reported no overage for any downgrade, ever.
+ *
+ * Archived rows do not count, because they are not applying: the same
+ * condition the quota itself is checked against on create.
  */
 async function countUsage(): Promise<Record<LimitKey, number>> {
   shopScope.require("countUsage");
 
-  return {
-    // TODO(phase 1.3): db.pricingRule.count({ where: { archivedAt: null } })
-    pricingRules: 0,
-    // TODO(phase 2.2): db.registrationForm.count({ where: { archivedAt: null } })
-    forms: 0,
-  };
+  const [pricingRules, forms] = await Promise.all([
+    db.pricingRule.count({ where: { archivedAt: null } }),
+    db.registrationForm.count({ where: { archivedAt: null } }),
+  ]);
+
+  return { pricingRules, forms };
 }
 
 export function meterFor(key: LimitKey, used: number, limit: number | null): UsageMeter {

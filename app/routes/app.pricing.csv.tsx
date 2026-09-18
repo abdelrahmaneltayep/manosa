@@ -5,7 +5,7 @@ import { useActionData, useLoaderData } from "@remix-run/react";
 import { CsvPage, type CsvView } from "~/components/pricing/CsvPage";
 import { db } from "~/db.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
-import { isPlanGateError } from "~/lib/billing/gate.server";
+import { assertFeature, isPlanGateError } from "~/lib/billing/gate.server";
 import {
   errorCsv,
   estimatePublishedSize,
@@ -69,6 +69,17 @@ function csvResponse(body: string, fileName: string) {
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
   withAdmin(request, async () => {
+    // The whole page, downloads included. The export is every rule in the shop
+    // at a page size of 5000, which is the paid capability itself rather than a
+    // preview of it — and the templates are the front door to an import this
+    // plan cannot run.
+    try {
+      await assertFeature("csv_import");
+    } catch (error) {
+      if (isPlanGateError(error)) return redirect("/app/plans?from=import");
+      throw error;
+    }
+
     const url = new URL(request.url);
     const download = url.searchParams.get("download");
     const templateParam = url.searchParams.get("template");
@@ -88,6 +99,17 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
 
 export const action = ({ request }: ActionFunctionArgs) =>
   withAdmin(request, async ({ admin, session }) => {
+    // Before anything is parsed, mapped or sent to Claude. `runImport` refuses
+    // too — that is the enforcement the gate docstring means — but by then the
+    // upload has already been read and the model already called on the app
+    // owner's key for a shop that is not paying for it.
+    try {
+      await assertFeature("csv_import");
+    } catch (error) {
+      if (isPlanGateError(error)) return redirect("/app/plans?from=import");
+      throw error;
+    }
+
     const contentType = request.headers.get("content-type") ?? "";
     const t = await getFixedT(detectLocale(request));
     const actor = { type: "STAFF" as const, id: session.id };

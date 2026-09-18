@@ -63,7 +63,15 @@ const brokenAdmin = () => ({
 async function installShop(shop: string) {
   await shopScope.run(shop, async () => {
     await db.shop.create({
-      data: { ...tenant(), planKey: "growth", discountId: "gid://shopify/Discount/1" },
+      // `billingStatus` as well as `planKey`: a row with a plan and no status
+      // is a shop that never subscribed, so its effective plan is Free and its
+      // rules are capped at one. Production always writes both together.
+      data: {
+        ...tenant(),
+        planKey: "growth",
+        billingStatus: "ACTIVE",
+        discountId: "gid://shopify/Discount/1",
+      },
     });
   });
 }

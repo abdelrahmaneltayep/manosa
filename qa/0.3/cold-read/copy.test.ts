@@ -6,14 +6,35 @@
 import { describe, expect, it } from "vitest";
 import en from "~/i18n/locales/en.json";
 import {
+  featuresAddedBy,
   PLANS,
   planHasFeature,
   type FeatureKey,
   type PlanKey,
 } from "~/lib/billing/plans";
 
-type Catalog = { planTagline: Record<PlanKey, string> };
+type Catalog = {
+  planTagline: { free: string };
+  feature: Record<FeatureKey, string>;
+};
 const strings = en as unknown as Catalog;
+
+/**
+ * The line the card shows now.
+ *
+ * FIXED: `planTagline.pro` / `.growth` were hand-written from
+ * `docs/spec/pages-features.md`, where the tier names are the other way round
+ * from `plans.ts` — so the $29 card sold the $59 plan's features while the
+ * table below it marked them Not included. The three paid strings are gone;
+ * the card composes its line from the ladder, so this reads what a merchant
+ * reads.
+ */
+const taglineFor = (plan: PlanKey): string =>
+  plan === "free"
+    ? strings.planTagline.free
+    : featuresAddedBy(plan)
+        .map((feature) => strings.feature[feature])
+        .join(", ");
 
 /** Phrases a merchant would reasonably read as "this plan includes X". */
 const CLAIMS: Array<{ phrase: string; feature: FeatureKey }> = [
@@ -33,7 +54,7 @@ const CLAIMS: Array<{ phrase: string; feature: FeatureKey }> = [
 describe("F7 — a plan card only promises what the plan includes", () => {
   for (const plan of Object.keys(PLANS) as PlanKey[]) {
     it(`${plan} ($${PLANS[plan].monthlyPrice}/mo)`, () => {
-      const tagline = strings.planTagline[plan].toLowerCase();
+      const tagline = taglineFor(plan).toLowerCase();
       const promisedButAbsent = CLAIMS.filter(
         ({ phrase, feature }) =>
           tagline.includes(phrase) && !planHasFeature(plan, feature),
@@ -41,7 +62,7 @@ describe("F7 — a plan card only promises what the plan includes", () => {
 
       expect(
         promisedButAbsent,
-        `planTagline.${plan} sells capabilities the ${plan} plan does not grant: ${strings.planTagline[plan]}`,
+        `the ${plan} card sells capabilities the ${plan} plan does not grant: ${taglineFor(plan)}`,
       ).toEqual([]);
     });
   }

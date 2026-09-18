@@ -93,6 +93,28 @@ const AGENTIC_FEATURES = [
   "priority_support",
 ] as const satisfies readonly FeatureKey[];
 
+/**
+ * What this plan adds over the one below it, in ladder order.
+ *
+ * The card's one-line summary used to be four hand-written strings in the
+ * catalogue, and they were written from `docs/spec/pages-features.md`, where
+ * the tier names are the other way round from this file. So the Pro card read
+ * "$29/month · Net terms, draft orders … and the Merchant Agent" while the
+ * comparison table immediately below it marked all six of those *Not included*
+ * for Pro — and a merchant who read the card and subscribed had bought
+ * something they were not going to get.
+ *
+ * Deriving it is the fix, not correcting the strings: a hand-kept list beside
+ * a real one is a registration step, and this repo has now found six of them.
+ * Move a capability between tiers and both the card and the table move with it.
+ */
+export function featuresAddedBy(plan: PlanKey): readonly FeatureKey[] {
+  const ladder = [...PLAN_KEYS].sort((a, b) => PLANS[a].rank - PLANS[b].rank);
+  const index = ladder.indexOf(plan);
+  const below = index > 0 ? PLANS[ladder[index - 1]!].features : [];
+  return PLANS[plan].features.filter((feature) => !below.includes(feature));
+}
+
 export const PLANS: Record<PlanKey, PlanDefinition> = {
   free: {
     key: "free",

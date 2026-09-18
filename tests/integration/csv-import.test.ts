@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "~/db.server";
+import { FeatureLockedError } from "~/lib/billing/gate.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import {
   errorCsv,
@@ -135,8 +136,17 @@ describe("running an import", () => {
     );
   });
 
-  /** Importing 200 rules on a plan that allows one should fail before insert one. */
-  it("checks the plan quota for the whole batch, not per row", async () => {
+  /**
+   * CSV import is a Pro capability, and this is the only place that was ever
+   * true.
+   *
+   * `assertFeature("csv_import")` appeared nowhere in the codebase. The row
+   * quota below it is a different question and never stood in for this one —
+   * and on the ladder as it stands it cannot stand in for it at all, because
+   * every plan that includes CSV import also removes the rules quota. It is
+   * kept as defence against a future ladder that does not.
+   */
+  it("refuses an import on a plan that does not include it", async () => {
     await installShop(ALPHA, "free");
     const plan = planFor(
       `${HEADER}\nA,percentage,10,all,,wholesale,draft,100,no,,\n` +
@@ -145,9 +155,24 @@ describe("running an import", () => {
 
     await expect(
       inAlpha(() => runImport(plan, { fileName: "f.csv", admin: fakeAdmin(), actor })),
-    ).rejects.toThrow(/pricingRules/);
+    ).rejects.toBeInstanceOf(FeatureLockedError);
 
+    // Before the first insert, not after the hundredth.
     expect(await inAlpha(() => db.pricingRule.count())).toBe(0);
+    expect(await inAlpha(() => db.ruleImport.count())).toBe(0);
+  });
+
+  it("refuses once a paid plan has lapsed, not only on a Free signup", async () => {
+    await installShop(ALPHA, "pro");
+    await inAlpha(() =>
+      db.shop.update({ where: { shop: ALPHA }, data: { billingStatus: "CANCELLED" } }),
+    );
+
+    const plan = planFor(`${HEADER}\nA,percentage,10,all,,wholesale,draft,100,no,,\n`);
+
+    await expect(
+      inAlpha(() => runImport(plan, { fileName: "f.csv", admin: fakeAdmin(), actor })),
+    ).rejects.toBeInstanceOf(FeatureLockedError);
   });
 
   it("writes an audit entry naming the file", async () => {

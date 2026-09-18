@@ -9,7 +9,7 @@ import { db } from "~/db.server";
 import { aiGate } from "~/lib/ai/permissions.server";
 import { detectLocale, getFixedT } from "~/i18n.server";
 import { translate } from "~/i18n/translate";
-import { loadEntitlements } from "~/lib/billing/entitlements.server";
+import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { ruleUsesCollections } from "~/lib/pricing/product-collections.server";
 import { RulesetTooLargeError } from "~/lib/pricing/ruleset.server";
 import {
@@ -47,6 +47,8 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     const limit = entitlements.limits.pricingRules;
     const duplicates = duplicateNamesIn(page.rows);
 
+    const live = await activeEngineRules();
+
     const view: RuleListView = {
       rows: page.rows.map((row) =>
         toRowView(row, { now, duplicateNames: duplicates, t: translate(t) }),
@@ -68,10 +70,14 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
         : null,
       publishError: url.searchParams.get("publishError") as RuleListView["publishError"],
       atRuleLimit: limit !== null && page.totalUnfiltered >= limit,
-      collectionsPending: collectionsPending(shop, (await activeEngineRules()).rules),
+      collectionsPending: collectionsPending(shop, live.rules),
+      // Rules the plan is holding back. Shown here because this is the page
+      // that otherwise lists them all as Active.
+      pausedByPlan: live.pausedByPlan,
       archiveRetentionDays: ARCHIVE_RETENTION_DAYS,
       // ✦ Describe a rule works whenever there is a key to ask with.
       aiAvailable: (await aiGate("draft")).allowed,
+      csvEntitled: hasFeature(entitlements, "csv_import"),
     };
 
     return json({ view });

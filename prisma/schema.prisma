@@ -247,6 +247,17 @@ model Shop {
   /// The combination setting as last pushed to the live discount, so a rule
   /// save does not re-state a choice that has not moved.
   combinationsHash      String?
+  /// Where the plan-change reconcile got to in this shop's buyers.
+  ///
+  /// A lapse has to reach checkout, and for net terms that is one metafield
+  /// per buyer who has them. Paged like the backfills, for the same reason: a
+  /// request-triggered runner has a timeout, and a sweep that tries to do a
+  /// whole customer base in one go finishes none of it.
+  planReconcileCursor   String?
+  /// When the effective plan last reached checkout. Null means a plan change
+  /// is still working its way out to the metafields.
+  planReconciledAt      DateTime?
+
   /// When the discount was granted the PRODUCT discount class. Null on a shop
   /// whose discount was created before the app sent `discountClasses` — that
   /// discount runs on every cart and is permitted to produce nothing, so

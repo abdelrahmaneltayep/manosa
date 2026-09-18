@@ -161,10 +161,7 @@
     "agentic": "Agentic"
   },
   "planTagline": {
-    "free": "One pricing rule and one form — enough to see Mannon work on a real product.",
-    "growth": "Unlimited rules and forms, CSV import, auto-tagging and order limits.",
-    "pro": "Net terms, shipping rules, draft orders, POS, Markets — and the Merchant Agent.",
-    "agentic": "The storefront Buyer Agent, PO-to-order, quote drafting and ERP sync."
+    "free": "One pricing rule and one form — enough to see Mannon work on a real product."
   },
   "feature": {
     "csv_import": "CSV price import and export",
@@ -250,7 +247,11 @@
       "csvLink": "Import or export a CSV",
       "collectionsPendingHeading_one": "{{count}} rule uses collections, and your catalogue is still publishing",
       "collectionsPendingHeading_other": "{{count}} rules use collections, and your catalogue is still publishing",
-      "collectionsPendingBody": "Checkout learns which collections a product is in from Mannon, and we have published {{published}} products so far. Until that finishes, a rule that excludes a collection may not exclude it at checkout. This runs on its own and needs nothing from you."
+      "collectionsPendingBody": "Checkout learns which collections a product is in from Mannon, and we have published {{published}} products so far. Until that finishes, a rule that excludes a collection may not exclude it at checkout. This runs on its own and needs nothing from you.",
+      "pausedByPlanHeading_one": "{{count}} rule is not applying at checkout",
+      "pausedByPlanHeading_other": "{{count}} rules are not applying at checkout",
+      "pausedByPlanBody": "Your plan includes fewer rules than you have. The ones with the highest priority are live; the rest stay saved and start applying again the moment you move back up. Nothing has been deleted.",
+      "pausedByPlanAction": "See plans"
     },
     "status": {
       "draft": "Draft",

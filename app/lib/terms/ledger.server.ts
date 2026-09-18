@@ -5,6 +5,7 @@ import type { Order } from "@prisma/client";
 import { db } from "~/db.server";
 import { orderRevenue } from "~/lib/orders/totals";
 import { recordAudit, type AuditActor } from "~/lib/audit/record.server";
+import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { assertFeature } from "~/lib/billing/gate.server";
 import { publishBuyerFacts } from "~/lib/pricing/buyer-facts.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
@@ -142,14 +143,20 @@ export async function publishBuyerTerms(admin: AdminGraphql, buyer: BuyerWithGro
 
   const ledger = await ledgerFor(buyer, { currencyCode });
 
+  // A lapsed plan extends no terms. The payment customization reads a
+  // metafield, so gating the admin stopped nothing: after a lapse this app kept
+  // offering buyers "pay in 30 days" at checkout while `recordPayment` refused
+  // the merchant the ability to record the money coming in against it. The
+  // credit half ran and the collection half stopped. The ledger is untouched —
+  // every invoice, payment and due date stays exactly where it is.
+  const entitled = hasFeature(await loadEntitlements(), "net_terms");
+
   return publishBuyerFacts(admin, buyer.customerId, {
     tags: buyer.tags,
     groupIds: buyer.groupId ? [buyer.groupId] : [],
-    terms: publishableTerms(
-      ledger.terms,
-      ledger.summary,
-      record?.termsOverdueBlocks ?? true,
-    ),
+    terms: entitled
+      ? publishableTerms(ledger.terms, ledger.summary, record?.termsOverdueBlocks ?? true)
+      : null,
   });
 }
 

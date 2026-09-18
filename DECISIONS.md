@@ -942,3 +942,69 @@ Rejected: normalising at each call site (four call sites, each one an
 opportunity to get it wrong differently); rounding in the parser (the exact
 hidden rounding decision the rule forbids); catching in the Function and
 falling back to retail (that is what it was already doing, silently).
+
+## 2026-09-18 — A lapse is work, not a flag
+
+The gate refused every admin action for a cancelled shop correctly, and three
+capabilities went on reaching buyers anyway: the pricing ruleset, the order
+limits and each buyer's net terms all live in metafields Shopify evaluates
+without asking us. There is no request to refuse.
+
+So each publisher now asks what the effective plan allows, and a
+`billing.reconcile` job runs them at the moment the answer changes — queued by
+both plan writers, in both directions. The alternative, deleting or archiving
+what the plan no longer covers, was rejected outright: Appendix A says features
+pause and data is never deleted, and a merchant who resubscribes has to get
+back exactly what they left.
+
+Which rules survive a truncation is the cascade's own priority order. That is
+not an implementation detail: "deciding shows its working" applies to a pause
+as much as to a price, so the merchant can predict which of their rules stays
+live and the answer is the same on every request. Rejected: newest-first (a
+merchant's oldest rule is usually their most important) and random or
+id-ordered (unpredictable, and unstable across requests).
+
+## 2026-09-18 — An empty answer from Shopify is not a cancellation
+
+`billing.check` filters `activeSubscriptions` by plan name **and** by test
+mode, so an empty list also means a renamed plan, a flipped
+`SHOPIFY_BILLING_TEST_MODE`, or a frozen subscription Shopify omitted. Writing
+Free on it cut off a paying merchant and erased the grace period, on a page
+load, with an audit line announcing a change that had not happened.
+
+`readSubscriptions` answers "known" or "not known, and here is why", and the
+caller decides. An unrecognised plan **name** never downgrades anybody — there
+is a live subscription, we simply cannot read it. An empty list downgrades only
+when there is nothing to lose or the period the merchant paid for has already
+ended.
+
+That second clause is deliberate and is the part worth arguing about. Refusing
+for ever would be safer for the merchant and wrong for the app: a cancellation
+whose webhook was lost would leave a shop on a paid plan indefinitely. A
+`currentPeriodEnd` in the past is the merchant having received what they were
+charged for, which corroborates the empty answer instead of guessing at it.
+
+Rejected: trusting the empty list (the bug); counting consecutive empty answers
+(state to maintain, and it still guesses); refusing unconditionally (gives paid
+features away for ever on a lost webhook).
+
+## 2026-09-18 — A plan card composes its own summary
+
+`planTagline.pro` promised "Net terms, shipping rules, draft orders, POS,
+Markets — and the Merchant Agent" while the comparison table immediately below
+it marked all six Not included for Pro. The four strings were written from
+`docs/spec/pages-features.md`, where the tier names are the other way round
+from `plans.ts`.
+
+Correcting the strings would have fixed today's card and left the mechanism
+that produced it. So the three paid taglines are deleted and each card composes
+its line from `featuresAddedBy(plan)` — the capabilities that tier adds over
+the one below — using the same `feature.*` labels the table uses. Move a
+capability between tiers and both move together.
+
+Free keeps a written line, because Free is described by its limits rather than
+by capabilities it adds.
+
+Rejected: swapping the two strings and adding a test that they agree with the
+ladder. It works, and it leaves a hand-kept list beside a real one — the thing
+this repo has now found seven times.

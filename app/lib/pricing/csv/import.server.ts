@@ -3,7 +3,7 @@ import { serializeRuleset, type PricingRule } from "@mannon/pricing-engine";
 
 import { db } from "~/db.server";
 import { recordAudit, type AuditActor } from "~/lib/audit/record.server";
-import { assertWithinLimit } from "~/lib/billing/gate.server";
+import { assertFeature, assertWithinLimit } from "~/lib/billing/gate.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { toCsv } from "~/lib/pricing/csv/parse";
 import type { ImportPlan } from "~/lib/pricing/csv/plan";
@@ -62,6 +62,14 @@ export async function runImport(
   options: { fileName: string; admin: AdminGraphql; actor: AuditActor },
 ): Promise<ImportResult> {
   const shop = shopScope.require("runImport");
+
+  // CSV import is a Pro capability and this is where that is true. It was
+  // checked nowhere at all: not here, not in the loader, not in the action, and
+  // the link to the page rendered on every plan — so a Free shop could export
+  // every rule it had, have Claude map its columns on the app owner's key, and
+  // import. The row quota below is a different question and never stood in for
+  // this one.
+  await assertFeature("csv_import");
 
   const existingCount = await db.pricingRule.count({ where: { archivedAt: null } });
   // Checked once for the whole batch: importing 200 rules on a plan that allows

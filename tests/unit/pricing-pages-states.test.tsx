@@ -74,6 +74,8 @@ const listView = (overrides: Partial<RuleListView> = {}): RuleListView => ({
   pageSize: 50,
   totalUnfiltered: 0,
   collectionsPending: null,
+  csvEntitled: true,
+  pausedByPlan: 0,
   search: "",
   archived: false,
   sort: "priority",
@@ -282,6 +284,29 @@ describe("rule list states", () => {
     );
 
     expect(html).not.toContain("still publishing");
+  });
+
+  /**
+   * A merchant on a lapsed plan, looking at a list that calls every rule
+   * Active while some of them are not applying to anybody.
+   */
+  it("partial — rules the plan is holding back from checkout", () => {
+    const html = render(
+      <RuleListPage
+        view={listView({
+          rows: [row()],
+          total: 4,
+          totalUnfiltered: 4,
+          pausedByPlan: 3,
+        })}
+      />,
+    );
+    capture("19-list-paused-by-plan", html);
+
+    expect(html).toContain("3 rules are not applying at checkout");
+    // The two halves the Plans page has always promised, said here too.
+    expect(html).toContain("stay saved");
+    expect(html).toContain("Nothing has been deleted");
   });
 
   it("paginates past one page", () => {

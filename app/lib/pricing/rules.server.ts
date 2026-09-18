@@ -7,6 +7,7 @@ import {
   type AiProvenance,
   type AuditActor,
 } from "~/lib/audit/record.server";
+import { limitFor, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { assertWithinLimit } from "~/lib/billing/gate.server";
 import type { AdminGraphql } from "~/lib/pricing/admin-graphql.server";
 import { toEngineRule, toEngineRules, toRowData } from "~/lib/pricing/rule-mapper.server";
@@ -132,22 +133,45 @@ export async function getRule(id: string): Promise<PricingRuleRow | null> {
  * the Danger zone says it means. Nothing is deleted: the rules are still in
  * the table and resuming is one write.
  *
+ * **A lapsed plan has only as many as it pays for**, and for the same reason.
+ * The quota used to be consulted on *create* and nowhere else, so a merchant
+ * who cancelled kept every rule applying at checkout for ever — while the
+ * Plans page told them, in as many words, that over-quota rules "stay saved
+ * and stop applying until you move back up". That sentence is now true.
+ *
+ * Which rules survive is not arbitrary: the order below is the cascade's own
+ * order, so the ones kept are the ones the merchant ranked highest. Same input,
+ * same answer, every time — "deciding shows its working" applies to a pause as
+ * much as to a price.
+ *
  * Shopify's Function is the exception, because it reads a metafield rather
- * than calling us. Pausing republishes an empty ruleset for it; see
- * `app/lib/settings/pause.server.ts`.
+ * than calling us. Pausing republishes an empty ruleset for it, and a plan
+ * change republishes the truncated one; see `app/lib/settings/pause.server.ts`
+ * and `app/lib/jobs/handlers/reconcile-plan.server.ts`.
  */
-export async function activeEngineRules() {
+export interface ActiveRules {
+  rules: PricingRule[];
+  unreadable: { id: string; message: string }[];
+  /** Rules held back by the plan's quota. Zero on every paid plan. */
+  pausedByPlan: number;
+}
+
+export async function activeEngineRules(): Promise<ActiveRules> {
   const shop = await db.shop.findUnique({
     where: { shop: shopScope.require("activeEngineRules") },
     select: { pausedAt: true },
   });
-  if (shop?.pausedAt) return toEngineRules([]);
+  if (shop?.pausedAt) return { ...toEngineRules([]), pausedByPlan: 0 };
 
   const rows = await db.pricingRule.findMany({
     where: { status: "ACTIVE", archivedAt: null },
     orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
   });
-  return toEngineRules(rows);
+
+  const allowed = limitFor(await loadEntitlements(), "pricingRules");
+  const live = allowed === null ? rows : rows.slice(0, Math.max(0, allowed));
+
+  return { ...toEngineRules(live), pausedByPlan: rows.length - live.length };
 }
 
 /**

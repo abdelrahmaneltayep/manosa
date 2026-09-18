@@ -66,6 +66,25 @@ export interface RuleListView {
   /** ✦ Describe a rule needs the AI layer (phase 4.2). */
   aiAvailable: boolean;
   /**
+   * False when the plan does not include CSV import.
+   *
+   * The link rendered unconditionally on every plan, and the page behind it
+   * gated nothing — a Free shop could export every rule it had and import a
+   * file. The server refuses now; this is the courtesy half, so the merchant
+   * lands on the plan that includes it rather than on a redirect.
+   */
+  csvEntitled: boolean;
+  /**
+   * Rules the plan's quota is holding back from checkout.
+   *
+   * The quota used to be checked on create and nowhere else, so a merchant who
+   * cancelled kept every rule pricing while the Plans page told them the
+   * opposite. Now that the sentence is true, this is the page that has to say
+   * it: without it the list shows every rule as **Active** while some of them
+   * are not applying to anybody.
+   */
+  pausedByPlan: number;
+  /**
    * How long an archived rule stays restorable.
    *
    * From `ARCHIVE_RETENTION_DAYS`, not typed into the page: the same number
