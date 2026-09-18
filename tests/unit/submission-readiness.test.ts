@@ -29,7 +29,20 @@ describe("the submission check", () => {
     // puts an ngrok tunnel in the file on the way there, it flips back.
     expect(urls.status).toBe("blocked");
     expect(urls.detail).toContain("localhost");
-    expect(urls.detail).toContain("Set them to the deployed app URL");
+
+    // All five, each named by the key it sits under. Counting them was not
+    // enough: "3 URLs point at localhost" leaves a person hunting the file for
+    // which three, and the App Proxy line is the one nobody thinks to check.
+    expect(urls.detail).toContain("5 of 5");
+    for (const key of ["application_url", "auth.redirect_urls", "app_proxy.url"]) {
+      expect(urls.detail, key).toContain(key);
+    }
+
+    // And the way out, in the words that run it. "Set them to the deployed
+    // app URL" described five hand edits to a file the Shopify CLI rewrites
+    // on every `shopify app dev`.
+    expect(urls.detail).toContain("SHOPIFY_APP_URL");
+    expect(urls.detail).toContain("npm run config:urls");
   });
 
   it("knows the privacy topics are declared under the key Shopify reads", () => {

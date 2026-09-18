@@ -27,7 +27,9 @@
     "shopify": "shopify",
     "jobs:run": "curl -fsS -X POST -H \"Authorization: Bearer $JOBS_RUNNER_TOKEN\" \"${APP_URL:-http://localhost:3000}/internal/jobs/run\"",
     "qa:capture": "QA_CAPTURE=1 vitest run tests/unit/*-states.test.tsx && playwright test tests/e2e/qa-states.spec.ts",
-    "release:check": "vite-node scripts/release-check.ts"
+    "release:check": "vite-node scripts/release-check.ts",
+    "config:urls": "vite-node scripts/app-urls.ts",
+    "deploy": "npm run config:urls && shopify app deploy"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

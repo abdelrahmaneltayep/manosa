@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { appUrlSites, LOCAL_HOST } from "~/lib/release/app-urls";
 import { WEBHOOK_SUBSCRIPTIONS } from "~/lib/webhooks/registry";
 
 /**
@@ -33,22 +34,17 @@ export interface SubmissionCheck {
 
 const root = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
-/** Hosts that mean "this was never deployed". */
-const LOCAL = /localhost|127\.0\.0\.1|\.ngrok|trycloudflare|\.local\b/;
-
 export function submissionReadiness(): SubmissionCheck[] {
   const toml = root("shopify.app.toml");
   const checks: SubmissionCheck[] = [];
 
   // --- Things that are simply wrong until a deploy happens -----------------
 
-  const urls = [...toml.matchAll(/^\s*(?:application_url|url)\s*=\s*"([^"]+)"/gm)].map(
-    (match) => match[1]!,
-  );
-  const redirects = [
-    ...(toml.match(/redirect_urls\s*=\s*\[([^\]]*)\]/)?.[1] ?? "").matchAll(/"([^"]+)"/g),
-  ].map((match) => match[1]!);
-  const local = [...urls, ...redirects].filter((url) => LOCAL.test(url));
+  // Through the same scanner `npm run config:urls` rewrites with, so the check
+  // that reports a wrong URL and the command that fixes it cannot disagree
+  // about which URLs the file has.
+  const sites = appUrlSites(toml);
+  const local = sites.filter((site) => LOCAL_HOST.test(site.url));
 
   checks.push({
     id: "urls",
@@ -56,12 +52,14 @@ export function submissionReadiness(): SubmissionCheck[] {
     status: local.length > 0 ? "blocked" : "ready",
     detail:
       local.length > 0
-        ? `${local.length} URL(s) still point at a development host: ${[
-            ...new Set(local),
+        ? `${local.length} of ${sites.length} URL(s) still point at a development host: ${[
+            ...new Set(local.map((site) => `${site.key} → ${site.url}`)),
           ].join(
-            ", ",
-          )}. Shopify calls these — OAuth, webhooks and the App Proxy — so a submission on this file is rejected before anybody reads the listing. Set them to the deployed app URL.`
-        : "No development hosts in the app configuration.",
+            "; ",
+          )}. Shopify calls these — OAuth, webhooks and the App Proxy — so a submission on this file is rejected before anybody reads the listing. Set SHOPIFY_APP_URL to the deployed origin and run \`npm run config:urls\`, which \`npm run deploy\` does for you.`
+        : `All ${sites.length} point at ${[
+            ...new Set(sites.map((site) => new URL(site.url).origin)),
+          ].join(", ")}.`,
   });
 
   // --- Things this repo can genuinely prove --------------------------------

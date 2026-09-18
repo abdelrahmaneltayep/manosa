@@ -50,7 +50,11 @@ export const ENVIRONMENT: readonly EnvironmentVariable[] = [
   {
     name: "SHOPIFY_APP_URL",
     required: true,
-    breaks: "OAuth redirects and every webhook callback point at nothing.",
+    breaks:
+      "OAuth redirects and every webhook callback point at nothing. It is also " +
+      "what `npm run config:urls` writes into shopify.app.toml, so a deploy " +
+      "from a shell without it configures the app against a host that is not " +
+      "the one serving it.",
   },
   {
     name: "SCOPES",

@@ -1215,3 +1215,32 @@ unsaved-changes guard, and no resource picker; the CSV page has no dropzone;
 the error boundary does not read the catalogue. Deleting those words would
 have hidden the gaps rather than closed them, so each is listed with what is
 missing, and a control that gets built fails the test that says it has not.
+
+## 2026-09-19 — The app's URL is generated, and no hostname was invented
+
+`shopify.app.toml` names the app's origin five times and had said
+`https://localhost:3000` in all five since 0.1. The obvious fix — type the real
+URL in five places — is the wrong one twice over: `automatically_update_urls_on_dev`
+means the Shopify CLI rewrites those keys to its own tunnel on every
+`shopify app dev`, so a hand-typed production URL survives until the next dev
+run; and there is no real URL to type, because nothing has been deployed and
+the repository does not record where this app will live.
+
+So the origin comes from `SHOPIFY_APP_URL` — already required at boot, already
+what the running app uses for these exact callbacks — through
+`npm run config:urls`, which `npm run deploy` runs first. Only the origin is
+replaced, never the paths, because `/auth/callback` and `/proxy` are this app's
+routes and a rewrite that rebuilt each URL could drop one silently. The command
+refuses http, a development host, a URL carrying a path, and a non-URL, writing
+nothing rather than a config that looks deployed and is not. `release:check`
+and the rewriter share one scanner, so they cannot disagree about which URLs
+the file has.
+
+Rejected: **a second committed config** (`shopify.app.production.toml`), which
+is the Shopify CLI's own multi-environment mechanism and is the better answer
+the day there are two environments — today there is one, and it would need the
+hostname that does not exist. Also rejected: **putting a plausible hostname in
+the file to clear the check.** `https://mannon.example.com` would look
+deployed, pass a glance and fail at OAuth on a real merchant's store;
+`localhost` at least announces what it is. The check stays red until somebody
+says where this app lives, which is the honest state.

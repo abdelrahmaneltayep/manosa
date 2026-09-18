@@ -1,6 +1,6 @@
 # Progress
 
-Updated: 2026-09-19T04:05:00Z
+Updated: 2026-09-19T06:20:00Z
 Current milestone: 6 — Analytics
 Current task: the P4s [done] — **there is no P4 severity band**; the two things
 labelled P4 are a MEDIUM finding in 5.3's `P1`–`P17` list and a reproduction
@@ -9,8 +9,11 @@ audited in the same pass and three of 6.1's four were still open. **Every
 finding in every cold read in `qa/` is now closed**, at every severity, with
 the one exception noted against 6.5 #23 below, which cannot be fixed without
 breaking `migrate deploy` and is documented instead. The outstanding blockers are unchanged and are
-listed under _Blocked_ and in the notes below — the localhost URLs in
-`shopify.app.toml`, and everything that needs a real dev store.
+listed under _Blocked_ and in the notes below. The localhost URLs in
+`shopify.app.toml` are now **one variable away** rather than five hand edits:
+set `SHOPIFY_APP_URL` and run `npm run config:urls`. Nobody has said where this
+app will be deployed, so that variable has no production value and
+`release:check` still reports the blocker, correctly.
 
 ## Done
 
@@ -63,6 +66,8 @@ listed under _Blocked_ and in the notes below — the localhost URLs in
 
 - [x] **The twelve pricing P1s** from `qa/1.1-1.2/COLD-READ.md` — commit `82b9aa0` — QA: `qa/pricing-p1/REPORT.md` (`docs/adr/0031`). Ten fixed, one built as a feature, one recorded as a deliberate gap. The money one: **the cascade multiplied in float**, so every percentage whose exact answer landed on a half-cent tie landed just below it and `half_up` rounded it down — 13,636 measured wrong answers, every one a cent in the buyer's favour, for ever. The running price is an exact integer fraction now and 39.8M brute-forced cases agree with exact half-up. Also: **"Why this price?" answered with a context checkout never sees** (no groups, no company, no collections, the unit price as the cart subtotal — four of six audience modes wrong while the route said "this answer is the checkout answer"); **schedules were a day early** and the shop's timezone, populated and used by every analytics surface, was used by none of the pricing ones; **a later combinable rule overwrote a negotiated contract price upward**, reporting both as applied; **a rule pricing above the shelf price** was honoured by the preview, the quote and the agent and silently dropped at checkout; **a buyer checking out in EUR lost exactly their contract prices** and kept the percentage discounts, with no field anywhere to price a second currency — there is one now; **a ruleset format bump would have charged every buyer on every store retail** the day anybody made it; the unreadable-rules banner was wired to a hardcoded `0`; "checkout did not update" was a one-shot query parameter; the buyer backfill published only the one configured tag, so a rule targeting `gold` priced its buyers at retail until somebody edited them; and the Function read its own sandbox clock instead of the store's. **Market scoping stays unbuilt on purpose** — the Function knows the buyer's country, not their Market, so a scoped rule would be dropped at checkout while the admin showed it applying; the parser refuses one and a test names the unblocker.
 
+- [x] **The app's own URL, from one place** — commit `PENDING` — QA: `qa/app-urls/REPORT.md`. The standing blocker since 3.4 was stated as "the URLs are wrong"; that is the symptom. The defect was that the app's origin was **five strings a person had to remember to change together**, in a file the Shopify CLI rewrites on every `shopify app dev` — so anything hand-typed there is one dev run from being replaced by a tunnel URL. `SHOPIFY_APP_URL` already existed, was already required to boot, and was already what the running app used for these exact callbacks; the file was the only thing that disagreed. `npm run config:urls` now writes all five from it (`npm run deploy` runs it first), moving **only the origin** so `/auth/callback` and `/proxy` cannot be dropped, and refusing http, a development host, a URL with a path, or a non-URL — writing nothing rather than a config that looks deployed and is not. `submission.server.ts` and the rewriter share one scanner, so the check that reports a wrong URL and the command that fixes it cannot disagree about which URLs exist. **No hostname was invented**: nothing has been deployed and a plausible-looking wrong origin is worse than an obviously-local one.
+
 - [x] **The P4s — and the LOW/NIT rung below P3** — commit `8ee8492` — QA: `qa/p4/REPORT.md`. There is no P4 band: 5.3's "P4" is a MEDIUM finding in a `P1`–`P17` list (the agent publish action had no plan gate — closed) and 6.1's is a reproduction probe (closed). The rung below P3 was audited instead: all ten of 5.3's LOW/NITs are genuinely closed; three of 6.1's four were not. **`OrderLine` stored money with no currency** — the model header stated the join requirement and the reviewer read that line and filed the finding anyway, because a comment is not a guard; there is a `currencyCode` column now, backfilled, with the `DEFAULT ''` dropped in the same migration so a future insert cannot write an empty one, taken from the currency the amounts were parsed in rather than copied from the order. **The one multiplication was the one unguarded number** — `1e15 × $10.00` threw straight out of `factsFromWebhook`, the one reader written so every malformed field fails soft, and a webhook that throws is an order that never mirrors because Shopify redelivers it to fail the same way; `lineTotal()` fails soft and logs, as `parseShopifyMoney` does. And **`///` comments in TypeScript**, where they reach no hover and no signature — 14 more than the finding named, three of them written by me in earlier rounds of this sequence.
 
 - [x] **The P3s**, across all thirteen cold reads — commit `4066f7d` — QA: `qa/p3/REPORT.md`. Twenty-three of twenty-seven were already closed and were re-derived from the source rather than taken on the word of the line claiming it; four were open. **A setting and the entry that says who changed it were two awaits** (6.4 P3-5) — so was the pause flag, which is the most consequential control on the page; both are one transaction now, while `resumeApp`'s pair stays deliberately split because the publish sits between them and the entry states a number the publish produces. **An inverted date range on the activity log showed an empty page** (6.5 #22), which a merchant reads as a fact about their store rather than about what they typed; it now says so beside the field and in the empty state. **The one form on Settings with no unsaved-changes guard** (6.5 #24) was the one a merchant pastes a 4,000-character email into. And **6.5 #23 cannot be fixed**: editing an applied migration fails `migrate deploy` on every environment that ran it, so `prisma/migrations/README.md` explains instead why `Shop.aiMayAutoApprove` appears in the history and never existed.
@@ -107,8 +112,10 @@ listed under _Blocked_ and in the notes below — the localhost URLs in
   itself is unverified.
 - **The App Proxy has never received a request from Shopify.** The signature
   scheme is implemented from the documented algorithm and tested both ways. The
-  `[app_proxy]` url in `shopify.app.toml` still points at localhost and needs
-  the real app URL at deploy time.
+  `[app_proxy]` url in `shopify.app.toml` points at localhost until
+  `SHOPIFY_APP_URL` is set and `npm run config:urls` runs — it is one of the
+  five URLs that command writes, and no longer something to remember
+  separately.
 - **`shopify app deploy` and the dev-store run** — same unblocker. The discount
   Function has never run at a real checkout, the theme block has never rendered
   in a real theme, and the Admin API mutations are asserted by request shape
@@ -664,10 +671,14 @@ name="value"` never reaches `FormData` in the browser here, because Polaris
   does a direct request. The skill that performs that review says never to work
   from a remembered list, so 7.3 did not produce one. `npm run release:check`
   is the local subset instead, and it is careful to say what it is not.
-- **Every URL in `shopify.app.toml` is still localhost.** This is the one thing
-  standing between the repo and a submission that a person could make.
-  `npm run release:check` exits non-zero on it. It is deliberately **not** part
-  of `npm test`: the blocker is real and outstanding, and a red suite everybody
+- **Every URL in `shopify.app.toml` is still localhost, and the fix is one
+  variable.** `SHOPIFY_APP_URL=https://<host> npm run config:urls` writes all
+  five; `npm run deploy` runs it first. What is outstanding is not the edit but
+  **the hostname** — nobody has said where this app is deployed, and an invented
+  one would be worse than localhost, which at least announces itself.
+  `npm run release:check` exits non-zero while any of the five names a
+  development host and now names each key. It is deliberately **not** part of
+  `npm test`: the blocker is real and outstanding, and a red suite everybody
   learns to ignore is worse than no check.
 - **A test that builds the object under test by hand tests half the system.**
   The golden vectors constructed `PricingRule`s in the test file, so all 41
@@ -719,3 +730,9 @@ name="value"` never reaches `FormData` in the browser here, because Polaris
   not have.** `OrderLine`'s header stated the currency join requirement and the
   cold read filed the finding anyway. The column costs a migration and cannot
   be forgotten; the sentence cost nothing and already had been.
+- **A value that has to be typed in five places will be wrong in at least
+  one.** The app's origin lived in five strings in `shopify.app.toml` and in
+  `SHOPIFY_APP_URL`, which the app already required to boot. The fix was not
+  editing five strings; it was making one command write all five from the
+  variable that already existed. Look for this shape anywhere a config file and
+  an environment variable state the same fact.

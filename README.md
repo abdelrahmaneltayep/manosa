@@ -302,6 +302,33 @@ See `docs/adr/0004-webhooks-and-jobs.md`.
 
 ## Before a deploy is a deploy
 
+### The app's own URL
+
+`shopify.app.toml` names the app's origin in five places: `application_url`,
+three `redirect_urls` and `app_proxy.url`. **Do not edit them by hand.** They
+come from `SHOPIFY_APP_URL`:
+
+```bash
+SHOPIFY_APP_URL=https://<your-host> npm run config:urls   # rewrites the five
+npm run deploy                                            # does that, then deploys
+```
+
+Only the origin moves; `/auth/callback` and `/proxy` are this app's routes and
+stay as written. The command refuses anything that is not a deployable
+origin — http, a development host, or a URL carrying a path — and writes
+nothing rather than a config that looks deployed and is not.
+
+`npm run release:check` blocks while any of the five names a development host,
+and names which key each one is under. That is the check to put in front of a
+deploy.
+
+They say `https://localhost:3000` in the repository because nothing has been
+deployed yet, and because `automatically_update_urls_on_dev = true` means the
+Shopify CLI rewrites them to its own tunnel on every `shopify app dev`. One
+origin in five places stays consistent only if one command writes all five.
+
+### Two health endpoints
+
 Two endpoints answer two different questions, and the second is the one that
 matters after the first week.
 

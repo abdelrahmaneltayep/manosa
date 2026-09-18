@@ -4,6 +4,16 @@
 # `client_id`, then `shopify app dev --store=mannon-9iu9ewku.myshopify.com`.
 # Everything else in this file is checked in on purpose so the app config is
 # reviewable in the diff rather than living only in the Partners dashboard.
+#
+# The five URLs below — `application_url`, the three `redirect_urls` and
+# `app_proxy.url` — are **not edited by hand**. They come from
+# `SHOPIFY_APP_URL` via `npm run config:urls`, which `npm run deploy` runs
+# first; `npm run release:check` blocks while any of them names a development
+# host. They say localhost here because nothing has been deployed yet, and
+# because `automatically_update_urls_on_dev` below means the Shopify CLI
+# rewrites them to its tunnel on every `shopify app dev`. One origin, five
+# places, and the only way they stay consistent is for one command to write
+# all five.
 
 name = "mannon"
 handle = "mannon"
