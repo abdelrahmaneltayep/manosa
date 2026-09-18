@@ -597,6 +597,44 @@ describe("expireQuotes", () => {
     });
   });
 
+  it("stops chasing buyers about a feature the shop no longer pays for", async () => {
+    await installShop(ALPHA);
+
+    await inAlpha(async () => {
+      const stale = await seedDraftedQuote();
+      await sendQuote(stale.id, { actor, now: daysAgo(30) });
+
+      const closing = await createQuote(
+        {
+          customerId: null,
+          email: "soon@acme.test",
+          company: "Soon Ltd",
+          requestNote: null,
+        },
+        { actor },
+      );
+      await draftQuote(closing.id, { lines: [line()] }, { actor, now: NOW });
+      await sendQuote(closing.id, { actor, now: daysAgo(12) });
+
+      // The subscription lapses while both quotes are out with buyers.
+      await db.shop.updateMany({ data: { billingStatus: "CANCELLED" } });
+
+      const result = await expireQuotes({ now: NOW });
+
+      // Expiry still runs: a quote past its date must never read as live.
+      expect(result).toMatchObject({ expired: 1, reminded: 0, remindersPaused: 1 });
+      expect((await getQuote(stale.id))?.status).toBe("EXPIRED");
+      expect(await db.emailMessage.count({ where: { kind: "quote_expiring" } })).toBe(0);
+
+      // And it is paused, not spent: `remindedAt` still says nobody was told,
+      // so resubscribing before the quote runs out still sends the reminder.
+      expect((await getQuote(closing.id))?.remindedAt).toBeNull();
+
+      await db.shop.updateMany({ data: { billingStatus: "ACTIVE" } });
+      expect((await expireQuotes({ now: NOW })).reminded).toBe(1);
+    });
+  });
+
   it("runs just after midnight, not on the hour", () => {
     expect(nextRun(NOW).toISOString()).toBe("2026-09-11T00:05:00.000Z");
   });

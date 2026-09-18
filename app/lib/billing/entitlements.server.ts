@@ -66,12 +66,17 @@ export function entitlementsFor(
   const plan: PlanKey = isPlanKey(shop.planKey) ? shop.planKey : "free";
   const status = shop.billingStatus;
 
-  // A cancelled or expired subscription pauses paid capability but never
-  // deletes anything. A failed charge keeps the plan through the grace window.
-  const lapsed =
-    status === "CANCELLED" ||
-    (status === "PAST_DUE" && shop.graceEndsAt !== null && shop.graceEndsAt <= now) ||
-    status === "NONE";
+  // A failed charge keeps the plan through the grace window — and a `PAST_DUE`
+  // row with no window at all is a lapse, not an indefinite pass. Both writers
+  // set `graceEndsAt` today, but a gate that hands out paid capability for ever
+  // the day one of them stops is a gate that fails open. It reads the absence
+  // as expired instead, which is the answer that can only cost us money.
+  const graceExpired =
+    status === "PAST_DUE" && (shop.graceEndsAt === null || shop.graceEndsAt <= now);
+
+  // A cancelled or lapsed subscription pauses paid capability but never
+  // deletes anything.
+  const lapsed = status === "CANCELLED" || graceExpired || status === "NONE";
 
   const effectivePlan: PlanKey = lapsed ? "free" : plan;
   const definition = PLANS[effectivePlan];

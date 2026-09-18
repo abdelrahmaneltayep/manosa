@@ -274,7 +274,16 @@ A lapsed subscription **pauses** paid capability and never deletes anything:
 what applies now. A failed charge keeps the plan working for a 7-day grace
 period.
 
-Set `SHOPIFY_BILLING_TEST_MODE=true` on development stores so no money moves.
+A **development store** is charged in test mode automatically: Mannon reads
+`shop.plan.partnerDevelopment` with the rest of the shop's facts and stores it,
+so one deployment answers the question per store. Nothing to set, and a
+merchant on a dev store can subscribe — before this, a live-mode deployment
+refused them with the generic "We couldn't start that change".
+
+`SHOPIFY_BILLING_TEST_MODE=true` forces test mode for **every** store in the
+process. It is for working against a store that is not a development store. A
+production process refuses to start with it set, because there it means every
+merchant subscribes for nothing while the app tells them they are paying.
 
 See `docs/adr/0005-billing-and-gating.md`.
 

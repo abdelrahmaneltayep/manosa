@@ -19,6 +19,7 @@ import {
   type PlanKey,
 } from "~/lib/billing/plans";
 import { syncSubscription } from "~/lib/billing/subscription.server";
+import { billingTestMode } from "~/lib/billing/test-mode.server";
 import { loadUsageMeters, usageFor } from "~/lib/billing/usage.server";
 import { LIMIT_KEYS } from "~/lib/billing/plans";
 import { detectLocale } from "~/i18n.server";
@@ -114,7 +115,10 @@ export const action = ({ request }: ActionFunctionArgs) =>
     }
 
     const entitlements = await loadEntitlements();
-    const isTest = process.env.SHOPIFY_BILLING_TEST_MODE === "true";
+    // Per shop, not per deployment: Shopify refuses a live charge on a
+    // development store, and one multi-tenant deployment cannot set an
+    // environment variable per store.
+    const isTest = await billingTestMode();
 
     // Moving to Free means cancelling, not buying something for $0.
     if (plan === "free") {

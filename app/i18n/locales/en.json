@@ -69,19 +69,15 @@
   },
   "plans": {
     "currentPlan": "Current plan",
-    "onPlan": "You're on {{plan}}",
     "free": "Free",
     "perMonth": "${{price}}/month",
     "perYear": "${{price}}/year",
-    "billedMonthly": "Billed monthly",
-    "billedAnnually": "Billed once a year",
     "annualSaving": "Save ${{amount}} a year",
     "interval": {
       "legend": "Billing period",
       "monthly": "Monthly",
       "annual": "Yearly"
     },
-    "choose": "Choose {{plan}}",
     "switchTo": "Switch to {{plan}}",
     "thisIsYourPlan": "This is your plan",
     "trial": {
@@ -104,16 +100,12 @@
     },
     "usage": {
       "heading": "Your usage",
-      "pricingRules": "Pricing rules",
-      "forms": "Registration forms",
-      "unlimited": "Unlimited",
       "ofLimit": "{{used}} of {{limit}}",
       "usedUnlimited": "{{used}} used",
       "nearingHeading": "You're close to your {{item}} limit",
-      "nearingBody": "You've used {{used}} of {{limit}}. {{plan}} makes them unlimited.",
+      "nearingBody": "You've used {{used}} of {{allowance}}. {{plan}} makes them unlimited.",
       "atHeading": "You've reached your {{item}} limit",
-      "atBody": "The {{plan}} plan allows {{limit}}. Upgrade to add more — what you already have keeps working.",
-      "pending": "Counting…"
+      "atBody": "The {{plan}} plan allows {{allowance}}. Upgrade to add more — what you already have keeps working."
     },
     "change": {
       "upgradeHeading": "Switch to {{plan}}",
@@ -126,9 +118,10 @@
       "gaining": "What you gain",
       "losing": "What pauses",
       "nothingDeleted": "Nothing is deleted. Paused features and their data come back if you move up again.",
-      "limitTightens": "{{item}}: {{used}} in use, {{becomes}} allowed",
+      "limitTightens": "{{allowed}} allowed, {{used}} in use",
       "overageHeading": "Some of what you've built will pause",
-      "overageBody": "{{item}}: you have {{overBy}} more than {{plan}} allows. They stay saved and stop applying until you move back up.",
+      "overageBody_one": "You have {{over}} more than {{plan}} allows. It stays saved and stops applying until you move back up.",
+      "overageBody_other": "You have {{over}} more than {{plan}} allows. They stay saved and stop applying until you move back up.",
       "exportFirst": "Export your data first",
       "confirmUpgrade": "Continue to Shopify",
       "confirmDowngrade": "Move to {{plan}}",
@@ -193,11 +186,6 @@
     "unlimitedRules": "Unlimited pricing rules",
     "unlimitedForms": "Unlimited registration forms"
   },
-  "locked": {
-    "heading": "{{feature}} is on {{plan}}",
-    "body": "Your plan doesn't include this yet. Everything else keeps working.",
-    "cta": "See plans"
-  },
   "pricing": {
     "list": {
       "heading": "Pricing rules",
@@ -242,8 +230,6 @@
       "retry": "Try again",
       "archive": "Archive",
       "restore": "Restore",
-      "delete": "Delete permanently",
-      "edit": "Edit",
       "unreadableHeading_one": "{{count}} rule can't be read",
       "unreadableHeading_other": "{{count}} rules can't be read",
       "unreadableBody": "They are not applying at checkout. This is a bug in Mannon, not something you did — contact us and we'll fix it.",
@@ -382,14 +368,6 @@
       "yours": "What you have",
       "overwrite": "Overwrite with mine",
       "keepTheirs": "Keep theirs and reload"
-    },
-    "deleteModal": {
-      "heading": "Delete “{{name}}” permanently?",
-      "body": "This cannot be undone. Type the rule's name to confirm.",
-      "label": "Rule name",
-      "confirm": "Delete permanently",
-      "cancel": "Cancel",
-      "mismatch": "That doesn't match the rule's name."
     },
     "settings": {
       "heading": "Priority and combinations",

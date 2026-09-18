@@ -121,10 +121,36 @@ export class EnvironmentIncomplete extends Error {
  * Throws in production and warns everywhere else. Tests set what they need and
  * would otherwise have to set everything.
  */
+export class BillingTestModeInProduction extends Error {
+  constructor() {
+    super(
+      [
+        "Mannon cannot start. SHOPIFY_BILLING_TEST_MODE is true in production.",
+        "",
+        "A test charge takes no money. With this set, every merchant on this",
+        "deployment subscribes to a paid plan for nothing, and the Plans page",
+        "tells them so in a banner they have no reason to question.",
+        "",
+        "A development store does not need it: Mannon reads",
+        "shop.plan.partnerDevelopment and charges those stores in test mode on",
+        "their own, one store at a time.",
+      ].join("\n"),
+    );
+    this.name = "BillingTestModeInProduction";
+  }
+}
+
 export function assertEnvironment(
   env: string | undefined = process.env.NODE_ENV,
+  billingTestMode: string | undefined = process.env.SHOPIFY_BILLING_TEST_MODE,
 ): EnvironmentReport {
   const report = checkEnvironment();
+
+  // Before the missing-variable check, because this one is not a degradation
+  // either: it is a deployment that bills nobody while saying it does.
+  if (env === "production" && billingTestMode === "true") {
+    throw new BillingTestModeInProduction();
+  }
 
   if (report.missingRequired.length > 0) {
     if (env === "production") throw new EnvironmentIncomplete(report.missingRequired);

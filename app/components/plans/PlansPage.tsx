@@ -10,11 +10,27 @@ import {
   PLAN_LIST,
   planHasFeature,
   priceFor,
+  type LimitKey,
   type PlanDefinition,
   type PlanInterval,
   type PlanKey,
 } from "~/lib/billing/plans";
+import type { TFunction } from "i18next";
 import type { UsageMeter } from "~/lib/billing/usage.server";
+
+/**
+ * "3 pricing rules", in the merchant's language and the right plural.
+ *
+ * These banners used to interpolate the bare number where the noun belongs —
+ * "The Free plan allows 1" — which reads badly in English and cannot be made
+ * to agree in Arabic, where the noun inflects for one, two and three-to-ten and
+ * the number alone has nothing to agree with. The per-limit allowance keys
+ * already carry all six categories and the right gender, so the count goes
+ * through them rather than into the sentence.
+ */
+function allowance(t: TFunction, key: LimitKey, count: number): string {
+  return t(`limit.${key}Allowance`, { count });
+}
 
 /** A trial with this long or less gets its own banner, not just a pill. */
 const TRIAL_WARNING_DAYS = 3;
@@ -188,11 +204,11 @@ function StatusBanners({
           {meter.atLimit
             ? t("plans.usage.atBody", {
                 plan: planName(view.effectivePlan),
-                limit: meter.limit,
+                allowance: allowance(t, meter.key, meter.limit ?? 0),
               })
             : t("plans.usage.nearingBody", {
                 used: meter.used,
-                limit: meter.limit,
+                allowance: allowance(t, meter.key, meter.limit ?? 0),
                 plan: planName(nextPlanUp(view.effectivePlan)),
               })}
         </s-paragraph>
@@ -469,9 +485,8 @@ function ChangeConfirmation({
               {change.limitImpacts.map((impact) => (
                 <s-list-item key={impact.key}>
                   {t("plans.change.limitTightens", {
-                    item: t(`limit.${impact.key}`),
+                    allowed: allowance(t, impact.key, impact.becomes ?? 0),
                     used: impact.used,
-                    becomes: impact.becomes,
                   })}
                 </s-list-item>
               ))}
@@ -487,8 +502,8 @@ function ChangeConfirmation({
               .map((impact) => (
                 <s-paragraph key={impact.key}>
                   {t("plans.change.overageBody", {
-                    overBy: impact.overBy,
-                    item: t(`limit.${impact.key}`),
+                    count: impact.overBy,
+                    over: allowance(t, impact.key, impact.overBy),
                     plan: target,
                   })}
                 </s-paragraph>

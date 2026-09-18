@@ -123,6 +123,9 @@ const SHOP_FACTS = `#graphql
       contactEmail
       ianaTimezone
       currencyCode
+      plan {
+        partnerDevelopment
+      }
       primaryDomain {
         host
       }
@@ -140,6 +143,14 @@ export interface ShopFacts {
   currencyCode: string | null;
   primaryDomain: string | null;
   countryCode: string | null;
+  /**
+   * A Shopify development store.
+   *
+   * `null` when the response did not carry the field — which must not be read
+   * as "no", because the write below skips a null and a wrong `false` would
+   * try to put a live charge on a store Shopify will refuse it on.
+   */
+  isDevelopmentStore: boolean | null;
 }
 
 interface ShopFactsBody {
@@ -150,6 +161,7 @@ interface ShopFactsBody {
       contactEmail?: string | null;
       ianaTimezone?: string | null;
       currencyCode?: string | null;
+      plan?: { partnerDevelopment?: boolean | null } | null;
       primaryDomain?: { host?: string | null } | null;
       shopAddress?: { countryCodeV2?: string | null } | null;
     } | null;
@@ -175,6 +187,10 @@ export function factsFromShopNode(body: ShopFactsBody): ShopFacts {
     currencyCode: clean(node?.currencyCode)?.toUpperCase() ?? null,
     primaryDomain: clean(node?.primaryDomain?.host),
     countryCode: clean(node?.shopAddress?.countryCodeV2)?.toUpperCase() ?? null,
+    isDevelopmentStore:
+      typeof node?.plan?.partnerDevelopment === "boolean"
+        ? node.plan.partnerDevelopment
+        : null,
   };
 }
 
@@ -221,6 +237,9 @@ export async function syncShopFacts(admin: AdminGraphql): Promise<ShopFacts | nu
         ...(facts.currencyCode ? { currencyCode: facts.currencyCode } : {}),
         ...(facts.primaryDomain ? { primaryDomain: facts.primaryDomain } : {}),
         ...(facts.countryCode ? { countryCode: facts.countryCode } : {}),
+        ...(facts.isDevelopmentStore === null
+          ? {}
+          : { isDevelopmentStore: facts.isDevelopmentStore }),
         shopFactsSyncedAt: new Date(),
       },
     });

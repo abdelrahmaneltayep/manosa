@@ -140,6 +140,9 @@ describe("Plans page states", () => {
     // The wall explains the way past it rather than just refusing.
     expect(html).toContain("Upgrade to add more");
     expect(html).toContain("keeps working");
+    // The number goes through the allowance phrase, so the noun is there and
+    // agrees with it — "allows 1 pricing rule", never a bare "allows 1".
+    expect(html).toContain("allows 1 pricing rule");
   });
 
   it("warns before the wall, at 80%", () => {
@@ -152,6 +155,7 @@ describe("Plans page states", () => {
     capture("03-nearing-limit", html);
     expect(html).toContain("close to your");
     expect(html).toContain("8");
+    expect(html).toContain("8 of 10 pricing rules");
   });
 
   it("Pro, active", () => {
@@ -305,10 +309,44 @@ describe("Plans page states", () => {
     expect(html).toContain("Move to Free");
     // Numbers, not vagueness.
     expect(html).toContain("13");
+    // And a noun beside every number: "1 pricing rule allowed, 14 in use".
+    expect(html).toContain("1 pricing rule allowed, 14 in use");
+    // Thirteen over, so the sentence takes its plural form. At one it reads
+    // "It stays saved"; a key called without `count` would render neither.
+    expect(html).toContain("13 pricing rules more than Free allows");
+    expect(html).toContain("They stay saved");
     expect(html).toContain("Merchant Agent in the admin");
     expect(html).toContain("Nothing is deleted");
     // The merchant keeps what they already paid for.
     expect(html).toContain("1 July 2026");
+  });
+
+  it("says 'it stays saved' when exactly one thing is over", () => {
+    // The plural form of this sentence was the only one anybody had seen: the
+    // key took `overBy` under its own name, so i18next had no `count` to
+    // choose a form with and English read "They stay saved" for one rule.
+    const html = render(
+      baseView({
+        plan: "growth",
+        effectivePlan: "growth",
+        status: "ACTIVE",
+        interval: "monthly",
+        pendingChange: {
+          to: "free",
+          toInterval: "monthly",
+          direction: "downgrade",
+          price: 0,
+          gaining: [],
+          losing: ["csv_import"],
+          limitImpacts: [{ key: "pricingRules", used: 2, becomes: 1, overBy: 1 }],
+          hasOverage: true,
+        },
+      }),
+    );
+
+    expect(html).toContain("1 pricing rule more than Free allows");
+    expect(html).toContain("It stays saved");
+    expect(html).not.toContain("They stay saved");
   });
 
   it("a failed billing request, with nothing charged", () => {

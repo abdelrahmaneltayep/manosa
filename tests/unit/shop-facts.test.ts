@@ -36,6 +36,7 @@ describe("the shop's facts, from Shopify", () => {
       currencyCode: "EUR",
       primaryDomain: "acme.example",
       countryCode: "DE",
+      isDevelopmentStore: null,
     });
   });
 
@@ -76,5 +77,34 @@ describe("a timezone this runtime can actually use", () => {
     expect(knownTimezone("not a zone")).toBeNull();
     expect(knownTimezone(null)).toBeNull();
     expect(knownTimezone("")).toBeNull();
+  });
+});
+
+describe("whether the store can be charged for real", () => {
+  const body = (shop: Record<string, unknown> | null) => ({ data: { shop } });
+
+  it("reads a development store as one", () => {
+    expect(
+      factsFromShopNode(body({ plan: { partnerDevelopment: true } })).isDevelopmentStore,
+    ).toBe(true);
+  });
+
+  it("reads a real store as one", () => {
+    expect(
+      factsFromShopNode(body({ plan: { partnerDevelopment: false } })).isDevelopmentStore,
+    ).toBe(false);
+  });
+
+  it("says nothing when the field did not come back", () => {
+    // Not `false`: the write skips a null, so an unanswered question leaves the
+    // stored answer alone. Reading it as "a real store" would put a live charge
+    // on one Shopify refuses live charges for, and the merchant would be told
+    // only "We couldn\u2019t start that change".
+    expect(factsFromShopNode(body({})).isDevelopmentStore).toBeNull();
+    expect(factsFromShopNode(body(null)).isDevelopmentStore).toBeNull();
+    expect(
+      factsFromShopNode(body({ plan: { partnerDevelopment: "true" } }))
+        .isDevelopmentStore,
+    ).toBeNull();
   });
 });

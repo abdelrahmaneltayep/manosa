@@ -134,6 +134,12 @@ model Shop {
   subscriptionId     String?
   subscriptionName   String?
   isTestSubscription Boolean       @default(false)
+  /// A Shopify development store, read from `shop.plan.partnerDevelopment`.
+  /// Shopify refuses a live charge on one, so a subscription started here is
+  /// always a test charge — whatever the deployment's env says. Without this
+  /// the only per-store answer was an environment variable, which a single
+  /// multi-tenant deployment cannot vary by store.
+  isDevelopmentStore Boolean       @default(false)
   trialEndsAt        DateTime?
   currentPeriodEnd   DateTime?
   /// End of the 7-day grace period after a failed charge. Features keep

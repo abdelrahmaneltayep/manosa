@@ -69,19 +69,15 @@
   },
   "plans": {
     "currentPlan": "باقتك الحالية",
-    "onPlan": "أنت على باقة {{plan}}",
     "free": "مجانية",
     "perMonth": "{{price}}$ شهرياً",
     "perYear": "{{price}}$ سنوياً",
-    "billedMonthly": "الفوترة شهرياً",
-    "billedAnnually": "الفوترة مرة واحدة سنوياً",
     "annualSaving": "وفّر {{amount}}$ سنوياً",
     "interval": {
       "legend": "دورة الفوترة",
       "monthly": "شهري",
       "annual": "سنوي"
     },
-    "choose": "اختر {{plan}}",
     "switchTo": "انتقل إلى {{plan}}",
     "thisIsYourPlan": "هذه باقتك",
     "trial": {
@@ -116,16 +112,12 @@
     },
     "usage": {
       "heading": "استخدامك",
-      "pricingRules": "قواعد التسعير",
-      "forms": "نماذج التسجيل",
-      "unlimited": "بلا حدود",
       "ofLimit": "{{used}} من {{limit}}",
       "usedUnlimited": "{{used}} مستخدمة",
       "nearingHeading": "اقتربت من حدّ {{item}}",
-      "nearingBody": "استخدمت {{used}} من {{limit}}. باقة {{plan}} تجعلها بلا حدود.",
+      "nearingBody": "استخدمت {{used}} من {{allowance}}. باقة {{plan}} تجعلها بلا حدود.",
       "atHeading": "وصلت إلى حدّ {{item}}",
-      "atBody": "تسمح باقة {{plan}} بـ {{limit}}. قم بالترقية لإضافة المزيد — وما لديك يستمر في العمل.",
-      "pending": "جارٍ الحساب…"
+      "atBody": "تسمح باقة {{plan}} بـ {{allowance}}. قم بالترقية لإضافة المزيد — وما لديك يستمر في العمل."
     },
     "change": {
       "upgradeHeading": "الانتقال إلى {{plan}}",
@@ -138,9 +130,14 @@
       "gaining": "ما ستحصل عليه",
       "losing": "ما سيتوقف",
       "nothingDeleted": "لن يُحذف أي شيء. تعود المزايا المتوقفة وبياناتها إذا رجعت لباقة أعلى.",
-      "limitTightens": "{{item}}: {{used}} قيد الاستخدام، والمسموح {{becomes}}",
+      "limitTightens": "المسموح {{allowed}}، و{{used}} قيد الاستخدام",
       "overageHeading": "بعض ما أنشأته سيتوقف",
-      "overageBody": "{{item}}: لديك {{overBy}} أكثر مما تسمح به باقة {{plan}}. تبقى محفوظة وتتوقف عن العمل حتى ترجع لباقة أعلى.",
+      "overageBody_zero": "لا شيء لديك يزيد عمّا تسمح به باقة {{plan}}. تبقى محفوظة وتتوقف عن التطبيق حتى ترجع لباقة أعلى.",
+      "overageBody_one": "لديك {{over}} زيادة عمّا تسمح به باقة {{plan}}. تبقى محفوظة وتتوقف عن التطبيق حتى ترجع لباقة أعلى.",
+      "overageBody_two": "لديك {{over}} زيادة عمّا تسمح به باقة {{plan}}. تبقى محفوظة وتتوقف عن التطبيق حتى ترجع لباقة أعلى.",
+      "overageBody_few": "لديك {{over}} زيادة عمّا تسمح به باقة {{plan}}. تبقى محفوظة وتتوقف عن التطبيق حتى ترجع لباقة أعلى.",
+      "overageBody_many": "لديك {{over}} زيادة عمّا تسمح به باقة {{plan}}. تبقى محفوظة وتتوقف عن التطبيق حتى ترجع لباقة أعلى.",
+      "overageBody_other": "لديك {{over}} زيادة عمّا تسمح به باقة {{plan}}. تبقى محفوظة وتتوقف عن التطبيق حتى ترجع لباقة أعلى.",
       "exportFirst": "صدّر بياناتك أولاً",
       "confirmUpgrade": "المتابعة إلى شوبيفاي",
       "confirmDowngrade": "الانتقال إلى {{plan}}",
@@ -213,11 +210,6 @@
     "unlimitedRules": "قواعد تسعير بلا حدود",
     "unlimitedForms": "نماذج تسجيل بلا حدود"
   },
-  "locked": {
-    "heading": "{{feature}} متاحة في باقة {{plan}}",
-    "body": "باقتك لا تشمل هذه الميزة بعد. كل شيء آخر يستمر في العمل.",
-    "cta": "عرض الباقات"
-  },
   "pricing": {
     "list": {
       "heading": "قواعد التسعير",
@@ -274,8 +266,6 @@
       "retry": "حاول مرة أخرى",
       "archive": "أرشفة",
       "restore": "استعادة",
-      "delete": "حذف نهائي",
-      "edit": "تعديل",
       "unreadableHeading_zero": "لا توجد قواعد يتعذّر قراءتها",
       "unreadableHeading_one": "تتعذّر قراءة قاعدة واحدة",
       "unreadableHeading_two": "تتعذّر قراءة قاعدتين",
@@ -454,14 +444,6 @@
       "yours": "ما لديك",
       "overwrite": "استبدال بما لديّ",
       "keepTheirs": "الإبقاء على نسختهم وإعادة التحميل"
-    },
-    "deleteModal": {
-      "heading": "حذف «{{name}}» نهائياً؟",
-      "body": "لا يمكن التراجع عن هذا. اكتب اسم القاعدة للتأكيد.",
-      "label": "اسم القاعدة",
-      "confirm": "حذف نهائي",
-      "cancel": "إلغاء",
-      "mismatch": "هذا لا يطابق اسم القاعدة."
     },
     "settings": {
       "heading": "الأولوية والدمج",

@@ -11,6 +11,7 @@ import {
   type PlanInterval,
   type PlanKey,
 } from "~/lib/billing/plans";
+import { testModeFor } from "~/lib/billing/test-mode.server";
 import { enqueueJob } from "~/lib/jobs/queue.server";
 import { shopScope } from "~/lib/tenant/shop-context.server";
 
@@ -73,6 +74,8 @@ export type SubscriptionReading =
 export function readSubscriptions(
   subscriptions: AppSubscription[],
   now: Date = new Date(),
+  /** Only for the detail line — which test mode the empty answer came from. */
+  context: { isTest?: boolean } = {},
 ): SubscriptionReading {
   // During a plan change Shopify can briefly report more than one. The active
   // one wins; otherwise take the most recently created, which is the one the
@@ -91,7 +94,7 @@ export function readSubscriptions(
       reason: "no-subscriptions",
       detail:
         `Shopify reported no subscription matching ${PAID_BILLING_PLAN_IDS.join(", ")} ` +
-        `with isTest=${process.env.SHOPIFY_BILLING_TEST_MODE === "true"}.`,
+        `with isTest=${context.isTest ?? false}.`,
     };
   }
 
@@ -183,13 +186,19 @@ export async function syncSubscription(
 ): Promise<SubscriptionSnapshot> {
   const shop = shopScope.require("syncSubscription");
 
+  // Read before the check, not after: `billing.check` filters by test mode, so
+  // asking with the wrong one returns an empty list for a shop that does have a
+  // subscription — which reads as "they cancelled".
+  const previous = await db.shop.findUnique({ where: { shop } });
+
   const response = await billing.check({
     plans: PAID_BILLING_PLAN_IDS,
-    isTest: process.env.SHOPIFY_BILLING_TEST_MODE === "true",
+    isTest: testModeFor(previous),
   });
 
-  const reading = readSubscriptions(response.appSubscriptions ?? [], now);
-  const previous = await db.shop.findUnique({ where: { shop } });
+  const reading = readSubscriptions(response.appSubscriptions ?? [], now, {
+    isTest: testModeFor(previous),
+  });
 
   if (!reading.known && !mayActOn(reading, previous, now)) {
     // Stamped, and nothing else. Without this the staleness check would call

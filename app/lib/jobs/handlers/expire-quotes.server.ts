@@ -1,5 +1,6 @@
 import { db } from "~/db.server";
 import { recordAudit, SYSTEM_ACTOR } from "~/lib/audit/record.server";
+import { hasFeature, loadEntitlements } from "~/lib/billing/entitlements.server";
 import { enqueueJob } from "~/lib/jobs/queue.server";
 import { deliverQuoteEmail } from "~/lib/quotes/email.server";
 import {
@@ -20,6 +21,12 @@ import { shopScope } from "~/lib/tenant/shop-context.server";
  * The buyer's accept page checks the date too, so a race between the job and a
  * buyer at 23:59 cannot let an expired quote through.
  *
+ * Expiring runs on every plan; reminding does not. A quote past its date must
+ * never read as live on a page the merchant can still open, whatever they pay.
+ * Mailing their buyer about it is a different act: quotes are paused on Free,
+ * so the merchant could not honour a reply, and the app would be chasing
+ * somebody on behalf of a feature it has switched off.
+ *
  * There is no recurring scheduler in this app, so the job keeps itself alive:
  * it re-queues for tomorrow while any quote is still out with a buyer, and
  * stops when none is. Sending a quote queues one too, so a store with nothing
@@ -32,6 +39,10 @@ export async function expireQuotes({ now = new Date() } = {}) {
   if (!record) return { skipped: "no install record" as const };
   if (record.uninstalledAt) return { skipped: "uninstalled" as const };
 
+  // Quotes are a paid capability. Expiry below is not gated — it only ever
+  // takes a promise away — but the reminder email is.
+  const mayQuote = hasFeature(await loadEntitlements(now), "draft_orders");
+
   const sent = await db.quote.findMany({
     where: { status: "SENT", expiresAt: { not: null } },
     include: { lines: true },
@@ -39,6 +50,7 @@ export async function expireQuotes({ now = new Date() } = {}) {
 
   let expired = 0;
   let reminded = 0;
+  let remindersPaused = 0;
 
   for (const quote of sent) {
     const state = quote as unknown as {
@@ -64,6 +76,14 @@ export async function expireQuotes({ now = new Date() } = {}) {
         quote.reminderDays ?? record.quoteReminderDays ?? DEFAULT_REMINDER_DAYS,
       )
     ) {
+      if (!mayQuote) {
+        // Not stamped: `remindedAt` means "we told them", and we did not. A
+        // merchant who resubscribes before the quote runs out gets the
+        // reminder they paid for.
+        remindersPaused += 1;
+        continue;
+      }
+
       // Stamped whatever the provider said. A failed send is recorded in
       // `EmailMessage` with its error; retrying it every hour would not help
       // and would chase the buyer once the provider recovered.
@@ -82,7 +102,7 @@ export async function expireQuotes({ now = new Date() } = {}) {
           ? `One quote reached its expiry date and is no longer open to accept.`
           : `${expired} quotes reached their expiry date and are no longer open to accept.`,
       subject: { type: "Shop", id: shop },
-      metadata: { expired, reminded },
+      metadata: { expired, reminded, remindersPaused },
     });
   }
 
@@ -101,7 +121,13 @@ export async function expireQuotes({ now = new Date() } = {}) {
     });
   }
 
-  return { expired, reminded, examined: sent.length, requeued: stillOpen > 0 };
+  return {
+    expired,
+    reminded,
+    remindersPaused,
+    examined: sent.length,
+    requeued: stillOpen > 0,
+  };
 }
 
 /**

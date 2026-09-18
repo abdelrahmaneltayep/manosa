@@ -1163,3 +1163,55 @@ call does not carry cancelled subscriptions, so there is nothing to read).
 Separately, `trialReminderSentAt` **is** cleared when a genuinely different
 trial starts, so a merchant who trials twice is warned twice and never twice
 for the same one.
+
+## 2026-09-18 — The store answers for its own charge, not the deployment
+
+`SHOPIFY_BILLING_TEST_MODE` is one variable for a whole process, and the README
+told an operator to set it per store — which a single multi-tenant deployment
+cannot do. Whichever way it was set, it was wrong for somebody: `true` bills
+every merchant in the tenancy nothing, `false` refuses every development store
+a subscription (Shopify declines the live charge) behind the generic "We
+couldn't start that change", which names no cause a merchant could act on.
+
+Shopify already knows the answer, per store: `shop.plan.partnerDevelopment`. It
+is read with the rest of the shop's facts, stored as `Shop.isDevelopmentStore`,
+and `testModeFor()` returns true for those stores whatever the environment
+says. The variable survives as a developer's override for a store that is _not_
+a dev store, and `assertEnvironment` now refuses to start a production process
+with it set.
+
+Rejected: a per-shop settings toggle (a merchant cannot be asked to know this,
+and a wrong answer either bills them for nothing or blocks them entirely), and
+deriving it from the `.myshopify.com` name (development stores do not announce
+themselves in their domain).
+
+## 2026-09-18 — A number is count-bearing when the words around it change
+
+The 0.3 cold read listed five plan strings as interpolating a count without
+`count`. Two readings were possible, and the one taken is: a string is
+count-bearing when its own wording changes with the number — a noun that
+inflects, a verb or pronoun that agrees — not merely because a number appears
+in it.
+
+So `plans.usage.ofLimit` ("{{used}} of {{limit}}") is left alone: the row's
+label names the thing, and neither English nor Arabic inflects anything in
+"4 of 5". The other four had a bare number standing where a noun belongs —
+"The Free plan allows 1" — which cannot be made to agree in Arabic, because a
+numeral alone has nothing to agree with. They now interpolate the existing
+`limit.<key>Allowance` phrases, which already carry all six Arabic categories
+and the right gender per item. `plans.change.overageBody` is the one whose own
+words change ("It stays saved" against "They stay saved"), so it is pluralised
+on `count` in both languages.
+
+## 2026-09-18 — Copy for a control that does not exist is kept, and named
+
+`tests/unit/i18n-orphans.test.ts` makes the English catalogue a total map:
+every key is rendered by something in `app/`, or listed with the reason it is
+not. The cold read named six orphans; the map found thirty-seven.
+
+Thirteen were superseded and are deleted. The remaining twenty-four are copy
+written before its control — the rule builder has no way to add a tier, no
+unsaved-changes guard, and no resource picker; the CSV page has no dropzone;
+the error boundary does not read the catalogue. Deleting those words would
+have hidden the gaps rather than closed them, so each is listed with what is
+missing, and a control that gets built fails the test that says it has not.

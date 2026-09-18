@@ -81,6 +81,21 @@ describe("entitlements", () => {
     expect(result.plan).toBe("agentic");
   });
 
+  it("treats a failed charge with no grace window as lapsed, not as unlimited", () => {
+    // Nothing writes a `PAST_DUE` row without a `graceEndsAt` today. The gate
+    // used to require one before it would ever lapse, so the day a writer
+    // stopped setting it — a webhook shape change, a manual fix in psql — that
+    // shop would have kept its paid plan for ever.
+    const result = entitlementsFor(
+      shop({ planKey: "agentic", billingStatus: "PAST_DUE", graceEndsAt: null }),
+      NOW,
+    );
+
+    expect(result.effectivePlan).toBe("free");
+    expect(result.plan).toBe("agentic");
+    expect(result.graceDaysRemaining).toBeNull();
+  });
+
   it("pauses paid features when a subscription is cancelled, remembering the plan", () => {
     const result = entitlementsFor(
       shop({ planKey: "growth", billingStatus: "CANCELLED" }),
