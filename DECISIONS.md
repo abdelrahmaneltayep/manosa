@@ -1244,3 +1244,33 @@ the file to clear the check.** `https://mannon.example.com` would look
 deployed, pass a glance and fail at OAuth on a real merchant's store;
 `localhost` at least announces what it is. The check stays red until somebody
 says where this app lives, which is the honest state.
+
+## 2026-09-19 — Two codebases, two Shopify apps, and a guard between them
+
+`manosh` released `mannon-6` to the Shopify app "Mannon" while this repository
+still declared `handle = "mannon"` with no `client_id` pinned and
+`include_config_on_deploy = true`. The CLI binds by handle when nothing is
+pinned, so the next `npm run deploy` from here would have adopted that app,
+written this file's config over its own — URLs, App Proxy, access scopes — and
+released this repo's four extensions in place of its two. Nothing warns; the
+CLI prints the app it picked and carries on.
+
+They are two apps, so this one is `mannon-wholesale`, with the App Proxy
+subpath moved to match (one store can install both, and Shopify gives one
+prefix+subpath to one app). The rename cost four Liquid files and a handful of
+assertions, and now was the cheapest it will ever be: nothing is deployed, so
+no live storefront is calling the old path.
+
+The rename alone was not enough, because a handle can be changed back by
+anyone. `npm run check:app` runs first in `npm run deploy` and refuses while no
+`client_id` is pinned, or while `SHOPIFY_APP_CLIENT_ID` contradicts the pinned
+one — the shape an absent-minded `shopify app config link --reset` creates.
+
+Rejected: **pinning this repo to app 401839423489** (that is manosh's app, and
+releasing from here would delete its two extensions from the live version), and
+**leaving the handle alone and relying on the deployer reading the CLI's info
+box** — which is the thing that did not happen. A guard that fails a command is
+worth more than a sentence somebody has to notice.
+
+Also rejected for now: **giving this app a host.** It is not deployed, the
+`release:check` blocker stays open, and `manosh.fly.dev` runs different code.

@@ -282,7 +282,7 @@
       function personalise(node) {
         if (!customerId) return;
 
-        fetch(routes + 'apps/mannon/agent?hello=1', {
+        fetch(routes + 'apps/mannon-wholesale/agent?hello=1', {
           headers: { Accept: 'application/json' }
         })
           .then(function (response) {
@@ -326,7 +326,7 @@
         var query = 'conversation=' + encodeURIComponent(conversationId);
         if (lastSeenId) query += '&after=' + encodeURIComponent(lastSeenId);
 
-        fetch(routes + 'apps/mannon/agent?' + query, {
+        fetch(routes + 'apps/mannon-wholesale/agent?' + query, {
           headers: { Accept: 'application/json' }
         })
           .then(function (response) {
@@ -438,7 +438,7 @@
         var body = new URLSearchParams();
         body.set('message', message);
 
-        fetch(routes + 'apps/mannon/agent', {
+        fetch(routes + 'apps/mannon-wholesale/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: body.toString()

@@ -1,7 +1,19 @@
 # Mannon — B2B Wholesale Pricing
 #
-# Run `shopify app config link` once against the Partners app to populate
-# `client_id`, then `shopify app dev --store=mannon-9iu9ewku.myshopify.com`.
+# **This is not the app handled `mannon`.** That one is deployed from the
+# `manosh` repository and already has a released version (`mannon-6`,
+# quote-widget + customer-account-quotes). The two are separate Shopify apps
+# that happen to share a product name, and the only thing that kept them apart
+# was nobody having run `shopify app deploy` from here yet: an unpinned
+# `client_id` binds by handle, and `include_config_on_deploy = true` would then
+# have written this file over that app's config and released this repo's
+# extensions in place of its own.
+#
+# So the handle below is distinct, and `npm run deploy` refuses until a
+# `client_id` is pinned — see `app/lib/release/app-identity.ts`.
+#
+# Run `shopify app config link` once against **a new Partners app**, commit the
+# `client_id` it writes, then `shopify app dev --store=mannon-9iu9ewku.myshopify.com`.
 # Everything else in this file is checked in on purpose so the app config is
 # reviewable in the diff rather than living only in the Partners dashboard.
 #
@@ -15,8 +27,8 @@
 # places, and the only way they stay consistent is for one command to write
 # all five.
 
-name = "mannon"
-handle = "mannon"
+name = "mannon-wholesale"
+handle = "mannon-wholesale"
 # client_id = ""   # populated by `shopify app config link`
 application_url = "https://localhost:3000"
 embedded = true
@@ -44,13 +56,15 @@ redirect_urls = [
 ]
 
 # The storefront blocks call the app through Shopify's App Proxy, at
-# /apps/mannon/... on the merchant's own domain. Shopify signs each request and
+# /apps/mannon-wholesale/... on the merchant's own domain. The subpath is
+# distinct for the same reason the handle is: a store can install both apps,
+# and Shopify gives one prefix+subpath to one app. Shopify signs each request and
 # passes the logged-in customer id — that signature is the whole security model
 # for wholesale prices, since without it anyone could ask for any buyer's.
 [app_proxy]
 url = "https://localhost:3000/proxy"
 prefix = "apps"
-subpath = "mannon"
+subpath = "mannon-wholesale"
 
 [webhooks]
 api_version = "2025-07"

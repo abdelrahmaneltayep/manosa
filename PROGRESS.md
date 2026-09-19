@@ -1,19 +1,14 @@
 # Progress
 
-Updated: 2026-09-19T06:20:00Z
+Updated: 2026-09-19T11:40:00Z
 Current milestone: 6 — Analytics
-Current task: the P4s [done] — **there is no P4 severity band**; the two things
-labelled P4 are a MEDIUM finding in 5.3's `P1`–`P17` list and a reproduction
-probe in 6.1, both closed. The rung below P3 (5.3's and 6.1's LOW/NIT tail) was
-audited in the same pass and three of 6.1's four were still open. **Every
-finding in every cold read in `qa/` is now closed**, at every severity, with
-the one exception noted against 6.5 #23 below, which cannot be fixed without
-breaking `migrate deploy` and is documented instead. The outstanding blockers are unchanged and are
-listed under _Blocked_ and in the notes below. The localhost URLs in
-`shopify.app.toml` are now **one variable away** rather than five hand edits:
-set `SHOPIFY_APP_URL` and run `npm run config:urls`. Nobody has said where this
-app will be deployed, so that variable has no production value and
-`release:check` still reports the blocker, correctly.
+Current task: the two-app collision [done]. `manosh` released `mannon-6` to the
+Shopify app "Mannon" while this repo still declared the same handle with no
+`client_id` pinned — one `npm run deploy` from adopting that app and releasing
+over it. This repo is `mannon-wholesale` now, with its own App Proxy subpath,
+and `npm run deploy` refuses until an app is pinned. **Not deployed**, by
+decision: the URLs stay on localhost and `release:check` still reports that
+blocker, correctly.
 
 ## Done
 
@@ -65,6 +60,8 @@ app will be deployed, so that variable has no production value and
 - [x] **The five billing P0s** from `qa/0.3/COLD-READ.md` — commit `cfc149d` — QA: `qa/billing-p0/REPORT.md` (`docs/adr/0030`). (1) **CSV import was gated nowhere at all** — `assertFeature("csv_import")` appeared nowhere in the codebase, so a Free shop could export every rule it had, have Claude map its columns on the app owner's key, and import; the link rendered on every plan. Now refused in the service layer, in the action before anything is parsed or sent to the model, and in the loader (which covers the two downloads). (2) **Nothing paused when a subscription lapsed.** The gate refused every _admin_ action correctly while three capabilities went on reaching buyers through metafields Shopify evaluates without asking us: over-quota pricing rules kept pricing, order limits kept blocking carts, and net terms kept being **extended** while `recordPayment` refused the merchant the ability to record the money coming in against invoices this app was still issuing — the credit half ran and the collection half stopped. Each publisher now asks what the effective plan allows, and `billing.reconcile` runs them the moment the answer changes, in both directions. Nothing is deleted. (3) **An out-of-order webhook dropped a paying merchant to Free** — an upgrade is exactly when Shopify sends two deliveries whose order is not guaranteed, and a cancellation landing second wrote Free over a merchant charged minutes earlier. (4) **An empty `billing.check` cancelled the plan and erased the grace period** on every Plans page load — and an empty list is not a cancellation: a renamed plan, a flipped test-mode flag or a frozen subscription all produce one. (5) **The $29 card sold the $59 plan's features**, with the table below it marking all six Not included; the hand-written taglines are deleted and each card composes its line from the ladder. Also: the usage meters had returned a hard-coded `0` since 0.3, so the downgrade preview reported no overage for any downgrade, ever.
 
 - [x] **The twelve pricing P1s** from `qa/1.1-1.2/COLD-READ.md` — commit `82b9aa0` — QA: `qa/pricing-p1/REPORT.md` (`docs/adr/0031`). Ten fixed, one built as a feature, one recorded as a deliberate gap. The money one: **the cascade multiplied in float**, so every percentage whose exact answer landed on a half-cent tie landed just below it and `half_up` rounded it down — 13,636 measured wrong answers, every one a cent in the buyer's favour, for ever. The running price is an exact integer fraction now and 39.8M brute-forced cases agree with exact half-up. Also: **"Why this price?" answered with a context checkout never sees** (no groups, no company, no collections, the unit price as the cart subtotal — four of six audience modes wrong while the route said "this answer is the checkout answer"); **schedules were a day early** and the shop's timezone, populated and used by every analytics surface, was used by none of the pricing ones; **a later combinable rule overwrote a negotiated contract price upward**, reporting both as applied; **a rule pricing above the shelf price** was honoured by the preview, the quote and the agent and silently dropped at checkout; **a buyer checking out in EUR lost exactly their contract prices** and kept the percentage discounts, with no field anywhere to price a second currency — there is one now; **a ruleset format bump would have charged every buyer on every store retail** the day anybody made it; the unreadable-rules banner was wired to a hardcoded `0`; "checkout did not update" was a one-shot query parameter; the buyer backfill published only the one configured tag, so a rule targeting `gold` priced its buyers at retail until somebody edited them; and the Function read its own sandbox clock instead of the store's. **Market scoping stays unbuilt on purpose** — the Function knows the buyer's country, not their Market, so a scoped rule would be dropped at checkout while the admin showed it applying; the parser refuses one and a test names the unblocker.
+
+- [x] **Two codebases, one Shopify app** — commit `PENDING` — QA: `qa/two-apps/REPORT.md`. `manosh` released `mannon-6` (quote-widget, customer-account-quotes) to the Shopify app **"Mannon"** (`401839423489`) and deployed its server to `manosh.fly.dev`. This repo declared `handle = "mannon"` — the same one — with **no `client_id` pinned** and `include_config_on_deploy = true`. The CLI binds by handle when nothing is pinned, so the next `npm run deploy` from here would have adopted that app, written this file's config over its own (URLs, App Proxy, **access scopes**) and released this repo's four extensions **in place of its two**, with no warning beyond an info box naming the app it picked. Nothing was clobbered — this repo has never deployed. They are two apps: this one is now `mannon-wholesale`, its App Proxy subpath moved to match (one store can install both, and Shopify gives one prefix+subpath to one app), and `npm run check:app` runs first in `npm run deploy` and refuses while no `client_id` is pinned or while `SHOPIFY_APP_CLIENT_ID` contradicts it. A drift guard checks every `apps/…/` in every Liquid block against the TOML, because the blocks cannot import it and a mismatch only shows on a real storefront. **Also fixed two pre-existing red e2e tests** this surfaced: `qa/3.4`'s captures were stale, predating the Buyer Agent's `?hello=1` greeting handshake, and both tests asserted against whichever call came first — one expecting a POST and getting the handshake GET, the other asserting **zero** GETs, which asserted the handshake did not exist.
 
 - [x] **The app's own URL, from one place** — commit `ab3380c` — QA: `qa/app-urls/REPORT.md`. The standing blocker since 3.4 was stated as "the URLs are wrong"; that is the symptom. The defect was that the app's origin was **five strings a person had to remember to change together**, in a file the Shopify CLI rewrites on every `shopify app dev` — so anything hand-typed there is one dev run from being replaced by a tunnel URL. `SHOPIFY_APP_URL` already existed, was already required to boot, and was already what the running app used for these exact callbacks; the file was the only thing that disagreed. `npm run config:urls` now writes all five from it (`npm run deploy` runs it first), moving **only the origin** so `/auth/callback` and `/proxy` cannot be dropped, and refusing http, a development host, a URL with a path, or a non-URL — writing nothing rather than a config that looks deployed and is not. `submission.server.ts` and the rewriter share one scanner, so the check that reports a wrong URL and the command that fixes it cannot disagree about which URLs exist. **No hostname was invented**: nothing has been deployed and a plausible-looking wrong origin is worse than an obviously-local one.
 
@@ -736,3 +733,13 @@ name="value"` never reaches `FormData` in the browser here, because Polaris
   editing five strings; it was making one command write all five from the
   variable that already existed. Look for this shape anywhere a config file and
   an environment variable state the same fact.
+- **An unpinned `client_id` is not an empty field, it is a loaded one.**
+  `shopify app config link` binds by handle, and `include_config_on_deploy`
+  means the binding decides whose config and whose extensions the next release
+  carries. Two repos that share a product name will share a handle unless
+  somebody stops them, and the CLI's only signal is an info box.
+- **Running a suite you have not run in a while is a review.** The storefront
+  e2e turned up two tests red before this change and captures stale by a
+  feature — both invisible because nothing here runs Playwright on every task.
+  `npx playwright test` is not in the default gate; it should be run whenever
+  the storefront blocks or the proxy path move.

@@ -274,7 +274,7 @@
       body.append('list', list);
       body.append('defaultQuantity', '{{ block.settings.default_quantity }}');
 
-      fetch(routes + 'apps/mannon/quick-order', {
+      fetch(routes + 'apps/mannon-wholesale/quick-order', {
         method: 'POST',
         body: body
       })

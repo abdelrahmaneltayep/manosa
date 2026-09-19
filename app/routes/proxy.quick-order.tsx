@@ -11,7 +11,7 @@ import { unauthenticated } from "~/shopify.server";
 /**
  * Pricing a pasted list, for the storefront quick-order block.
  *
- * Reached at `/apps/mannon/quick-order` on the merchant's own domain, through
+ * Reached at `/apps/mannon-wholesale/quick-order` on the merchant's own domain, through
  * Shopify's App Proxy. Three things make it safe to answer:
  *
  * - the request is signed, so `logged_in_customer_id` is Shopify's word, not

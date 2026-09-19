@@ -51,8 +51,12 @@ afterEach(() => {
 
 describe("the signable payload", () => {
   it("sorts by name and joins with nothing between pairs", () => {
-    const params = new URLSearchParams("shop=b.myshopify.com&path_prefix=/apps/mannon");
-    expect(signablePayload(params)).toBe("path_prefix=/apps/mannonshop=b.myshopify.com");
+    const params = new URLSearchParams(
+      "shop=b.myshopify.com&path_prefix=/apps/mannon-wholesale",
+    );
+    expect(signablePayload(params)).toBe(
+      "path_prefix=/apps/mannon-wholesaleshop=b.myshopify.com",
+    );
   });
 
   it("joins a repeated parameter with commas, as Shopify does", () => {

@@ -233,6 +233,7 @@
 
       var fallbackUrl = "/collections/all";
       var firstName = "Sam";
+      var customerId = 77;
 
       // Nothing is fetched until the buyer opens it. The launcher appearing is
       // the whole cost of this block on a page nobody uses it on.
@@ -275,14 +276,37 @@
         input.focus();
         if (!greeted) {
           greeted = true;
-          bubble(
+          // Liquid knows their name; their tier and last order arrive after.
+          var hello = bubble(
             'agent',
             firstName
               ? strings.greetingNamed.replace('%name%', firstName)
               : strings.greeting,
           );
           bubble('agent', strings.examples);
+          personalise(hello);
         }
+      }
+
+      // Signed-in only: a guest has no tier and no orders to ask about.
+      function personalise(node) {
+        if (!customerId) return;
+
+        fetch(routes + 'apps/mannon-wholesale/agent?hello=1', {
+          headers: { Accept: 'application/json' }
+        })
+          .then(function (response) {
+            return response.json().catch(function () {
+              return { ok: false };
+            });
+          })
+          .then(function (data) {
+            if (!data || data.ok !== true || !data.greeting) return;
+            node.textContent = data.greeting;
+          })
+          .catch(function () {
+            // The greeting already on screen stays.
+          });
       }
 
       function closePanel() {
@@ -312,7 +336,7 @@
         var query = 'conversation=' + encodeURIComponent(conversationId);
         if (lastSeenId) query += '&after=' + encodeURIComponent(lastSeenId);
 
-        fetch(routes + 'apps/mannon/agent?' + query, {
+        fetch(routes + 'apps/mannon-wholesale/agent?' + query, {
           headers: { Accept: 'application/json' }
         })
           .then(function (response) {
@@ -424,7 +448,7 @@
         var body = new URLSearchParams();
         body.set('message', message);
 
-        fetch(routes + 'apps/mannon/agent', {
+        fetch(routes + 'apps/mannon-wholesale/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: body.toString()

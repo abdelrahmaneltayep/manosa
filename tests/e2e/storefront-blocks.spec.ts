@@ -206,7 +206,7 @@ test.describe("quick order by SKU", () => {
     await page.getByRole("button", { name: "Check prices" }).click();
     await expect(page.getByText("Blue Mug — Large")).toBeVisible();
 
-    expect(calls[0]?.url).toBe("/apps/mannon/quick-order");
+    expect(calls[0]?.url).toBe("/apps/mannon-wholesale/quick-order");
     expect(calls[0]?.method).toBe("POST");
   });
 
@@ -421,7 +421,7 @@ test.describe("the variants table", () => {
     await expect(page.getByText("$6.50")).toBeVisible();
 
     const asked = decodeURIComponent(calls[0]?.url ?? "");
-    expect(asked).toContain("/apps/mannon/variants");
+    expect(asked).toContain("/apps/mannon-wholesale/variants");
     // Liquid's own price is already in the subunit; no decimal round-trip.
     expect(asked).toContain('"priceMinor":1000');
   });
@@ -593,8 +593,15 @@ test.describe("the Buyer Agent widget", () => {
     // The question is echoed back, so the log reads as a conversation.
     await expect(page.locator(".mannon-agent__turn--buyer")).toContainText("MUG-BL-L");
 
-    const asked = calls.find((call) => call.url.includes("apps/mannon/agent"));
-    expect(asked?.method).toBe("POST");
+    // The POST specifically. Opening the panel also fires the `?hello=1`
+    // greeting handshake, so "the first call to this path" is a GET — and a
+    // `find` on the path alone was asserting against whichever call happened
+    // to come first rather than against the one the test is named for.
+    const asked = calls.find(
+      (call) =>
+        call.method === "POST" && call.url.includes("apps/mannon-wholesale/agent"),
+    );
+    expect(asked, "the block never posted the question").toBeDefined();
     expect(asked?.body).toContain("message=");
     await shot(page, "42-agent-answer");
   });
@@ -723,8 +730,12 @@ test.describe("the Buyer Agent widget", () => {
     await ask(page, "what's my price?");
 
     // A conversation nobody took over costs this block one request, not a
-    // poll every ten seconds for as long as the panel is open.
-    expect(calls.filter((call) => call.method === "GET")).toHaveLength(0);
+    // poll every ten seconds for as long as the panel is open. That one is the
+    // greeting handshake, which fires once when the panel opens; asserting
+    // zero GETs was asserting the handshake did not exist.
+    const gets = calls.filter((call) => call.method === "GET");
+    expect(gets).toHaveLength(1);
+    expect(gets[0]?.url).toContain("hello=1");
   });
 
   test("closes on Escape, and comes back", async ({ page }) => {

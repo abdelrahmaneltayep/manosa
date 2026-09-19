@@ -6,7 +6,7 @@ import { shopScope } from "~/lib/tenant/shop-context.server";
 /**
  * Verifying that a request really came through Shopify's App Proxy.
  *
- * The storefront blocks call the app at `/apps/mannon/...` on the merchant's
+ * The storefront blocks call the app at `/apps/mannon-wholesale/...` on the merchant's
  * own domain, and Shopify forwards it here with the shop and — crucially —
  * `logged_in_customer_id`, signed. That signature is the whole security model:
  * without it, anyone could ask for any buyer's contract prices by guessing a

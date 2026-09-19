@@ -302,6 +302,28 @@ See `docs/adr/0004-webhooks-and-jobs.md`.
 
 ## Before a deploy is a deploy
 
+### Which Shopify app this is
+
+**This repository is not the app handled `mannon`.** That one is deployed from
+the `manosh` repository and already has a released version. They are two
+separate Shopify apps that share a product name.
+
+This one is `mannon-wholesale`, and its App Proxy is `/apps/mannon-wholesale/…`
+for the same reason — a store can install both, and Shopify gives one
+prefix+subpath to one app.
+
+`npm run deploy` refuses until `shopify.app.toml` pins a `client_id`:
+
+```bash
+shopify app config link      # against a NEW Partners app — read the org and app it names
+# commit the client_id it writes
+```
+
+Without that line the CLI binds by handle, and `include_config_on_deploy = true`
+means a deploy would write this file over that app's config and release this
+repo's extensions in place of its own. Set `SHOPIFY_APP_CLIENT_ID` too and the
+guard will also catch a `--reset` that re-pins the file to something else.
+
 ### The app's own URL
 
 `shopify.app.toml` names the app's origin in five places: `application_url`,

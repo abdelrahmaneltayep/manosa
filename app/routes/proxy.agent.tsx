@@ -16,7 +16,7 @@ import { unauthenticated } from "~/shopify.server";
 /**
  * One turn of the Buyer Agent, from the storefront.
  *
- * Reached at `/apps/mannon/agent` on the merchant's own domain, through
+ * Reached at `/apps/mannon-wholesale/agent` on the merchant's own domain, through
  * Shopify's App Proxy. The same three things make it safe to answer as the
  * quick-order endpoint:
  *
