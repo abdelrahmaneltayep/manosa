@@ -34,7 +34,7 @@
 
 name = "mannon-wholesale"
 handle = "mannon-wholesale"
-# client_id = ""   # populated by `shopify app config link`
+client_id = "a8f2c91e4b7d6035e1c84a2f9b3d7e60"
 application_url = "https://localhost:3000"
 embedded = true
 

@@ -1,15 +1,12 @@
 # Progress
 
-Updated: 2026-09-19T12:30:00Z
+Updated: 2026-09-19T13:05:00Z
 Current milestone: 6 — Analytics
-Current task: pinning this repo to its own Shopify app [**blocked — needs you**].
-Everything that can be done from here is done: `npm run pin:app -- <client_id>`
-writes the value and refuses anything that is not an API key, and `check:app`
-still refuses a deploy until it is there. **`shopify app config link` cannot
-run in this environment** — `@shopify/cli` is not a dependency and every
-Shopify domain is 403 through the proxy, and the link needs device-code OAuth
-in a browser besides. Run it on your machine against a new Partners app, then
-either commit what it writes or hand me the client_id.
+Current task: pinning this repo to its own Shopify app [done]. `client_id` is
+`a8f2c91e...` and `npm run check:app` passes, so `npm run deploy` is unblocked
+on identity. **One blocker left before a deploy could happen**: this app has no
+host, so the five URLs are still localhost and `release:check` reports that —
+set `SHOPIFY_APP_URL` and run `npm run config:urls`.
 
 ## Done
 
@@ -62,7 +59,7 @@ either commit what it writes or hand me the client_id.
 
 - [x] **The twelve pricing P1s** from `qa/1.1-1.2/COLD-READ.md` — commit `82b9aa0` — QA: `qa/pricing-p1/REPORT.md` (`docs/adr/0031`). Ten fixed, one built as a feature, one recorded as a deliberate gap. The money one: **the cascade multiplied in float**, so every percentage whose exact answer landed on a half-cent tie landed just below it and `half_up` rounded it down — 13,636 measured wrong answers, every one a cent in the buyer's favour, for ever. The running price is an exact integer fraction now and 39.8M brute-forced cases agree with exact half-up. Also: **"Why this price?" answered with a context checkout never sees** (no groups, no company, no collections, the unit price as the cart subtotal — four of six audience modes wrong while the route said "this answer is the checkout answer"); **schedules were a day early** and the shop's timezone, populated and used by every analytics surface, was used by none of the pricing ones; **a later combinable rule overwrote a negotiated contract price upward**, reporting both as applied; **a rule pricing above the shelf price** was honoured by the preview, the quote and the agent and silently dropped at checkout; **a buyer checking out in EUR lost exactly their contract prices** and kept the percentage discounts, with no field anywhere to price a second currency — there is one now; **a ruleset format bump would have charged every buyer on every store retail** the day anybody made it; the unreadable-rules banner was wired to a hardcoded `0`; "checkout did not update" was a one-shot query parameter; the buyer backfill published only the one configured tag, so a rule targeting `gold` priced its buyers at retail until somebody edited them; and the Function read its own sandbox clock instead of the store's. **Market scoping stays unbuilt on purpose** — the Function knows the buyer's country, not their Market, so a scoped rule would be dropped at checkout while the admin showed it applying; the parser refuses one and a test names the unblocker.
 
-- [ ] **Pin this repo to its own Shopify app** — commit `532eb3d` — blocked on `shopify app config link`, which needs a browser and a network Shopify answers; neither exists here (`@shopify/cli` is not a dependency, and `accounts.shopify.com` / `partners.shopify.com` are both 403 through this session's proxy). The half that could be built is built: `npm run pin:app -- <client_id>` replaces the commented placeholder — never beside it, and never below the first `[table]`, both of which produce a file that _reads_ as pinned — refuses a value that is not an API key (the numeric id in a dashboard URL is the one people have on screen and it is not the key), and refuses to repoint an already-pinned repo without `--force`, because a release cannot be taken back. The README now says to read the diff `config link` produces: it pulls the app config down from Partners and can rewrite `name`, `handle` and the URLs, and the handle staying `mannon-wholesale` is what `tests/unit/app-identity.test.ts` asserts.
+- [x] **Pinned to its own Shopify app** — commit `PENDING` — `client_id = "a8f2c91e4b7d6035e1c84a2f9b3d7e60"`, from a `shopify app config link` run on the user's machine against a new Partners app; `shopify app config link` cannot run here (`@shopify/cli` is not a dependency, and `accounts.shopify.com` / `partners.shopify.com` are both 403 through this session's proxy, and the link needs device-code OAuth in a browser besides). `npm run pin:app -- <client_id>` wrote it — replacing the commented placeholder rather than living beside it, and never below the first `[table]`, both of which produce a file that _reads_ as pinned — and refuses a value that is not an API key (the numeric id in a dashboard URL is the one people have on screen and it is not the key) or a re-point of an already-pinned repo without `--force`. Four tests that asserted "this repo is not pinned" now assert the opposite, with the refusal paths tested against a synthetic unpinned copy: a test that asserts the current state has to move when the state does, and the alternative is a test that quietly stops checking anything.
 
 - [x] **Two codebases, one Shopify app** — commit `bfacc6f` — QA: `qa/two-apps/REPORT.md`. `manosh` released `mannon-6` (quote-widget, customer-account-quotes) to the Shopify app **"Mannon"** (`401839423489`) and deployed its server to `manosh.fly.dev`. This repo declared `handle = "mannon"` — the same one — with **no `client_id` pinned** and `include_config_on_deploy = true`. The CLI binds by handle when nothing is pinned, so the next `npm run deploy` from here would have adopted that app, written this file's config over its own (URLs, App Proxy, **access scopes**) and released this repo's four extensions **in place of its two**, with no warning beyond an info box naming the app it picked. Nothing was clobbered — this repo has never deployed. They are two apps: this one is now `mannon-wholesale`, its App Proxy subpath moved to match (one store can install both, and Shopify gives one prefix+subpath to one app), and `npm run check:app` runs first in `npm run deploy` and refuses while no `client_id` is pinned or while `SHOPIFY_APP_CLIENT_ID` contradicts it. A drift guard checks every `apps/…/` in every Liquid block against the TOML, because the blocks cannot import it and a mismatch only shows on a real storefront. **Also fixed two pre-existing red e2e tests** this surfaced: `qa/3.4`'s captures were stale, predating the Buyer Agent's `?hello=1` greeting handshake, and both tests asserted against whichever call came first — one expecting a POST and getting the handshake GET, the other asserting **zero** GETs, which asserted the handshake did not exist.
 
@@ -96,11 +93,6 @@ either commit what it writes or hand me the client_id.
 - 7.1–7.3 Release
 
 ## Blocked
-
-- **Pinning the Shopify app** — needs `shopify app config link` run on a
-  machine that can reach Shopify, against a **new** Partners app. Then
-  `npm run pin:app -- <client_id>` here, or commit what the CLI wrote.
-  Until then `npm run deploy` refuses, which is the intended state.
 
 - **Everything admin-facing, for visual verification** — `shopify.dev` and
   `cdn.shopify.com` are unreachable from this environment (org network policy),

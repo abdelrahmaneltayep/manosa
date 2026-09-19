@@ -28,6 +28,9 @@ import {
 const root = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 const TOML = root("shopify.app.toml");
 
+/** The file as it was before `shopify app config link` named an app. */
+const UNPINNED = TOML.replace(/^client_id[ \t]*=.*$/m, '# client_id = ""');
+
 describe("this repository's app identity", () => {
   it("does not claim the handle the other app already has", () => {
     expect(declaredHandle(TOML)).not.toBe("mannon");
@@ -41,8 +44,19 @@ describe("this repository's app identity", () => {
     expect(pushesConfig(TOML)).toBe(true);
   });
 
-  it("refuses to deploy while no client_id is pinned", () => {
-    const problem = whyNotDeployable(TOML, undefined);
+  it("names exactly one app, and deploying is allowed to it", () => {
+    // The state since `shopify app config link` ran. If this fails, something
+    // re-pointed the repository — which is the whole thing the guard is for.
+    const pinned = pinnedClientId(TOML);
+
+    expect(pinned).toMatch(/^[a-f0-9]{32}$/);
+    expect(whyNotDeployable(TOML, undefined)).toBeNull();
+    expect(whyNotDeployable(TOML, pinned!)).toBeNull();
+    expect(whyNotDeployable(TOML, `  ${pinned}  `)).toBeNull();
+  });
+
+  it("refuses to deploy when nothing is pinned", () => {
+    const problem = whyNotDeployable(UNPINNED, undefined);
 
     expect(problem).not.toBeNull();
     expect(problem!.reason).toContain("pins no client_id");
@@ -50,23 +64,13 @@ describe("this repository's app identity", () => {
     expect(problem!.remedy).toContain("shopify app config link");
   });
 
-  it("allows a deploy once the file names one app and nothing contradicts it", () => {
-    const pinned = TOML.replace(/^# client_id.*$/m, 'client_id = "abc123"');
-
-    expect(pinnedClientId(pinned)).toBe("abc123");
-    expect(whyNotDeployable(pinned, undefined)).toBeNull();
-    expect(whyNotDeployable(pinned, "abc123")).toBeNull();
-    expect(whyNotDeployable(pinned, "  abc123  ")).toBeNull();
-  });
-
   it("refuses when the environment names a different app than the file", () => {
     // The case an absent-minded `shopify app config link --reset` creates: the
     // file is re-pinned to whatever was picked in the prompt, and the deployer
     // never reads it. A release cannot be taken back from merchants who have it.
-    const pinned = TOML.replace(/^# client_id.*$/m, 'client_id = "abc123"');
-    const problem = whyNotDeployable(pinned, "401839423489");
+    const problem = whyNotDeployable(TOML, "401839423489");
 
-    expect(problem!.reason).toContain("abc123");
+    expect(problem!.reason).toContain(pinnedClientId(TOML)!);
     expect(problem!.reason).toContain("401839423489");
   });
 
@@ -131,7 +135,7 @@ describe("pinning this repository to one app", () => {
   });
 
   it("replaces the commented placeholder rather than living beside it", () => {
-    const pinned = pinClientId(TOML, KEY);
+    const pinned = pinClientId(UNPINNED, KEY);
 
     expect(pinnedClientId(pinned)).toBe(KEY);
     // Two client_id lines, one commented, is a file that reads as pinned to
@@ -140,7 +144,7 @@ describe("pinning this repository to one app", () => {
   });
 
   it("puts the line in the root table, where the CLI reads it", () => {
-    const pinned = pinClientId(TOML, KEY);
+    const pinned = pinClientId(UNPINNED, KEY);
     const line = pinned.indexOf(`client_id = "${KEY}"`);
     const firstTable = pinned.search(/^\[/m);
 
@@ -151,16 +155,22 @@ describe("pinning this repository to one app", () => {
   });
 
   it("makes the deploy guard pass, and nothing else in the file move", () => {
-    const pinned = pinClientId(TOML, KEY);
+    const pinned = pinClientId(UNPINNED, KEY);
 
     expect(whyNotDeployable(pinned, undefined)).toBeNull();
     expect(declaredHandle(pinned)).toBe("mannon-wholesale");
-    expect(
-      pinned.replace(
-        /^client_id = .*$/m,
-        '# client_id = ""   # populated by `shopify app config link`',
-      ),
-    ).toBe(TOML);
+    // One line different from the file it was given, and that line is this one.
+    expect(pinned.replace(/^client_id = .*$/m, '# client_id = ""')).toBe(UNPINNED);
+  });
+
+  it("re-pins a repository that already names an app", () => {
+    // The live file is pinned, so this is the path a re-link takes. It is
+    // allowed here and refused by the script without --force, which is where
+    // the decision belongs.
+    const moved = pinClientId(TOML, KEY);
+
+    expect(pinnedClientId(moved)).toBe(KEY);
+    expect(moved.match(/client_id[ \t]*=/g) ?? []).toHaveLength(1);
   });
 
   it("refuses to write a client_id it would not accept", () => {
