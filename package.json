@@ -30,6 +30,7 @@
     "release:check": "vite-node scripts/release-check.ts",
     "config:urls": "vite-node scripts/app-urls.ts",
     "check:app": "vite-node scripts/check-app.ts",
+    "pin:app": "vite-node scripts/pin-app.ts",
     "deploy": "npm run check:app && npm run config:urls && shopify app deploy"
   },
   "dependencies": {

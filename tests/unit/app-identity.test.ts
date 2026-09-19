@@ -5,8 +5,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   declaredHandle,
+  pinClientId,
   pinnedClientId,
   pushesConfig,
+  whyNotAClientId,
   whyNotDeployable,
 } from "~/lib/release/app-identity";
 
@@ -99,5 +101,69 @@ describe("the App Proxy subpath", () => {
     }
 
     expect(wrong).toEqual([]);
+  });
+});
+
+describe("pinning this repository to one app", () => {
+  const KEY = "1a2b3c4d5e6f70819a2b3c4d5e6f7081";
+
+  it("accepts an API key", () => {
+    expect(whyNotAClientId(KEY)).toBeNull();
+    expect(whyNotAClientId(`  ${KEY}  `)).toBeNull();
+  });
+
+  it("refuses the numeric id out of a dashboard URL", () => {
+    // `/apps/401839423489/versions/…` is the id a person has on screen when
+    // they come to do this, and it is not the app's API key.
+    expect(whyNotAClientId("401839423489")).toContain("different id");
+  });
+
+  it("refuses the things that look plausible in a diff", () => {
+    for (const value of [
+      "",
+      "   ",
+      "mannon-wholesale",
+      `"${KEY}"`,
+      `${KEY} `.repeat(2),
+    ]) {
+      expect(whyNotAClientId(value), JSON.stringify(value)).not.toBeNull();
+    }
+  });
+
+  it("replaces the commented placeholder rather than living beside it", () => {
+    const pinned = pinClientId(TOML, KEY);
+
+    expect(pinnedClientId(pinned)).toBe(KEY);
+    // Two client_id lines, one commented, is a file that reads as pinned to
+    // whichever one the reader's eye lands on.
+    expect(pinned.match(/client_id[ \t]*=/g) ?? []).toHaveLength(1);
+  });
+
+  it("puts the line in the root table, where the CLI reads it", () => {
+    const pinned = pinClientId(TOML, KEY);
+    const line = pinned.indexOf(`client_id = "${KEY}"`);
+    const firstTable = pinned.search(/^\[/m);
+
+    // Below `handle`, above the first `[table]`. A client_id inside `[build]`
+    // is a key nothing reads and a file that looks pinned.
+    expect(line).toBeGreaterThan(pinned.indexOf("handle ="));
+    expect(line).toBeLessThan(firstTable);
+  });
+
+  it("makes the deploy guard pass, and nothing else in the file move", () => {
+    const pinned = pinClientId(TOML, KEY);
+
+    expect(whyNotDeployable(pinned, undefined)).toBeNull();
+    expect(declaredHandle(pinned)).toBe("mannon-wholesale");
+    expect(
+      pinned.replace(
+        /^client_id = .*$/m,
+        '# client_id = ""   # populated by `shopify app config link`',
+      ),
+    ).toBe(TOML);
+  });
+
+  it("refuses to write a client_id it would not accept", () => {
+    expect(() => pinClientId(TOML, "401839423489")).toThrow("different id");
   });
 });

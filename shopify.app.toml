@@ -12,8 +12,13 @@
 # So the handle below is distinct, and `npm run deploy` refuses until a
 # `client_id` is pinned — see `app/lib/release/app-identity.ts`.
 #
-# Run `shopify app config link` once against **a new Partners app**, commit the
-# `client_id` it writes, then `shopify app dev --store=mannon-9iu9ewku.myshopify.com`.
+# Run `shopify app config link` once against **a new Partners app** and commit
+# the `client_id` it writes (or `npm run pin:app -- <client_id>` if the link ran
+# elsewhere), then `shopify app dev --store=mannon-9iu9ewku.myshopify.com`.
+#
+# Read the diff that link produces: it pulls the app's config down from
+# Partners and can rewrite `name`, `handle` and the URLs too. The handle must
+# stay `mannon-wholesale`, and the URLs are generated — see `config:urls`.
 # Everything else in this file is checked in on purpose so the app config is
 # reviewable in the diff rather than living only in the Partners dashboard.
 #

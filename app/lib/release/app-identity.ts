@@ -81,3 +81,42 @@ export function whyNotDeployable(
 
   return null;
 }
+
+/**
+ * Why this is not a client_id, or null.
+ *
+ * Shopify's is the app's API key: hex, no punctuation. Worth checking because
+ * the three things people paste instead all look plausible in a diff — the
+ * numeric app id out of a dashboard URL, the app's name, and a value that came
+ * with a stray quote attached. None of them is an app, and `check:app` would
+ * accept any of them as "pinned".
+ */
+export function whyNotAClientId(value: string): string | null {
+  const text = value.trim();
+  if (!text) return "No client_id was given.";
+  if (!/^[a-f0-9]{16,64}$/i.test(text)) {
+    return (
+      `"${text}" does not look like a client_id. It is the app's API key — hex, ` +
+      `32 characters in every app I have seen. The number in a dashboard URL ` +
+      `(/apps/401839423489/) is a different id.`
+    );
+  }
+  return null;
+}
+
+/**
+ * The same file, pinned to one app.
+ *
+ * Replaces the commented placeholder if it is there, and otherwise writes the
+ * line under `handle` — never appends blindly, because a `client_id` outside
+ * the root table is a key the CLI does not read and a file that looks pinned.
+ */
+export function pinClientId(toml: string, clientId: string): string {
+  const reason = whyNotAClientId(clientId);
+  if (reason) throw new Error(reason);
+
+  const line = `client_id = "${clientId.trim()}"`;
+  return /^[ \t]*#?[ \t]*client_id[ \t]*=.*$/m.test(toml)
+    ? toml.replace(/^[ \t]*#?[ \t]*client_id[ \t]*=.*$/m, line)
+    : toml.replace(/^(handle[ \t]*=.*)$/m, `$1\n${line}`);
+}

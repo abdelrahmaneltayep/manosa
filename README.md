@@ -312,12 +312,28 @@ This one is `mannon-wholesale`, and its App Proxy is `/apps/mannon-wholesale/…
 for the same reason — a store can install both, and Shopify gives one
 prefix+subpath to one app.
 
-`npm run deploy` refuses until `shopify.app.toml` pins a `client_id`:
+`npm run deploy` refuses until `shopify.app.toml` pins a `client_id`. Linking
+needs a browser and network Shopify will answer, so it runs on your machine,
+not in CI:
 
 ```bash
-shopify app config link      # against a NEW Partners app — read the org and app it names
-# commit the client_id it writes
+shopify app config link          # choose your org, then "Create a new app"
+git diff shopify.app.toml        # see below — the CLI rewrites more than one line
+npm run check:app                # should now say it is pinned
 ```
+
+If the link ran somewhere else and you have only the value:
+
+```bash
+npm run pin:app -- <client_id>   # writes it, refusing anything that is not an API key
+```
+
+**Read the diff.** `shopify app config link` pulls the app's config down from
+Partners, so as well as `client_id` it can rewrite `name`, `handle`,
+`application_url` and the redirect URLs. `handle` must stay
+`mannon-wholesale` — `tests/unit/app-identity.test.ts` fails if it does not —
+and the URLs are generated, so let `npm run config:urls` own them rather than
+committing whatever the CLI put there.
 
 Without that line the CLI binds by handle, and `include_config_on_deploy = true`
 means a deploy would write this file over that app's config and release this
