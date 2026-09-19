@@ -92,13 +92,15 @@ describe("pointing the config at a deployed app", () => {
   });
 
   it("leaves the rest of the file alone", () => {
+    // Whatever the file points at today — it is generated, so hard-coding the
+    // origin here would make this test something to edit on every re-deploy
+    // rather than something that checks a rewrite.
+    const current = new URL(appUrlSites(LIVE)[0]!.url).origin;
     const { toml } = withAppUrl(LIVE, "https://wholesale.example.com");
 
     // The scopes, the webhook topics and the compliance keys are the parts a
     // careless rewrite would take with it.
-    expect(
-      toml.replace(/https:\/\/wholesale\.example\.com/g, "https://localhost:3000"),
-    ).toBe(LIVE);
+    expect(toml.replace(/https:\/\/wholesale\.example\.com/g, current)).toBe(LIVE);
   });
 
   it("gives the root URL no trailing slash", () => {

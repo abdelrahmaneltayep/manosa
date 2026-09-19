@@ -34,8 +34,19 @@ export interface SubmissionCheck {
 
 const root = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
-export function submissionReadiness(): SubmissionCheck[] {
-  const toml = root("shopify.app.toml");
+/**
+ * `read` exists so the **blocked** branches can be exercised.
+ *
+ * Every check here has two answers and the repository only ever has one of
+ * them at a time. Once the URLs were real, nothing could reach the branch that
+ * catches a development host — and a branch nothing reaches is the one that
+ * quietly stops working, on the check whose whole job is to fail before a
+ * submission does.
+ */
+export function submissionReadiness(
+  read: (path: string) => string = root,
+): SubmissionCheck[] {
+  const toml = read("shopify.app.toml");
   const checks: SubmissionCheck[] = [];
 
   // --- Things that are simply wrong until a deploy happens -----------------
@@ -59,7 +70,7 @@ export function submissionReadiness(): SubmissionCheck[] {
           )}. Shopify calls these — OAuth, webhooks and the App Proxy — so a submission on this file is rejected before anybody reads the listing. Set SHOPIFY_APP_URL to the deployed origin and run \`npm run config:urls\`, which \`npm run deploy\` does for you.`
         : `All ${sites.length} point at ${[
             ...new Set(sites.map((site) => new URL(site.url).origin)),
-          ].join(", ")}.`,
+          ].join(", ")} — no localhost, tunnel or development host among them.`,
   });
 
   // --- Things this repo can genuinely prove --------------------------------
@@ -96,14 +107,14 @@ export function submissionReadiness(): SubmissionCheck[] {
     title: "The app is embedded and uses App Bridge",
     status:
       /^embedded\s*=\s*true/m.test(toml) &&
-      root("app/root.tsx").includes("cdn.shopify.com/shopifycloud/app-bridge.js")
+      read("app/root.tsx").includes("cdn.shopify.com/shopifycloud/app-bridge.js")
         ? "ready"
         : "blocked",
     detail:
       "`embedded = true` and App Bridge is loaded from Shopify's CDN, unbundled, as review requires.",
   });
 
-  const billing = root("app/shopify.server.ts").includes("billing");
+  const billing = read("app/shopify.server.ts").includes("billing");
   checks.push({
     id: "billing",
     title: "Charges go through Shopify's Billing API",

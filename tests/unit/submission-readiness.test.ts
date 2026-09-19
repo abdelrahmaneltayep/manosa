@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { formatReadiness, submissionReadiness } from "~/lib/release/submission.server";
@@ -20,13 +23,37 @@ import { formatReadiness, submissionReadiness } from "~/lib/release/submission.s
 const checks = submissionReadiness();
 const byId = new Map(checks.map((one) => [one.id, one]));
 
+/**
+ * The same checks, against a config that was never deployed.
+ *
+ * The repository only ever holds one answer at a time, so once the URLs became
+ * real nothing could reach the branch that catches a development host — on the
+ * check whose whole job is to fail before a submission does.
+ */
+const asIfUndeployed = () => {
+  const real = readFileSync(resolve(process.cwd(), "shopify.app.toml"), "utf8");
+  const local = real.replace(/https:\/\/manosa\.fly\.dev/g, "https://localhost:3000");
+  return submissionReadiness((path) =>
+    path === "shopify.app.toml"
+      ? local
+      : readFileSync(resolve(process.cwd(), path), "utf8"),
+  );
+};
+
 describe("the submission check", () => {
-  it("sees the development URLs that are still in the app config", () => {
+  it("passes now the URLs are the deployed app's", () => {
     const urls = byId.get("urls")!;
 
-    // Today this is blocked, and that is the correct answer. When the app is
-    // deployed and the URLs are real, this flips to ready — and if somebody
-    // puts an ngrok tunnel in the file on the way there, it flips back.
+    expect(urls.status).toBe("ready");
+    expect(urls.detail).toContain("manosa.fly.dev");
+    // The word appears in the reassurance ("no localhost, tunnel or…"); what
+    // must not appear is a URL pointing at one.
+    expect(urls.detail).not.toContain("https://localhost");
+  });
+
+  it("still catches a development host, and names every one of them", () => {
+    const urls = new Map(asIfUndeployed().map((one) => [one.id, one])).get("urls")!;
+
     expect(urls.status).toBe("blocked");
     expect(urls.detail).toContain("localhost");
 
@@ -75,6 +102,9 @@ describe("the submission check", () => {
   it("reads as a report, and says what it is not", () => {
     const report = formatReadiness(checks);
     expect(report).toContain("not a compliance report");
-    expect(report).toContain("1 blocker(s)");
+    expect(report).toContain("Nothing here blocks a submission");
+
+    // And the other half of that sentence, which is the one that matters.
+    expect(formatReadiness(asIfUndeployed())).toContain("1 blocker(s)");
   });
 });

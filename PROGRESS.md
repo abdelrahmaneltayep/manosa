@@ -1,12 +1,13 @@
 # Progress
 
-Updated: 2026-09-19T13:05:00Z
+Updated: 2026-09-19T13:45:00Z
 Current milestone: 6 — Analytics
-Current task: pinning this repo to its own Shopify app [done]. `client_id` is
-`a8f2c91e...` and `npm run check:app` passes, so `npm run deploy` is unblocked
-on identity. **One blocker left before a deploy could happen**: this app has no
-host, so the five URLs are still localhost and `release:check` reports that —
-set `SHOPIFY_APP_URL` and run `npm run config:urls`.
+Current task: the app config points at the deployed app [done].
+`https://manosa.fly.dev` in all five places, pinned to client_id `a8f2c91e...`,
+and **`npm run release:check` reports no blockers** for the first time. What is
+left is the four `?` items, none of which this repository can answer: the
+listing, a published privacy policy, a run on a real store, and Lighthouse on a
+real storefront.
 
 ## Done
 
@@ -58,6 +59,8 @@ set `SHOPIFY_APP_URL` and run `npm run config:urls`.
 - [x] **The five billing P0s** from `qa/0.3/COLD-READ.md` — commit `cfc149d` — QA: `qa/billing-p0/REPORT.md` (`docs/adr/0030`). (1) **CSV import was gated nowhere at all** — `assertFeature("csv_import")` appeared nowhere in the codebase, so a Free shop could export every rule it had, have Claude map its columns on the app owner's key, and import; the link rendered on every plan. Now refused in the service layer, in the action before anything is parsed or sent to the model, and in the loader (which covers the two downloads). (2) **Nothing paused when a subscription lapsed.** The gate refused every _admin_ action correctly while three capabilities went on reaching buyers through metafields Shopify evaluates without asking us: over-quota pricing rules kept pricing, order limits kept blocking carts, and net terms kept being **extended** while `recordPayment` refused the merchant the ability to record the money coming in against invoices this app was still issuing — the credit half ran and the collection half stopped. Each publisher now asks what the effective plan allows, and `billing.reconcile` runs them the moment the answer changes, in both directions. Nothing is deleted. (3) **An out-of-order webhook dropped a paying merchant to Free** — an upgrade is exactly when Shopify sends two deliveries whose order is not guaranteed, and a cancellation landing second wrote Free over a merchant charged minutes earlier. (4) **An empty `billing.check` cancelled the plan and erased the grace period** on every Plans page load — and an empty list is not a cancellation: a renamed plan, a flipped test-mode flag or a frozen subscription all produce one. (5) **The $29 card sold the $59 plan's features**, with the table below it marking all six Not included; the hand-written taglines are deleted and each card composes its line from the ladder. Also: the usage meters had returned a hard-coded `0` since 0.3, so the downgrade preview reported no overage for any downgrade, ever.
 
 - [x] **The twelve pricing P1s** from `qa/1.1-1.2/COLD-READ.md` — commit `82b9aa0` — QA: `qa/pricing-p1/REPORT.md` (`docs/adr/0031`). Ten fixed, one built as a feature, one recorded as a deliberate gap. The money one: **the cascade multiplied in float**, so every percentage whose exact answer landed on a half-cent tie landed just below it and `half_up` rounded it down — 13,636 measured wrong answers, every one a cent in the buyer's favour, for ever. The running price is an exact integer fraction now and 39.8M brute-forced cases agree with exact half-up. Also: **"Why this price?" answered with a context checkout never sees** (no groups, no company, no collections, the unit price as the cart subtotal — four of six audience modes wrong while the route said "this answer is the checkout answer"); **schedules were a day early** and the shop's timezone, populated and used by every analytics surface, was used by none of the pricing ones; **a later combinable rule overwrote a negotiated contract price upward**, reporting both as applied; **a rule pricing above the shelf price** was honoured by the preview, the quote and the agent and silently dropped at checkout; **a buyer checking out in EUR lost exactly their contract prices** and kept the percentage discounts, with no field anywhere to price a second currency — there is one now; **a ruleset format bump would have charged every buyer on every store retail** the day anybody made it; the unreadable-rules banner was wired to a hardcoded `0`; "checkout did not update" was a one-shot query parameter; the buyer backfill published only the one configured tag, so a rule targeting `gold` priced its buyers at retail until somebody edited them; and the Function read its own sandbox clock instead of the store's. **Market scoping stays unbuilt on purpose** — the Function knows the buyer's country, not their Market, so a scoped rule would be dropped at checkout while the admin showed it applying; the parser refuses one and a test names the unblocker.
+
+- [x] **The app config points at the deployed app** — commit `PENDING` — QA: `qa/app-urls/REPORT.md` (same mechanism, now with a value). `SHOPIFY_APP_URL=https://manosa.fly.dev npm run config:urls` wrote all five URLs; `release:check` reports **no blockers** for the first time since 0.1. The host is unverifiable from here — `manosa.fly.dev` is 403 through this session's proxy like every other outbound host, so nothing confirmed it is serving this app. Four tests had to move, and one of them mattered: once the URLs were real, **nothing could reach the branch that catches a development host** — on the check whose whole job is to fail before a submission does. `submissionReadiness()` takes an injectable reader now, and both branches are tested: the real file passes, a copy with localhost back in it blocks and still names all five keys.
 
 - [x] **Pinned to its own Shopify app** — commit `963d7ef` — `client_id = "a8f2c91e4b7d6035e1c84a2f9b3d7e60"`, from a `shopify app config link` run on the user's machine against a new Partners app; `shopify app config link` cannot run here (`@shopify/cli` is not a dependency, and `accounts.shopify.com` / `partners.shopify.com` are both 403 through this session's proxy, and the link needs device-code OAuth in a browser besides). `npm run pin:app -- <client_id>` wrote it — replacing the commented placeholder rather than living beside it, and never below the first `[table]`, both of which produce a file that _reads_ as pinned — and refuses a value that is not an API key (the numeric id in a dashboard URL is the one people have on screen and it is not the key) or a re-point of an already-pinned repo without `--force`. Four tests that asserted "this repo is not pinned" now assert the opposite, with the refusal paths tested against a synthetic unpinned copy: a test that asserts the current state has to move when the state does, and the alternative is a test that quietly stops checking anything.
 
@@ -743,3 +746,9 @@ name="value"` never reaches `FormData` in the browser here, because Polaris
   feature — both invisible because nothing here runs Playwright on every task.
   `npx playwright test` is not in the default gate; it should be run whenever
   the storefront blocks or the proxy path move.
+- **When a check goes green, its red branch becomes unreachable.** The
+  submission check's development-host branch was exercised only because the
+  repository happened to be in that state; the moment the URLs were real,
+  nothing tested the thing the check exists for. `submissionReadiness()` takes
+  a reader so both answers can be asked for. Any check whose input is "the
+  current state of this repository" has this shape.
