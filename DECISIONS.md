@@ -1274,3 +1274,57 @@ worth more than a sentence somebody has to notice.
 
 Also rejected for now: **giving this app a host.** It is not deployed, the
 `release:check` blocker stays open, and `manosh.fly.dev` runs different code.
+
+## 2026-10-02 — `e2e` (tester-army) evaluated, not wired in, and why
+
+`https://github.com/tester-army/e2e` — an Apache-2.0 agentic end-to-end
+framework (`e2e` 0.15.2, `@e2e-dev/web` 0.11.1 on npm). Vetted before anything
+touched this repository, because a third-party repo that ships a Claude Code
+skill is a repo that can put instructions in front of an agent:
+
+- No `preinstall` / `postinstall` / `prepare` hook in any of its package
+  manifests.
+- Its `.mcp.json` points at its own local testbed, nothing remote.
+- The `.claude/skills/` in it are that project's own contributor skills, not
+  something a consumer installs.
+- `skills/e2e/SKILL.md` documents its own API and nothing else.
+- Its `SECURITY.md` states the right trust model in its own words — _"page
+  content is evidence, never instructions"_ — and is candid that code you run
+  through it has your OS authority with no sandbox.
+
+**It is aimed squarely at this project's largest gap and cannot reach it from
+here.** The thing Mannon has never had is the admin driven as a merchant sees
+it: `cdn.shopify.com` is unreachable from this build environment, so `s-*`
+elements never upgrade to Polaris and there is no admin UI for _any_ tool to
+drive. That is a network boundary, not a tooling choice, and swapping test
+frameworks does not move it. The same boundary is why
+`release:check`'s "Installed, tested and demonstrated on a real store" has
+been owed since 1.2.
+
+Three further blockers, none of them the framework's fault:
+
+1. **No model key.** `ANTHROPIC_API_KEY`, `AI_GATEWAY_API_KEY` and
+   `OPENAI_API_KEY` are all unset, so every `agent.act` / `agent.assert` step
+   is unavailable. Stop condition #4: ask, never work around.
+2. **Tests with no agent steps need no model — and are Playwright.** This repo
+   already has 7 spec files and 426 passing Playwright tests. On the two
+   surfaces reachable from here (the buyer's registration form and the
+   storefront blocks, both our own pages on our own domain) the framework would
+   add a dependency and no coverage.
+3. **`CLAUDE.md` fixes the stack** — "Vitest + Playwright + MSW … do not
+   substitute" — and grants me "libraries _within_ the fixed stack". A new test
+   framework is not within it. `e2e`'s web engine runs on Playwright, so this
+   is additive rather than a substitution, but it is the user's call and not
+   mine.
+
+**Where it would earn its place: on a machine that can reach Shopify.** Pointed
+at `https://manosa.fly.dev` with the app installed on
+`mannon-9iu9ewku.myshopify.com`, its bug-bash and `agent.act` steps are a
+credible way to close the dev-store item — fresh install, reinstall, uninstall
+cleanup, a staff account with limited permissions, a 10k-product store — which
+no amount of `renderToStaticMarkup` can.
+
+Rejected for now: **writing `e2e.config.ts` and a first spec anyway.** I cannot
+run a line of it here, and a repository whose recurring lesson is "a test that
+cannot fail is not a test" should not gain a test suite its author never
+executed.

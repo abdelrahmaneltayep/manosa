@@ -1,13 +1,14 @@
 # Progress
 
-Updated: 2026-09-19T13:45:00Z
+Updated: 2026-10-02T09:30:00Z
 Current milestone: 6 — Analytics
-Current task: the app config points at the deployed app [done].
-`https://manosa.fly.dev` in all five places, pinned to client_id `a8f2c91e...`,
-and **`npm run release:check` reports no blockers** for the first time. What is
-left is the four `?` items, none of which this repository can answer: the
-listing, a published privacy policy, a run on a real store, and Lighthouse on a
-real storefront.
+Current task: evaluating `tester-army/e2e` for the dev-store gap [done — not
+wired in]. It is a real Apache-2.0 agentic test framework and it is aimed at
+exactly the thing this repo has never had — the admin driven as a merchant
+sees it — but that gap is a **network boundary**, not a tooling choice:
+`cdn.shopify.com` is unreachable here, so `s-*` never upgrade and there is no
+admin UI for any tool to drive. No model key either. Reasoning and the vetting
+in `DECISIONS.md`.
 
 ## Done
 
@@ -96,6 +97,14 @@ real storefront.
 - 7.1–7.3 Release
 
 ## Blocked
+
+- **A real-store run, which `tester-army/e2e` could do and this environment
+  cannot.** Evaluated 2026-10-02 and deliberately not wired in — see
+  `DECISIONS.md`. On a machine that can reach Shopify, pointed at
+  `https://manosa.fly.dev` with the app installed on the dev store, its
+  bug-bash and `agent.act` steps are a credible way to close the item
+  `release:check` has marked unverifiable since 1.2. Needs a model key, which
+  is unset here.
 
 - **Everything admin-facing, for visual verification** — `shopify.dev` and
   `cdn.shopify.com` are unreachable from this environment (org network policy),
